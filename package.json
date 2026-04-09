@@ -8,7 +8,8 @@
     "dev:backend":    "npm run dev --prefix backend",
     "dev:frontend":   "npm start --prefix frontend",
     "build:frontend": "npm run build --prefix frontend",
-    "start:backend":  "npm start --prefix backend"
+    "start:backend":  "npm start --prefix backend",
+    "start":          "npm install --prefix backend && node backend/src/index.js"
   },
   "engines": {
     "node": ">=18.0.0",
