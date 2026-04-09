@@ -219,9 +219,9 @@ exports.updateMenuItem = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, price, cost, is_available, is_popular, category_id, image_url } = req.body;
-    // Only persist image_url if it is a real server path (starts with /uploads/).
+    // Only persist image_url if it is a real server path or Cloudinary URL.
     // Ignore blob: URLs (local preview) and empty strings.
-    const safeImageUrl = (image_url && image_url.startsWith('/uploads/')) ? image_url : null;
+    const safeImageUrl = (image_url && (image_url.startsWith('/uploads/') || image_url.startsWith('http'))) ? image_url : null;
     const result = await db.query(
       `UPDATE menu_items SET name=COALESCE($1,name), description=COALESCE($2,description),
        price=COALESCE($3,price), cost=COALESCE($4,cost), is_available=COALESCE($5,is_available),
@@ -240,7 +240,7 @@ exports.uploadMenuItemImage = async (req, res) => {
   try {
     const { id } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const imageUrl = `/uploads/${req.file.filename}`;
+    const imageUrl = req.file.path && req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     const result = await db.query(
       `UPDATE menu_items SET image_url=$1 WHERE id=$2 AND restaurant_id=$3 RETURNING id, name, image_url`,
       [imageUrl, id, req.user.restaurantId]
@@ -838,7 +838,7 @@ exports.updateRestaurantSettings = async (req, res) => {
 exports.uploadRestaurantLogo = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = `/uploads/${req.file.filename}`;
+    const url = req.file.path && req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     await db.query(`UPDATE restaurants SET logo_url=$1 WHERE id=$2`, [url, req.user.restaurantId]);
     res.json({ url });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Upload failed' }); }
@@ -848,7 +848,7 @@ exports.uploadRestaurantLogo = async (req, res) => {
 exports.uploadEmployeePhoto = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const url = `/uploads/${req.file.filename}`;
+    const url = req.file.path && req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     const result = await db.query(
       `UPDATE employees SET avatar_url=$1 WHERE id=$2 AND restaurant_id=$3 RETURNING id,avatar_url`,
       [url, req.params.id, req.user.restaurantId]
