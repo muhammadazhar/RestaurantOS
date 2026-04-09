@@ -1,0 +1,420 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { getSystemHealth, listBackups, createBackup, downloadBackup, deleteBackup } from '../../services/api';
+import { Card, Btn, Badge, Spinner, PageHeader, T, useT } from '../shared/UI';
+import toast from 'react-hot-toast';
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmtBytes = (b) => {
+  if (!b) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0; let v = b;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+};
+
+const fmtUptime = (s) => {
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${Math.floor(s % 60)}s`;
+};
+
+const fmtDate = (d) => new Date(d).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' });
+
+// ─── Stat row in info card ────────────────────────────────────────────────────
+const InfoRow = ({ label, value, accent }) => {
+  useT();
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '9px 0', borderBottom: `1px solid ${T.border}`,
+    }}>
+      <span style={{ fontSize: 12, color: T.textMid, fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: accent || T.text, fontFamily: 'monospace' }}>{value}</span>
+    </div>
+  );
+};
+
+// ─── Usage bar ────────────────────────────────────────────────────────────────
+const UsageBar = ({ percent, color }) => {
+  useT();
+  const c = percent > 85 ? T.red : percent > 65 ? '#f39c12' : (color || T.green);
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{
+        height: 8, borderRadius: 4,
+        background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden',
+      }}>
+        <div style={{
+          height: '100%', width: `${percent}%`,
+          background: c, borderRadius: 4,
+          transition: 'width 0.6s ease',
+        }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+        <span style={{ fontSize: 11, color: T.textDim }}>0%</span>
+        <span style={{ fontSize: 11, color: c, fontWeight: 700 }}>{percent}% used</span>
+        <span style={{ fontSize: 11, color: T.textDim }}>100%</span>
+      </div>
+    </div>
+  );
+};
+
+// ─── Section title ────────────────────────────────────────────────────────────
+const SectionTitle = ({ icon, title }) => {
+  useT();
+  return (
+    <div style={{
+      fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 1,
+      textTransform: 'uppercase', marginBottom: 12,
+      display: 'flex', alignItems: 'center', gap: 6,
+    }}>
+      <span>{icon}</span>{title}
+    </div>
+  );
+};
+
+// ─── System Health Tab ────────────────────────────────────────────────────────
+function HealthTab() {
+  useT();
+  const [health,    setHealth]    = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [refreshed, setRefreshed] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getSystemHealth()
+      .then(r => { setHealth(r.data); setRefreshed(new Date()); })
+      .catch(() => toast.error('Failed to load health data'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <Spinner />;
+  if (!health) return null;
+
+  const dbOk = health.database?.status === 'connected';
+  const overallOk = health.status === 'healthy';
+
+  return (
+    <div>
+      {/* Overall status banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: overallOk ? T.greenDim : T.redDim,
+        border: `1px solid ${overallOk ? T.green : T.red}44`,
+        borderRadius: 12, padding: '14px 20px', marginBottom: 20,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28 }}>{overallOk ? '✅' : '⚠️'}</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: overallOk ? T.green : T.red }}>
+              System {overallOk ? 'Healthy' : 'Degraded'}
+            </div>
+            <div style={{ fontSize: 12, color: T.textMid, marginTop: 2 }}>
+              Uptime: {fmtUptime(health.uptime)}
+              {refreshed && ` · Refreshed ${fmtDate(refreshed)}`}
+            </div>
+          </div>
+        </div>
+        <Btn onClick={load} size="sm" variant="ghost">↻ Refresh</Btn>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+        {/* Memory */}
+        <Card>
+          <SectionTitle icon="🧠" title="Memory" />
+          <UsageBar percent={health.memory.usedPercent} />
+          <div style={{ marginTop: 12 }}>
+            <InfoRow label="Total RAM"  value={fmtBytes(health.memory.total)} />
+            <InfoRow label="Used"       value={fmtBytes(health.memory.used)}
+              accent={health.memory.usedPercent > 85 ? T.red : health.memory.usedPercent > 65 ? '#f39c12' : T.green} />
+            <InfoRow label="Free"       value={fmtBytes(health.memory.free)} />
+          </div>
+        </Card>
+
+        {/* CPU */}
+        <Card>
+          <SectionTitle icon="⚡" title="CPU" />
+          <div style={{
+            background: T.surface, borderRadius: 10, padding: '14px 16px',
+            marginBottom: 12, textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 32, fontWeight: 800, color: T.accent, fontFamily: 'monospace' }}>
+              {health.cpu.cores}
+            </div>
+            <div style={{ fontSize: 11, color: T.textMid, marginTop: 2 }}>CPU Cores</div>
+          </div>
+          <InfoRow label="Model"    value={health.cpu.model.length > 28 ? health.cpu.model.slice(0, 28) + '…' : health.cpu.model} />
+          <InfoRow label="Load Avg" value={health.cpu.loadAvg?.join(' / ') || '—'} />
+          <InfoRow label="Platform" value={`${health.platform} / ${health.arch}`} />
+        </Card>
+
+        {/* Database */}
+        <Card>
+          <SectionTitle icon="🗄" title="Database" />
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: dbOk ? T.greenDim : T.redDim,
+            border: `1px solid ${dbOk ? T.green : T.red}44`,
+            borderRadius: 10, padding: '10px 14px', marginBottom: 12,
+          }}>
+            <span style={{ fontSize: 20 }}>{dbOk ? '🟢' : '🔴'}</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: dbOk ? T.green : T.red }}>
+                {dbOk ? 'Connected' : 'Disconnected'}
+              </div>
+              {health.database?.error && (
+                <div style={{ fontSize: 11, color: T.red, marginTop: 2 }}>{health.database.error}</div>
+              )}
+            </div>
+          </div>
+          <InfoRow label="Engine"  value={health.database.version || '—'} />
+          <InfoRow label="Latency" value={health.database.latency != null ? `${health.database.latency} ms` : '—'}
+            accent={health.database.latency > 100 ? T.red : health.database.latency > 50 ? '#f39c12' : T.green} />
+          <InfoRow label="Server Time" value={health.database.serverTime ? fmtDate(health.database.serverTime) : '—'} />
+        </Card>
+
+        {/* Server info */}
+        <Card>
+          <SectionTitle icon="🖥" title="Server" />
+          <InfoRow label="Hostname"     value={health.hostname} />
+          <InfoRow label="Node.js"      value={health.nodeVersion} />
+          <InfoRow label="OS"           value={`${health.platform} ${health.arch}`} />
+          <InfoRow label="Uptime"       value={fmtUptime(health.uptime)} accent={T.accent} />
+          <InfoRow label="Backups"      value={`${health.backups?.count || 0} files · ${fmtBytes(health.backups?.size || 0)}`} />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── DB Backup Tab ────────────────────────────────────────────────────────────
+function BackupTab() {
+  useT();
+  const [backups,   setBackups]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [creating,  setCreating]  = useState(false);
+  const [deleting,  setDeleting]  = useState(null);
+  const [downloading, setDownloading] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    listBackups()
+      .then(r => setBackups(r.data))
+      .catch(() => toast.error('Failed to load backups'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleCreate = async () => {
+    setCreating(true);
+    toast.loading('Creating backup… this may take a moment', { id: 'backup' });
+    try {
+      const res = await createBackup();
+      toast.success(`Backup created: ${res.data.filename} (${fmtBytes(res.data.size)})`, { id: 'backup', duration: 5000 });
+      load();
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Backup failed';
+      toast.error(msg, { id: 'backup', duration: 8000 });
+    } finally { setCreating(false); }
+  };
+
+  const handleDownload = async (filename) => {
+    setDownloading(filename);
+    try {
+      const res = await downloadBackup(filename);
+      const url  = URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url; link.download = filename;
+      document.body.appendChild(link); link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Download started');
+    } catch { toast.error('Download failed'); }
+    finally { setDownloading(null); }
+  };
+
+  const handleDelete = async (filename) => {
+    if (!window.confirm(`Delete backup "${filename}"? This cannot be undone.`)) return;
+    setDeleting(filename);
+    try {
+      await deleteBackup(filename);
+      toast.success('Backup deleted');
+      setBackups(prev => prev.filter(b => b.name !== filename));
+    } catch { toast.error('Delete failed'); }
+    finally { setDeleting(null); }
+  };
+
+  return (
+    <div>
+      {/* Info + action header */}
+      <Card style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20 }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: T.text, marginBottom: 6 }}>
+              🗄 PostgreSQL Database Backup
+            </div>
+            <div style={{ fontSize: 13, color: T.textMid, lineHeight: 1.6 }}>
+              Creates a full SQL dump of the database using <code style={{ background: T.surface, padding: '1px 6px', borderRadius: 4, fontSize: 12 }}>pg_dump</code>
+              . Backups are saved to disk on the server. Download to keep an off-site copy.
+            </div>
+            <div style={{ marginTop: 10, fontSize: 12, color: T.textDim, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>💡</span>
+              <span>Requires <strong>pg_dump</strong> to be installed and in your system PATH.</span>
+            </div>
+          </div>
+          <Btn
+            onClick={handleCreate}
+            disabled={creating}
+            style={{ whiteSpace: 'nowrap', flexShrink: 0, minWidth: 160 }}
+          >
+            {creating ? '⏳ Creating…' : '+ Create Backup'}
+          </Btn>
+        </div>
+      </Card>
+
+      {/* Backup list */}
+      <Card style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Table header */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 110px 160px 180px',
+          gap: 8, padding: '10px 20px',
+          background: T.surface,
+          fontSize: 10, color: T.textMid, fontWeight: 700,
+          letterSpacing: 0.8, textTransform: 'uppercase',
+          borderBottom: `1px solid ${T.border}`,
+        }}>
+          <span>Filename</span>
+          <span style={{ textAlign: 'right' }}>Size</span>
+          <span style={{ textAlign: 'center' }}>Created</span>
+          <span style={{ textAlign: 'right' }}>Actions</span>
+        </div>
+
+        {loading && <Spinner />}
+
+        {!loading && backups.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: T.textDim }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>💾</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: T.textMid, marginBottom: 6 }}>No backups yet</div>
+            <div style={{ fontSize: 13 }}>Click "Create Backup" to make your first database backup.</div>
+          </div>
+        )}
+
+        {!loading && backups.map((b, idx) => (
+          <div key={b.name} style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 110px 160px 180px',
+            gap: 8, padding: '13px 20px',
+            alignItems: 'center',
+            borderBottom: idx < backups.length - 1 ? `1px solid ${T.border}` : 'none',
+            transition: 'background 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = T.surface}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            {/* Filename */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>💾</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{
+                  fontSize: 13, fontWeight: 600, color: T.text,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  fontFamily: 'monospace',
+                }}>
+                  {b.name}
+                </div>
+              </div>
+            </div>
+
+            {/* Size */}
+            <div style={{ textAlign: 'right', fontSize: 13, fontFamily: 'monospace', color: T.textMid }}>
+              {fmtBytes(b.size)}
+            </div>
+
+            {/* Date */}
+            <div style={{ textAlign: 'center', fontSize: 12, color: T.textMid }}>
+              {fmtDate(b.createdAt)}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => handleDownload(b.name)}
+                disabled={downloading === b.name}
+                style={{
+                  background: T.accentGlow, color: T.accent,
+                  border: `1px solid ${T.accent}44`,
+                  borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700,
+                  cursor: downloading === b.name ? 'not-allowed' : 'pointer',
+                  fontFamily: "'Syne', sans-serif", opacity: downloading === b.name ? 0.6 : 1,
+                }}
+              >
+                {downloading === b.name ? '⏳' : '⬇ Download'}
+              </button>
+              <button
+                onClick={() => handleDelete(b.name)}
+                disabled={deleting === b.name}
+                style={{
+                  background: T.redDim, color: T.red,
+                  border: `1px solid ${T.red}44`,
+                  borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700,
+                  cursor: deleting === b.name ? 'not-allowed' : 'pointer',
+                  fontFamily: "'Syne', sans-serif", opacity: deleting === b.name ? 0.6 : 1,
+                }}
+              >
+                {deleting === b.name ? '…' : '🗑'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+// ─── Main SystemPanel page ────────────────────────────────────────────────────
+export default function SystemPanel() {
+  useT();
+  const [tab, setTab] = useState('health');
+
+  const tabs = [
+    { id: 'health', icon: '❤️', label: 'System Health' },
+    { id: 'backup', icon: '💾', label: 'DB Backup' },
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        title="🖥 System"
+        subtitle="Monitor server health and manage database backups"
+      />
+
+      {/* Tab bar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 24, borderBottom: `1px solid ${T.border}`, paddingBottom: 0 }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            background: 'none', border: 'none',
+            color: tab === t.id ? T.accent : T.textMid,
+            fontWeight: tab === t.id ? 800 : 500, fontSize: 13,
+            padding: '10px 18px', cursor: 'pointer',
+            borderBottom: tab === t.id ? `2px solid ${T.accent}` : '2px solid transparent',
+            marginBottom: -1, fontFamily: "'Syne', sans-serif",
+            transition: 'all 0.15s',
+          }}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'health' && <HealthTab />}
+      {tab === 'backup' && <BackupTab />}
+    </div>
+  );
+}

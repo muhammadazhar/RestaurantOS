@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find 'd:\\\\System\\\\Systems\\\\Web Projects\\\\restaurantos' -type f -name *.js -o -name *.ts -o -name *.jsx -o -name *.tsx -o -name *.json -o -name .env*)"
+    ]
+  }
+}
