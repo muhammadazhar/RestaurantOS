@@ -5,7 +5,8 @@ const mode = (process.env.DB_MODE || 'local').toLowerCase();
 
 let pool;
 
-if (mode === 'neon' && process.env.DATABASE_URL) {
+// Use Neon if DATABASE_URL is set (auto-detected on Railway) or DB_MODE=neon
+if (process.env.DATABASE_URL || mode === 'neon') {
   console.log('🌩  Database: Neon (cloud)');
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
