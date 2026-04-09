@@ -92,6 +92,8 @@ export const createRecipe = (data) => API.post('/recipes', data);
 
 // ── Roles ────────────────────────────────────────────────────────────────────
 export const getRoles        = ()        => API.get('/roles');
+export const createRole      = (data)    => API.post('/roles', data);
+export const updateRole      = (id,data) => API.patch(`/roles/${id}`, data);
 
 // ── Employees ─────────────────────────────────────────────────────────────────
 export const getEmployees      = ()        => API.get('/employees');

@@ -499,10 +499,41 @@ exports.getPlatformStats = async (req, res) => {
 exports.getRoles = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT id, name, permissions FROM roles WHERE restaurant_id=$1 ORDER BY name`,
+      `SELECT id, name, permissions, is_system FROM roles WHERE restaurant_id=$1 ORDER BY name`,
       [req.user.restaurantId]
     );
     res.json(result.rows);
+  } catch { res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.createRole = async (req, res) => {
+  try {
+    const { name, permissions = [] } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Role name required' });
+    const result = await db.query(
+      `INSERT INTO roles(restaurant_id, name, permissions, is_system)
+       VALUES($1, $2, $3, false) RETURNING id, name, permissions, is_system`,
+      [req.user.restaurantId, name.trim(), JSON.stringify(permissions)]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Role name already exists' });
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.updateRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { permissions } = req.body;
+    const result = await db.query(
+      `UPDATE roles SET permissions=$1
+       WHERE id=$2 AND restaurant_id=$3 AND is_system=false
+       RETURNING id, name, permissions, is_system`,
+      [JSON.stringify(permissions), id, req.user.restaurantId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Role not found or is a system role' });
+    res.json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
 

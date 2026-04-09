@@ -68,6 +68,8 @@ router.post('/employees/:id/photo',    requirePermission('employees'), upload.si
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
 router.get('/roles',             requirePermission('employees'), ctrl.getRoles);
+router.post('/roles',            requirePermission('employees'), ctrl.createRole);
+router.patch('/roles/:id',       requirePermission('employees'), ctrl.updateRole);
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
 router.get('/shifts',            requirePermission('employees'), ctrl.getShifts);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Badge, T, useT } from '../shared/UI';
-import { getRestaurantSettings, updateRestaurantSettings, uploadRestaurantLogo } from '../../services/api';
+import { getRestaurantSettings, updateRestaurantSettings, uploadRestaurantLogo, getRoles, createRole, updateRole } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
@@ -395,40 +395,62 @@ const ALL_PERMS = [
 ];
 
 function RolesPermissions() {
-  const [roles, setRoles] = useState([
-    { id: 1, name: 'Manager',     system: true,  permissions: ALL_PERMS.map(p => p.key) },
-    { id: 2, name: 'Head Server', system: false, permissions: ['pos','kitchen','tables','alerts'] },
-    { id: 3, name: 'Server',      system: false, permissions: ['pos','tables','alerts'] },
-    { id: 4, name: 'Chef',        system: false, permissions: ['kitchen','recipes','inventory','alerts'] },
-    { id: 5, name: 'Cashier',     system: false, permissions: ['pos','alerts'] },
-  ]);
-  const [selected, setSelected] = useState(1);
+  const [roles, setRoles] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [newRole, setNewRole] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getRoles().then(r => {
+      const data = r.data.map(role => ({
+        ...role,
+        system: role.is_system,
+        permissions: Array.isArray(role.permissions) ? role.permissions : JSON.parse(role.permissions || '[]'),
+      }));
+      setRoles(data);
+      if (data.length) setSelected(data[0].id);
+    }).catch(() => toast.error('Failed to load roles')).finally(() => setLoading(false));
+  }, []);
 
   const role = roles.find(r => r.id === selected);
 
   const togglePerm = (key) => {
-    if (role.system) return;
+    if (role?.system) return;
     setRoles(rs => rs.map(r => r.id === selected
       ? { ...r, permissions: r.permissions.includes(key) ? r.permissions.filter(p => p !== key) : [...r.permissions, key] }
       : r
     ));
   };
 
-  const addRole = () => {
+  const addRole = async () => {
     if (!newRole.trim()) return;
-    setRoles(rs => [...rs, { id: Date.now(), name: newRole.trim(), system: false, permissions: ['pos','alerts'] }]);
-    setNewRole('');
-    toast.success(`Role "${newRole}" created`);
+    try {
+      const r = await createRole({ name: newRole.trim(), permissions: ['pos', 'alerts'] });
+      const created = { ...r.data, system: r.data.is_system, permissions: Array.isArray(r.data.permissions) ? r.data.permissions : JSON.parse(r.data.permissions || '[]') };
+      setRoles(rs => [...rs, created]);
+      setSelected(created.id);
+      setNewRole('');
+      toast.success(`Role "${created.name}" created`);
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Failed to create role');
+    }
   };
 
   const save = async () => {
+    if (!role || role.system) return;
     setSaving(true);
-    await new Promise(r => setTimeout(r, 800));
-    setSaving(false);
-    toast.success('Roles & permissions saved!');
+    try {
+      await updateRole(role.id, { permissions: role.permissions });
+      toast.success('Permissions saved!');
+    } catch {
+      toast.error('Failed to save permissions');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) return <div style={{ color: T.textMid, padding: 24 }}>Loading roles…</div>;
 
   return (
     <div>
