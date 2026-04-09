@@ -31,6 +31,41 @@ const EMP_TYPE_COLOR = { full_time: T.green, part_time: T.blue, contract: T.acce
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
+// ─── Password strength checker ────────────────────────────────────────────────
+function PasswordStrength({ password }) {
+  if (!password) return null;
+  const checks = [
+    { label: 'At least 6 characters',           ok: password.length >= 6 },
+    { label: 'At most 32 characters',            ok: password.length <= 32 },
+    { label: 'Contains a number',                ok: /\d/.test(password) },
+    { label: 'Contains a letter',                ok: /[a-zA-Z]/.test(password) },
+    { label: 'Contains special character (!@#$)', ok: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password) },
+  ];
+  const passed = checks.filter(c => c.ok).length;
+  const strength = passed <= 2 ? 'Weak' : passed <= 4 ? 'Fair' : 'Strong';
+  const strengthColor = passed <= 2 ? T.red : passed <= 4 ? '#f59e0b' : T.green;
+  const barWidth = `${(passed / checks.length) * 100}%`;
+
+  return (
+    <div style={{ marginTop: 8, marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <div style={{ flex: 1, height: 4, background: T.border, borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ width: barWidth, height: '100%', background: strengthColor, borderRadius: 2, transition: 'width 0.3s, background 0.3s' }} />
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, color: strengthColor, minWidth: 44 }}>{strength}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px' }}>
+        {checks.map(c => (
+          <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: c.ok ? T.green : T.textDim }}>
+            <span style={{ fontWeight: 700 }}>{c.ok ? '✓' : '○'}</span>
+            {c.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Small helpers ────────────────────────────────────────────────────────────
 const FieldLabel = ({ children }) => (
   <div style={{ fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 0.5, marginBottom: 6, textTransform: 'uppercase' }}>
@@ -213,6 +248,7 @@ function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
             <Input label="PIN (4 digits)" value={form.pin} onChange={set('pin')} placeholder="1234" maxLength={4} />
           </div>
         )}
+        {!isEdit && <PasswordStrength password={form.password} />}
       </Section>
 
       <Section title="Role & Employment Type">
@@ -268,8 +304,9 @@ function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
             <Input label="New Password" type="password" value={form.newPassword} onChange={set('newPassword')} placeholder="Leave blank to keep current" />
             <Input label="Confirm Password" type="password" value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="Repeat new password" />
           </div>
+          <PasswordStrength password={form.newPassword} />
           {form.newPassword && form.confirmPassword && form.newPassword !== form.confirmPassword && (
-            <div style={{ fontSize: 12, color: T.red, marginTop: 4, fontWeight: 600 }}>Passwords do not match</div>
+            <div style={{ fontSize: 12, color: T.red, marginTop: 4, fontWeight: 600 }}>✗ Passwords do not match</div>
           )}
           {form.newPassword && form.confirmPassword && form.newPassword === form.confirmPassword && (
             <div style={{ fontSize: 12, color: T.green, marginTop: 4, fontWeight: 600 }}>✓ Passwords match</div>
