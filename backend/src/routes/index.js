@@ -74,6 +74,7 @@ router.patch('/roles/:id',       requirePermission('employees'), ctrl.updateRole
 // ── Shifts ────────────────────────────────────────────────────────────────────
 router.get('/shifts',            requirePermission('employees'), ctrl.getShifts);
 router.post('/shifts',           requirePermission('employees'), ctrl.createShift);
+router.post('/shifts/bulk',      requirePermission('employees'), ctrl.bulkCreateShifts);
 router.patch('/shifts/:id',      requirePermission('employees'), ctrl.updateShift);
 router.delete('/shifts/:id',     requirePermission('employees'), ctrl.deleteShift);
 

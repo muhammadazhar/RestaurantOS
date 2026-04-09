@@ -559,6 +559,50 @@ exports.getShifts = async (req, res) => {
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
 
+exports.bulkCreateShifts = async (req, res) => {
+  try {
+    const { employee_id, shift_name, start_time, end_time, date_from, date_to, notes, skip_weekends } = req.body;
+    if (!employee_id || !shift_name || !start_time || !end_time || !date_from || !date_to)
+      return res.status(400).json({ error: 'employee_id, shift_name, start_time, end_time, date_from, date_to required' });
+
+    const from = new Date(date_from);
+    const to   = new Date(date_to);
+    if (from > to) return res.status(400).json({ error: 'date_from must be before date_to' });
+
+    const days = Math.round((to - from) / 86400000) + 1;
+    if (days > 366) return res.status(400).json({ error: 'Date range cannot exceed 366 days' });
+
+    const dates = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(from);
+      d.setDate(from.getDate() + i);
+      if (skip_weekends && (d.getDay() === 0 || d.getDay() === 6)) continue;
+      dates.push(d.toISOString().slice(0, 10));
+    }
+
+    // Insert all, skip dates that already have a shift for this employee
+    let created = 0;
+    for (const date of dates) {
+      const exists = await db.query(
+        `SELECT 1 FROM shifts WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3 LIMIT 1`,
+        [req.user.restaurantId, employee_id, date]
+      );
+      if (exists.rows.length > 0) continue;
+      await db.query(
+        `INSERT INTO shifts(restaurant_id, employee_id, shift_name, start_time, end_time, date, status, notes)
+         VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7)`,
+        [req.user.restaurantId, employee_id, shift_name, start_time, end_time, date, notes || null]
+      );
+      created++;
+    }
+
+    res.status(201).json({ created, total: dates.length, skipped: dates.length - created });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 exports.createShift = async (req, res) => {
   try {
     const { employee_id, shift_name, start_time, end_time, date, notes } = req.body;
@@ -577,11 +621,13 @@ exports.createShift = async (req, res) => {
 exports.updateShift = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes } = req.body;
+    const { status, notes, shift_name, start_time, end_time } = req.body;
     const result = await db.query(
-      `UPDATE shifts SET status=COALESCE($1,status), notes=COALESCE($2,notes)
-       WHERE id=$3 AND restaurant_id=$4 RETURNING *`,
-      [status||null, notes||null, id, req.user.restaurantId]
+      `UPDATE shifts SET
+         status=COALESCE($1,status), notes=COALESCE($2,notes),
+         shift_name=COALESCE($3,shift_name), start_time=COALESCE($4,start_time), end_time=COALESCE($5,end_time)
+       WHERE id=$6 AND restaurant_id=$7 RETURNING *`,
+      [status||null, notes||null, shift_name||null, start_time||null, end_time||null, id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Shift not found' });
     res.json(result.rows[0]);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   getEmployees, createEmployee, updateEmployee, uploadEmployeePhoto,
-  getRoles, getShifts, createShift, updateShift, deleteShift,
+  getRoles, getShifts, createShift, bulkCreateShifts, updateShift, deleteShift,
 } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, Input, Select, PageHeader, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
@@ -321,31 +321,67 @@ function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
   );
 }
 
-// ─── Add Shift Modal ──────────────────────────────────────────────────────────
-function AddShiftModal({ open, onClose, onSaved, employees }) {
-  const [form, setForm]     = useState({ employee_id: '', shift_name: 'Morning', start_time: '07:00', end_time: '15:00', date: todayStr(), notes: '' });
+// ─── Bulk Shift Modal ─────────────────────────────────────────────────────────
+function BulkShiftModal({ open, onClose, onSaved, employees }) {
+  const BLANK = { employee_id: '', shift_name: 'Morning', start_time: '07:00', end_time: '15:00', date_from: todayStr(), date_to: todayStr(), notes: '', skip_weekends: false };
+  const [form, setForm]     = useState(BLANK);
+  const [mode, setMode]     = useState('bulk'); // 'bulk' | 'single'
   const [saving, setSaving] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
   const applyPreset = p => setForm(f => ({ ...f, shift_name: p.name, start_time: p.start, end_time: p.end }));
+
+  const dayCount = () => {
+    try {
+      const from = new Date(form.date_from), to = new Date(form.date_to);
+      if (from > to) return 0;
+      let days = Math.round((to - from) / 86400000) + 1;
+      if (form.skip_weekends) {
+        let count = 0;
+        for (let i = 0; i < days; i++) {
+          const d = new Date(from); d.setDate(from.getDate() + i);
+          if (d.getDay() !== 0 && d.getDay() !== 6) count++;
+        }
+        return count;
+      }
+      return days;
+    } catch { return 0; }
+  };
 
   const handleSave = async () => {
     if (!form.employee_id) return toast.error('Select an employee');
     setSaving(true);
     try {
-      await createShift(form);
-      toast.success('Shift scheduled!');
-      onSaved(); onClose();
-      setForm({ employee_id: '', shift_name: 'Morning', start_time: '07:00', end_time: '15:00', date: todayStr(), notes: '' });
+      if (mode === 'bulk') {
+        const r = await bulkCreateShifts({ ...form, skip_weekends: form.skip_weekends });
+        toast.success(`✓ ${r.data.created} shifts created${r.data.skipped ? `, ${r.data.skipped} already existed` : ''}`);
+      } else {
+        await createShift({ employee_id: form.employee_id, shift_name: form.shift_name, start_time: form.start_time, end_time: form.end_time, date: form.date_from, notes: form.notes });
+        toast.success('Shift scheduled!');
+      }
+      onSaved(); onClose(); setForm(BLANK);
     } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
     finally { setSaving(false); }
   };
 
+  const btnStyle = (active) => ({
+    flex: 1, padding: '8px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+    fontFamily: "'Syne', sans-serif", border: `1px solid ${active ? T.accent + '66' : T.border}`,
+    background: active ? T.accentGlow : T.surface, color: active ? T.accent : T.textMid,
+  });
+
   return (
-    <Modal open={open} onClose={onClose} title="Schedule New Shift" width={480}>
+    <Modal open={open} onClose={onClose} title="Schedule Shifts" width={520}>
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+        <button style={btnStyle(mode === 'bulk')}   onClick={() => setMode('bulk')}>📅 Bulk (Date Range)</button>
+        <button style={btnStyle(mode === 'single')} onClick={() => setMode('single')}>📌 Single Date</button>
+      </div>
+
       <Select label="Employee *" value={form.employee_id} onChange={set('employee_id')}>
         <option value="">— Select Employee —</option>
         {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}{e.role_name ? ` (${e.role_name})` : ''}</option>)}
       </Select>
+
       <FieldLabel>Quick Presets</FieldLabel>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {SHIFT_PRESETS.map(p => (
@@ -354,15 +390,84 @@ function AddShiftModal({ open, onClose, onSaved, employees }) {
           </button>
         ))}
       </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 12px' }}>
-        <Input label="Shift Name" value={form.shift_name}  onChange={set('shift_name')}  placeholder="Morning" />
+        <Input label="Shift Name" value={form.shift_name} onChange={set('shift_name')} placeholder="Morning" />
         <Input label="Start Time" type="time" value={form.start_time} onChange={set('start_time')} />
         <Input label="End Time"   type="time" value={form.end_time}   onChange={set('end_time')} />
       </div>
-      <Input label="Date"             type="date" value={form.date}  onChange={set('date')} />
+
+      {mode === 'bulk' ? (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
+            <Input label="From Date" type="date" value={form.date_from} onChange={set('date_from')} />
+            <Input label="To Date"   type="date" value={form.date_to}   onChange={set('date_to')} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '10px 0 14px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: T.textMid }}>
+              <input type="checkbox" checked={form.skip_weekends} onChange={e => setForm(f => ({ ...f, skip_weekends: e.target.checked }))} style={{ accentColor: T.accent, width: 15, height: 15 }} />
+              Skip weekends (Sat & Sun)
+            </label>
+            {dayCount() > 0 && (
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: T.accent, fontWeight: 700, background: T.accentGlow, padding: '4px 10px', borderRadius: 8 }}>
+                {dayCount()} shifts will be created
+              </span>
+            )}
+          </div>
+        </>
+      ) : (
+        <Input label="Date" type="date" value={form.date_from} onChange={set('date_from')} />
+      )}
+
+      <Input label="Notes (optional)" value={form.notes} onChange={set('notes')} placeholder="Any instructions…" />
+
+      <Btn onClick={handleSave} disabled={saving || (mode === 'bulk' && dayCount() === 0)} style={{ width: '100%', marginTop: 4 }}>
+        {saving ? '⏳ Scheduling…' : mode === 'bulk' ? `✓ Create ${dayCount() || ''} Shifts` : '✓ Schedule Shift'}
+      </Btn>
+    </Modal>
+  );
+}
+
+// ─── Edit Single Shift Modal ──────────────────────────────────────────────────
+function EditShiftModal({ open, onClose, onSaved, shift }) {
+  const [form, setForm] = useState({ shift_name: '', start_time: '', end_time: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  useEffect(() => {
+    if (shift) setForm({ shift_name: shift.shift_name, start_time: shift.start_time, end_time: shift.end_time, notes: shift.notes || '' });
+  }, [shift]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateShift(shift.id, form);
+      toast.success('Shift updated!');
+      onSaved(); onClose();
+    } catch { toast.error('Failed to update shift'); }
+    finally { setSaving(false); }
+  };
+
+  if (!shift) return null;
+  return (
+    <Modal open={open} onClose={onClose} title={`Edit Shift — ${shift.employee_name} (${shift.date})`} width={440}>
+      <FieldLabel>Quick Presets</FieldLabel>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {SHIFT_PRESETS.map(p => (
+          <button key={p.name} onClick={() => setForm(f => ({ ...f, shift_name: p.name, start_time: p.start, end_time: p.end }))}
+            style={{ background: form.shift_name === p.name ? T.accentGlow : T.surface, border: `1px solid ${form.shift_name === p.name ? T.accent + '66' : T.border}`, color: form.shift_name === p.name ? T.accent : T.textMid, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+            {p.name} <span style={{ fontSize: 10, opacity: 0.7 }}>{p.start}–{p.end}</span>
+          </button>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 12px' }}>
+        <Input label="Shift Name" value={form.shift_name} onChange={set('shift_name')} />
+        <Input label="Start Time" type="time" value={form.start_time} onChange={set('start_time')} />
+        <Input label="End Time"   type="time" value={form.end_time}   onChange={set('end_time')} />
+      </div>
       <Input label="Notes (optional)" value={form.notes} onChange={set('notes')} placeholder="Any instructions…" />
       <Btn onClick={handleSave} disabled={saving} style={{ width: '100%', marginTop: 4 }}>
-        {saving ? '⏳ Scheduling…' : '✓ Schedule Shift'}
+        {saving ? '⏳ Saving…' : '✓ Save Changes'}
       </Btn>
     </Modal>
   );
@@ -373,6 +478,7 @@ function ShiftsTab({ employees }) {
   const [shifts,     setShifts]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [addOpen,    setAddOpen]    = useState(false);
+  const [editShift,  setEditShift]  = useState(null);
   const [dateFilter, setDateFilter] = useState(todayStr());
 
   const load = useCallback(() => {
@@ -442,6 +548,7 @@ function ShiftsTab({ employees }) {
                   {shift.status === 'active' && (
                     <button onClick={() => changeStatus(shift.id, 'completed')} style={{ background: T.blueDim, color: T.blue, border: `1px solid ${T.blue}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Check Out</button>
                   )}
+                  <button onClick={() => setEditShift(shift)} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>✏ Edit</button>
                   <button onClick={() => remove(shift.id)} style={{ background: 'none', border: 'none', color: T.textDim, cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>×</button>
                 </div>
               </div>
@@ -450,7 +557,8 @@ function ShiftsTab({ employees }) {
         ))
       )}
 
-      <AddShiftModal open={addOpen} onClose={() => setAddOpen(false)} onSaved={load} employees={employees} />
+      <BulkShiftModal open={addOpen} onClose={() => setAddOpen(false)} onSaved={load} employees={employees} />
+      <EditShiftModal open={!!editShift} onClose={() => setEditShift(null)} onSaved={load} shift={editShift} />
     </div>
   );
 }
