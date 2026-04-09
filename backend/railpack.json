@@ -1,5 +1,5 @@
 {
     "deploy": {
-        "startCommand": "npm start"
+        "startCommand": "node src/index.js"
     }
 }
