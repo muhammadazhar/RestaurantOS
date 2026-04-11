@@ -32,7 +32,8 @@ async function resolveAttendanceDate(client, restaurantId, employeeId, punchedAt
     const endMin   = timeToMin(shift.end_time);
     const isNight  = endMin < startMin; // crosses midnight
 
-    const shiftDate = new Date(shift.date + 'T00:00:00Z');
+    const dateOnly = new Date(shift.date).toISOString().slice(0, 10);
+    const shiftDate = new Date(dateOnly + 'T00:00:00Z');
     const shiftStart = new Date(shiftDate.getTime() + startMin * 60000);
     const shiftEnd   = isNight
       ? new Date(shiftDate.getTime() + (24 * 60 + endMin) * 60000)
@@ -41,7 +42,7 @@ async function resolveAttendanceDate(client, restaurantId, employeeId, punchedAt
     // Add 2h tolerance on both sides
     if (now >= new Date(shiftStart.getTime() - 7200000) &&
         now <= new Date(shiftEnd.getTime() + 7200000)) {
-      return shift.date; // attendance_date = shift's date
+      return dateOnly; // attendance_date = shift's date as YYYY-MM-DD string
     }
   }
 
@@ -130,7 +131,7 @@ async function computeDaily(client, restaurantId, employeeId, dateStr, force = f
         const startMin = timeToMin(shift.start_time);
         const endMin   = timeToMin(shift.end_time);
         const isNight  = endMin < startMin;
-        const shiftBase = new Date(shift.date + 'T00:00:00Z');
+        const shiftBase = new Date(new Date(shift.date).toISOString().slice(0, 10) + 'T00:00:00Z');
         const schedStart = new Date(shiftBase.getTime() + startMin * 60000);
         const schedEnd   = isNight
           ? new Date(shiftBase.getTime() + (24 * 60 + endMin) * 60000)
