@@ -71,8 +71,7 @@ export default function POS() {
   }, []);
 
   const load = useCallback(() => {
-    const tablesCall = hasPermission('tables') ? getTables() : Promise.resolve({ data: [] });
-    Promise.all([getMenu(), tablesCall, getOrders({ order_type: 'online', status: 'pending' })])
+    Promise.all([getMenu(), getTables(), getOrders({ order_type: 'online', status: 'pending' })])
       .then(([m, t, o]) => { setMenu(m.data); setTables(t.data); setOnlineOrders(o.data); })
       .finally(() => setLoading(false));
   }, [hasPermission]);
