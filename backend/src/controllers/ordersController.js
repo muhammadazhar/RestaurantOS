@@ -28,6 +28,8 @@ exports.getOrders = async (req, res) => {
       `SELECT o.*,
               dt.label as table_label,
               e.full_name as server_name,
+              s.shift_number, s.shift_name,
+              s.start_time as shift_start, s.end_time as shift_end,
               json_agg(json_build_object(
                 'id', oi.id, 'name', oi.name, 'quantity', oi.quantity,
                 'unit_price', oi.unit_price, 'total_price', oi.total_price,
@@ -36,9 +38,10 @@ exports.getOrders = async (req, res) => {
        FROM orders o
        LEFT JOIN dining_tables dt ON o.table_id = dt.id
        LEFT JOIN employees e ON o.employee_id = e.id
+       LEFT JOIN shifts s ON o.shift_id = s.id
        LEFT JOIN order_items oi ON o.id = oi.order_id
        WHERE ${where.join(' AND ')}
-       GROUP BY o.id, dt.label, e.full_name
+       GROUP BY o.id, dt.label, e.full_name, s.shift_number, s.shift_name, s.start_time, s.end_time
        ORDER BY o.created_at DESC`,
       params
     );

@@ -44,9 +44,10 @@ function printReceipt(order) {
       <div class="line"></div>
       <div class="row"><span>Order:</span><span class="bold">${order.order_number}</span></div>
       <div class="row"><span>Type:</span><span>${(order.order_type || '').replace('_',' ').toUpperCase()}</span></div>
+      <div class="row"><span>Cashier:</span><span class="bold">${order.server_name || '—'}</span></div>
+      ${order.shift_number ? `<div class="row"><span>Shift:</span><span class="bold">#${order.shift_number} ${order.shift_name || ''} (${(order.shift_start||'').slice(0,5)}–${(order.shift_end||'').slice(0,5)})</span></div>` : ''}
       ${isDineIn
         ? `<div class="row"><span>Table:</span><span class="bold">${order.table_label || '—'}</span></div>
-           <div class="row"><span>Server:</span><span>${order.server_name || '—'}</span></div>
            <div class="row"><span>Guests:</span><span>${order.guest_count || '—'}</span></div>`
         : `<div class="row"><span>Customer:</span><span class="bold">${order.customer_name || '—'}</span></div>
            ${order.customer_phone ? `<div class="row"><span>Phone:</span><span>${order.customer_phone}</span></div>` : ''}`
@@ -102,7 +103,8 @@ function OrderDetailModal({ order, open, onClose, onStatusChange }) {
         {[
           ['Type',    `${ORDER_TYPE_ICON[order.order_type] || ''} ${order.order_type?.replace('_',' ')}`],
           ['Table',   order.table_label || '—'],
-          ['Server',  order.server_name || '—'],
+          ['Cashier', order.server_name || '—'],
+          ['Shift',   order.shift_number ? `#${order.shift_number} ${order.shift_name || ''} (${order.shift_start?.slice(0,5)||''}–${order.shift_end?.slice(0,5)||''})` : '—'],
           ['Guests',  order.guest_count || '—'],
           ['Date',    fmtDT(order.created_at)],
           ['Source',  order.source || 'pos'],
@@ -364,7 +366,8 @@ export default function Orders() {
                   <div style={{ fontSize: 11, color: T.textMid }}>
                     {order.table_label ? `Table ${order.table_label}` : ''}
                     {order.customer_name ? ` ${order.customer_name}` : ''}
-                    {order.server_name ? ` · ${order.server_name}` : ''}
+                    {order.server_name ? ` · 👤 ${order.server_name}` : ''}
+                    {order.shift_number ? ` · 🕐 Shift #${order.shift_number} ${order.shift_name || ''}` : ''}
                     {` · ${order.items?.filter(i=>i?.name).length || 0} items`}
                     {` · ${new Date(order.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`}
                   </div>
