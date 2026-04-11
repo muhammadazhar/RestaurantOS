@@ -3,12 +3,19 @@ const db = require('../config/db');
 // GET /api/orders?status=pending  OR  ?status=pending,preparing,ready
 exports.getOrders = async (req, res) => {
   try {
-    const { restaurantId } = req.user;
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
     const { status, order_type, date } = req.query;
 
     let where = ['o.restaurant_id = $1'];
     const params = [restaurantId];
     let idx = 2;
+
+    // Non-managers only see their own orders
+    if (!isManager) {
+      where.push(`o.employee_id = $${idx++}`);
+      params.push(userId);
+    }
 
     if (status) {
       // Support comma-separated values e.g. "pending,preparing,ready"
@@ -194,7 +201,9 @@ exports.updateOrderStatus = async (req, res) => {
 // GET /api/reports/performance
 exports.getPerformanceMatrix = async (req, res) => {
   try {
-    const { restaurantId } = req.user;
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
+    const empFilter = isManager ? '' : `AND employee_id='${userId}'`;
     const from = req.query.from || new Date().toISOString().slice(0, 10);
     const to = req.query.to || from;
 
@@ -227,7 +236,7 @@ exports.getPerformanceMatrix = async (req, res) => {
                 AND o2.status IN ('served','paid')
             ) day_stats
        WHERE restaurant_id=$1
-         AND DATE(created_at) BETWEEN $2 AND $3`,
+         AND DATE(created_at) BETWEEN $2 AND $3 ${empFilter}`,
       [restaurantId, from, to]
     );
 
@@ -239,7 +248,8 @@ exports.getPerformanceMatrix = async (req, res) => {
               COUNT(*) as orders,
               ROUND(AVG(EXTRACT(EPOCH FROM (COALESCE(served_at, updated_at) - created_at))/60)) as avg_total_min
        FROM orders
-       WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3 AND status IN ('served','paid')
+       WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3
+         AND status IN ('served','paid') ${empFilter}
        GROUP BY DATE(created_at)
        ORDER BY DATE(created_at)`,
       [restaurantId, from, to]
@@ -260,18 +270,21 @@ exports.getPerformanceMatrix = async (req, res) => {
 // GET /api/dashboard/stats
 exports.getDashboardStats = async (req, res) => {
   try {
-    const { restaurantId } = req.user;
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
     const today = new Date().toISOString().slice(0, 10);
+
+    const empFilter = isManager ? '' : `AND employee_id='${userId}'`;
 
     const [revenue, orders, tables, alerts] = await Promise.all([
       db.query(
         `SELECT COALESCE(SUM(total_amount),0) as total, COUNT(*) as count
-         FROM orders WHERE restaurant_id=$1 AND DATE(created_at)=$2 AND payment_status='paid'`,
+         FROM orders WHERE restaurant_id=$1 AND DATE(created_at)=$2 AND payment_status='paid' ${empFilter}`,
         [restaurantId, today]
       ),
       db.query(
         `SELECT status, COUNT(*) as count FROM orders
-         WHERE restaurant_id=$1 AND DATE(created_at)=$2 GROUP BY status`,
+         WHERE restaurant_id=$1 AND DATE(created_at)=$2 ${empFilter} GROUP BY status`,
         [restaurantId, today]
       ),
       db.query(
@@ -302,7 +315,9 @@ exports.getDashboardStats = async (req, res) => {
 // GET /api/reports/sales  — daily/weekly/monthly sales breakdown
 exports.getSalesReport = async (req, res) => {
   try {
-    const { restaurantId } = req.user;
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
+    const empFilter = isManager ? '' : `AND employee_id='${userId}'`;
     const { period = 'daily', from, to, group_by = 'day' } = req.query;
 
     // Determine date range
@@ -338,7 +353,7 @@ exports.getSalesReport = async (req, res) => {
           COALESCE(AVG(total_amount) FILTER (WHERE payment_status='paid'), 0)    AS avg_order_value,
           COALESCE(SUM(guest_count) FILTER (WHERE payment_status='paid'), 0)     AS total_guests
         FROM orders
-        WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3`,
+        WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3 ${empFilter}`,
         [restaurantId, dateFrom, dateTo]
       ),
       // Revenue by day/week
@@ -349,7 +364,7 @@ exports.getSalesReport = async (req, res) => {
           COALESCE(SUM(total_amount) FILTER (WHERE payment_status='paid'), 0) AS revenue,
           COALESCE(AVG(total_amount) FILTER (WHERE payment_status='paid'), 0) AS avg_value
         FROM orders
-        WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3
+        WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3 ${empFilter}
         GROUP BY DATE(created_at) ORDER BY DATE(created_at)`,
         [restaurantId, dateFrom, dateTo]
       ),
@@ -360,7 +375,7 @@ exports.getSalesReport = async (req, res) => {
           COALESCE(SUM(total_amount) FILTER (WHERE payment_status='paid'),0) AS revenue
         FROM orders
         WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3
-          AND payment_status='paid'
+          AND payment_status='paid' ${empFilter}
         GROUP BY order_type ORDER BY revenue DESC`,
         [restaurantId, dateFrom, dateTo]
       ),
@@ -370,7 +385,7 @@ exports.getSalesReport = async (req, res) => {
           COUNT(*) AS orders,
           COALESCE(SUM(total_amount) FILTER (WHERE payment_status='paid'),0) AS revenue
         FROM orders
-        WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3
+        WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3 ${empFilter}
         GROUP BY hour ORDER BY hour`,
         [restaurantId, dateFrom, dateTo]
       ),
@@ -387,7 +402,7 @@ exports.getSalesReport = async (req, res) => {
         LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
         LEFT JOIN categories c  ON mi.category_id = c.id
         WHERE o.restaurant_id=$1 AND DATE(o.created_at) BETWEEN $2 AND $3
-          AND o.status NOT IN ('cancelled')
+          AND o.status NOT IN ('cancelled') ${empFilter.replace('employee_id', 'o.employee_id')}
         GROUP BY oi.name, oi.menu_item_id, mi.category_id, c.name
         ORDER BY qty_sold DESC LIMIT 15`,
         [restaurantId, dateFrom, dateTo]
@@ -399,7 +414,7 @@ exports.getSalesReport = async (req, res) => {
           COALESCE(SUM(total_amount),0) AS revenue
         FROM orders
         WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3
-          AND payment_status='paid'
+          AND payment_status='paid' ${empFilter}
         GROUP BY payment_method ORDER BY revenue DESC`,
         [restaurantId, dateFrom, dateTo]
       ),
@@ -420,13 +435,16 @@ exports.getSalesReport = async (req, res) => {
 // GET /api/reports/employees  — employee performance
 exports.getEmployeeReport = async (req, res) => {
   try {
-    const { restaurantId } = req.user;
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
     const { from, to, employee_id } = req.query;
     const now = new Date();
     const dateFrom = from || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
     const dateTo = to || now.toISOString().slice(0, 10);
 
-    const empWhere = employee_id ? `AND e.id='${employee_id}'::uuid` : '';
+    // Non-managers are locked to their own data; managers can filter by employee_id or see all
+    const resolvedEmpId = isManager ? (employee_id || null) : userId;
+    const empWhere = resolvedEmpId ? `AND e.id='${resolvedEmpId}'::uuid` : '';
 
     const [performance, shiftStats, topSellers] = await Promise.all([
       // Per-employee order performance
@@ -509,7 +527,9 @@ exports.getEmployeeReport = async (req, res) => {
 // GET /api/reports/menu  — menu item performance
 exports.getMenuReport = async (req, res) => {
   try {
-    const { restaurantId } = req.user;
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
+    const empFilter = isManager ? '' : `AND o.employee_id='${userId}'`;
     const { from, to } = req.query;
     const now = new Date();
     const dateFrom = from || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -532,7 +552,7 @@ exports.getMenuReport = async (req, res) => {
         LEFT JOIN order_items oi ON oi.menu_item_id = mi.id
         LEFT JOIN orders o       ON oi.order_id = o.id
           AND DATE(o.created_at) BETWEEN $2 AND $3
-          AND o.status NOT IN ('cancelled')
+          AND o.status NOT IN ('cancelled') ${empFilter}
         WHERE mi.restaurant_id=$1
         GROUP BY mi.id, mi.name, mi.price, mi.cost, mi.image_url, c.name
         ORDER BY qty_sold DESC`,
@@ -548,7 +568,8 @@ exports.getMenuReport = async (req, res) => {
         LEFT JOIN menu_items mi ON mi.category_id = c.id AND mi.restaurant_id=$1
         LEFT JOIN order_items oi ON oi.menu_item_id = mi.id
         LEFT JOIN orders o ON oi.order_id = o.id
-          AND DATE(o.created_at) BETWEEN $2 AND $3 AND o.status NOT IN ('cancelled')
+          AND DATE(o.created_at) BETWEEN $2 AND $3
+          AND o.status NOT IN ('cancelled') ${empFilter}
         WHERE c.restaurant_id=$1
         GROUP BY c.name ORDER BY revenue DESC`,
         [restaurantId, dateFrom, dateTo]
@@ -560,11 +581,12 @@ exports.getMenuReport = async (req, res) => {
         FROM order_items oi
         JOIN orders o ON oi.order_id = o.id
         WHERE o.restaurant_id=$1 AND DATE(o.created_at) BETWEEN $2 AND $3
-          AND o.status NOT IN ('cancelled')
+          AND o.status NOT IN ('cancelled') ${empFilter}
           AND oi.name IN (
             SELECT oi2.name FROM order_items oi2
             JOIN orders o2 ON oi2.order_id=o2.id
             WHERE o2.restaurant_id=$1 AND DATE(o2.created_at) BETWEEN $2 AND $3
+              AND o2.status NOT IN ('cancelled') ${empFilter.replace('o.employee_id', 'o2.employee_id')}
             GROUP BY oi2.name ORDER BY SUM(oi2.quantity) DESC LIMIT 5
           )
         GROUP BY DATE(o.created_at), oi.name ORDER BY day, qty DESC`,
