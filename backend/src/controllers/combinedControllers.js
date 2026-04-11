@@ -581,12 +581,12 @@ exports.bulkCreateShifts = async (req, res) => {
       dates.push(d.toISOString().slice(0, 10));
     }
 
-    // Insert all, skip dates that already have a shift for this employee
+    // Insert all, skip if exact same shift (same employee + date + start_time + end_time) already exists
     let created = 0;
     for (const date of dates) {
       const exists = await db.query(
-        `SELECT 1 FROM shifts WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3 LIMIT 1`,
-        [req.user.restaurantId, employee_id, date]
+        `SELECT 1 FROM shifts WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3 AND start_time=$4 AND end_time=$5 LIMIT 1`,
+        [req.user.restaurantId, employee_id, date, start_time, end_time]
       );
       if (exists.rows.length > 0) continue;
       const numRes = await db.query(
