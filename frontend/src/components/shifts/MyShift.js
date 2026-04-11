@@ -32,14 +32,19 @@ function ShiftCard({ shift, acting, onStart, onContinue, onClose, isToday }) {
   return (
     <Card style={{ marginBottom: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
       {/* Date block */}
-      <div style={{ minWidth: 52, textAlign: 'center' }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: T.text, fontFamily: 'monospace', lineHeight: 1 }}>
-          {new Date(shift.date + 'T00:00:00').getDate()}
-        </div>
-        <div style={{ fontSize: 10, color: T.textMid, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-          {new Date(shift.date + 'T00:00:00').toLocaleDateString('en', { month: 'short' })}
-        </div>
-      </div>
+      {(() => {
+        const d = new Date((shift.date + '').slice(0, 10) + 'T12:00:00');
+        return (
+          <div style={{ minWidth: 52, textAlign: 'center' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T.text, fontFamily: 'monospace', lineHeight: 1 }}>
+              {d.getDate()}
+            </div>
+            <div style={{ fontSize: 10, color: T.textMid, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {d.toLocaleDateString('en', { month: 'short' })}
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ width: 1, height: 36, background: T.border, flexShrink: 0 }} />
 
@@ -145,8 +150,8 @@ export default function MyShift() {
   if (loading) return <Spinner />;
 
   const today = new Date().toISOString().slice(0, 10);
-  const todayShifts = shifts.filter(s => s.date === today);
-  const history     = shifts.filter(s => s.date !== today);
+  const todayShifts = shifts.filter(s => (s.date + '').slice(0, 10) === today);
+  const history     = shifts.filter(s => (s.date + '').slice(0, 10) !== today);
 
   return (
     <div style={{ maxWidth: 700 }}>
