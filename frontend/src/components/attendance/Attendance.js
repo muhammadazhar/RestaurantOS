@@ -9,7 +9,7 @@ import {
   attGetOTRules, attCreateOTRule, attUpdateOTRule,
   attGetCorrections, attCreateCorrection, attUpdateCorrection,
   attGetMonthlySummary, attGetLogs, attCreateLog, attVoidLog, attRecompute,
-  getEmployees, getShifts,
+  getEmployees, getShifts, getOpenShifts, forceCloseShift,
 } from '../../services/api';
 
 const TABS = ['Live', 'Records', 'Leaves', 'Holidays', 'OT Rules', 'Corrections', 'Reports'];
@@ -34,7 +34,8 @@ const fmtTime = (ts) => {
 
 const fmtDate = (d) => {
   if (!d) return '—';
-  return new Date(d + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateOnly = (d + '').slice(0, 10);
+  return new Date(dateOnly + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
 const todayISO = () => new Date().toISOString().split('T')[0];
@@ -55,6 +56,7 @@ export default function Attendance() {
   const [summary, setSummary]     = useState({ employees: [] });
   const [employees, setEmployees] = useState([]);
   const [shifts, setShifts]       = useState([]);
+  const [openShifts, setOpenShifts] = useState([]);
 
   // Filters
   const [dailyFilter, setDailyFilter]   = useState({ date: todayISO(), employee_id: '' });
@@ -113,9 +115,14 @@ export default function Attendance() {
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
+  const loadOpenShifts = useCallback(async () => {
+    if (!isManager) return;
+    try { const r = await getOpenShifts(); setOpenShifts(r.data || []); } catch {}
+  }, [isManager]);
+
   useEffect(() => {
     if (tab === 'Live')        { loadStatus(); loadToday(); }
-    if (tab === 'Records')     { loadDaily(); }
+    if (tab === 'Records')     { loadDaily(); loadOpenShifts(); }
     if (tab === 'Leaves')      { loadLeaves(); }
     if (tab === 'Holidays')    { loadHolidays(); }
     if (tab === 'OT Rules')    { loadOTRules(); }
@@ -142,6 +149,30 @@ export default function Attendance() {
       loadStatus(); loadToday();
     } catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
     finally { setLoading(false); }
+  };
+
+  const handleRowClockIn = async (empId) => {
+    try {
+      await attClockIn({ employee_id: empId, source: 'web' });
+      toast.success('Clocked in!');
+      loadDaily(); loadStatus();
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
+  };
+
+  const handleRowClockOut = async (empId) => {
+    try {
+      await attClockOut({ employee_id: empId, source: 'web' });
+      toast.success('Clocked out!');
+      loadDaily(); loadStatus();
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
+  };
+
+  const handleForceCloseShift = async (shiftId) => {
+    try {
+      await forceCloseShift(shiftId);
+      toast.success('Shift closed!');
+      loadOpenShifts(); loadDaily();
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed'); }
   };
 
   // ── Styles ────────────────────────────────────────────────────────────────
@@ -252,6 +283,30 @@ export default function Attendance() {
   // ── TAB: Records ──────────────────────────────────────────────────────────
   const renderRecords = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Open shifts from previous days */}
+      {isManager && openShifts.length > 0 && (
+        <div style={{ ...card, border: `1px solid #E74C3C55`, background: '#E74C3C11' }}>
+          <div style={{ fontWeight: 700, color: '#E74C3C', fontSize: 13, marginBottom: 10 }}>
+            ⚠ {openShifts.length} shift{openShifts.length > 1 ? 's' : ''} still open from previous period
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {openShifts.map(s => (
+              <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', background: T.card, borderRadius: 8, padding: '8px 12px', border: `1px solid ${T.border}` }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontWeight: 700, color: T.text, fontSize: 13 }}>{s.employee_name}</span>
+                  <span style={{ color: T.textMid, fontSize: 12, marginLeft: 8 }}>
+                    {s.shift_name} · {fmtDate(s.date)} · {s.start_time?.slice(0,5)}–{s.end_time?.slice(0,5)}
+                  </span>
+                  <span style={{ marginLeft: 8, background: '#F39C1222', color: '#F39C12', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{s.status}</span>
+                </div>
+                <button onClick={() => handleForceCloseShift(s.id)} style={{ ...btn('#E74C3C', '#fff'), padding: '5px 12px', fontSize: 12 }}>Force Close</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div>
           <div style={label}>Date</div>
@@ -279,31 +334,49 @@ export default function Attendance() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ color: T.textMid }}>
-                  {['Date', isManager ? 'Employee' : null, 'Status', 'Clock In', 'Clock Out', 'Worked', 'Break', 'Late', 'Early Exit', 'OT', 'Notes'].filter(Boolean).map(h => (
+                  {['Date', isManager ? 'Employee' : null, 'Status', 'Clock In', 'Clock Out', 'Worked', 'Break', 'Late', 'Early Exit', 'OT', 'Notes', 'Actions'].filter(Boolean).map(h => (
                     <th key={h} style={{ textAlign: 'left', padding: '6px 10px', fontWeight: 600, borderBottom: `1px solid ${T.border}` }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {daily.map(row => (
-                  <tr key={row.id} style={{ borderBottom: `1px solid ${T.border}` }}>
-                    <td style={{ padding: '8px 10px', color: T.textMid }}>{fmtDate(row.attendance_date)}</td>
-                    {isManager && <td style={{ padding: '8px 10px', color: T.text, fontWeight: 600 }}>{row.full_name}</td>}
-                    <td style={{ padding: '8px 10px' }}>
-                      <span style={{ background: STATUS_COLORS[row.status] + '22', color: STATUS_COLORS[row.status], borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
-                        {row.status?.replace(/_/g, ' ')}
-                      </span>
-                    </td>
-                    <td style={{ padding: '8px 10px', color: T.textMid }}>{fmtTime(row.clock_in_at)}</td>
-                    <td style={{ padding: '8px 10px', color: T.textMid }}>{fmtTime(row.clock_out_at)}</td>
-                    <td style={{ padding: '8px 10px', color: T.text }}>{fmt(row.worked_minutes)}</td>
-                    <td style={{ padding: '8px 10px', color: T.textMid }}>{fmt(row.break_minutes)}</td>
-                    <td style={{ padding: '8px 10px', color: row.late_minutes > 0 ? '#E74C3C' : T.textMid }}>{fmt(row.late_minutes)}</td>
-                    <td style={{ padding: '8px 10px', color: row.early_exit_minutes > 0 ? '#E67E22' : T.textMid }}>{fmt(row.early_exit_minutes)}</td>
-                    <td style={{ padding: '8px 10px', color: row.ot_minutes > 0 ? '#27AE60' : T.textMid }}>{fmt(row.ot_minutes)}</td>
-                    <td style={{ padding: '8px 10px', color: T.textMid, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
-                  </tr>
-                ))}
+                {daily.map(row => {
+                  const canClockIn  = !row.clock_in_at;
+                  const canClockOut = row.clock_in_at && !row.clock_out_at;
+                  return (
+                    <tr key={row.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                      <td style={{ padding: '8px 10px', color: T.textMid }}>{fmtDate(row.attendance_date)}</td>
+                      {isManager && <td style={{ padding: '8px 10px', color: T.text, fontWeight: 600 }}>{row.full_name}</td>}
+                      <td style={{ padding: '8px 10px' }}>
+                        <span style={{ background: STATUS_COLORS[row.status] + '22', color: STATUS_COLORS[row.status], borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                          {row.status?.replace(/_/g, ' ')}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px 10px', color: T.textMid }}>{fmtTime(row.clock_in_at)}</td>
+                      <td style={{ padding: '8px 10px', color: T.textMid }}>{fmtTime(row.clock_out_at)}</td>
+                      <td style={{ padding: '8px 10px', color: T.text }}>{fmt(row.worked_minutes)}</td>
+                      <td style={{ padding: '8px 10px', color: T.textMid }}>{fmt(row.break_minutes)}</td>
+                      <td style={{ padding: '8px 10px', color: row.late_minutes > 0 ? '#E74C3C' : T.textMid }}>{fmt(row.late_minutes)}</td>
+                      <td style={{ padding: '8px 10px', color: row.early_exit_minutes > 0 ? '#E67E22' : T.textMid }}>{fmt(row.early_exit_minutes)}</td>
+                      <td style={{ padding: '8px 10px', color: row.ot_minutes > 0 ? '#27AE60' : T.textMid }}>{fmt(row.ot_minutes)}</td>
+                      <td style={{ padding: '8px 10px', color: T.textMid, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
+                      <td style={{ padding: '8px 10px' }}>
+                        {canClockIn && (
+                          <button onClick={() => handleRowClockIn(row.employee_id)}
+                            style={{ ...btn('#27AE60', '#fff'), padding: '4px 10px', fontSize: 11 }}>
+                            Clock In
+                          </button>
+                        )}
+                        {canClockOut && (
+                          <button onClick={() => handleRowClockOut(row.employee_id)}
+                            style={{ ...btn('#E74C3C', '#fff'), padding: '4px 10px', fontSize: 11 }}>
+                            Clock Out
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
