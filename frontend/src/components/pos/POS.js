@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn } from '../../services/api';
 import { Card, Pill, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -285,15 +285,8 @@ export default function POS() {
   return (
     <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 56px)', position: 'relative' }}>
 
-      {/* ── Shift blocked overlay ── */}
-      {shiftBlocked && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
-          <div style={{ fontSize: 56, marginBottom: 16 }}>🚫</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 8 }}>POS Locked</div>
-          <div style={{ fontSize: 15, color: '#f87171', fontWeight: 600, marginBottom: 24, textAlign: 'center', maxWidth: 360 }}>{currentShift.reason}</div>
-          <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center' }}>Contact your manager to update your shift schedule.</div>
-        </div>
-      )}
+      {/* ── Shift/Attendance gate modal ── */}
+      {shiftBlocked && <POSGateModal currentShift={currentShift} onUnlocked={() => loadShift()} />}
 
       {/* ── Shift-end confirmation modal ── */}
       {shiftEndModal && (
@@ -680,6 +673,97 @@ export default function POS() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── POS Gate Modal — shown when shift or attendance is missing ─────────────────
+function POSGateModal({ currentShift, onUnlocked }) {
+  const [acting, setActing] = useState(null); // 'shift' | 'clock'
+
+  const hasShift     = !!currentShift?.shift && ['active','in_process'].includes(currentShift.shift.status);
+  const isClockedIn  = currentShift?.attendance?.is_clocked_in;
+  const scheduledShift = currentShift?.shifts?.find(s => s.status === 'scheduled');
+
+  const row = (ok, label, detail, btn) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, background: ok ? '#27AE6033' : '#E74C3C33' }}>
+        {ok ? '✓' : '✗'}
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: ok ? '#27AE60' : '#f87171' }}>{label}</div>
+        {detail && <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>{detail}</div>}
+      </div>
+      {!ok && btn}
+    </div>
+  );
+
+  const handleStartShift = async () => {
+    if (!scheduledShift) return;
+    setActing('shift');
+    try {
+      await startMyShift(scheduledShift.id);
+      onUnlocked();
+    } catch (e) {
+      const msg = e.response?.data?.error || 'Failed to start shift';
+      alert(msg);
+    } finally { setActing(null); }
+  };
+
+  const handleClockIn = async () => {
+    setActing('clock');
+    try {
+      await attClockIn({ source: 'web' });
+      onUnlocked();
+    } catch (e) {
+      const msg = e.response?.data?.error || 'Failed to clock in';
+      alert(msg);
+    } finally { setActing(null); }
+  };
+
+  const btnStyle = (bg, col = '#000') => ({
+    background: bg, color: col, border: 'none', borderRadius: 8,
+    padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+    fontFamily: "'Syne', sans-serif", whiteSpace: 'nowrap', opacity: acting ? 0.6 : 1,
+  });
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 20, padding: '32px 36px', maxWidth: 440, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.8)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ fontSize: 48, marginBottom: 10 }}>🔐</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 6 }}>POS Access Required</div>
+          <div style={{ fontSize: 13, color: '#888' }}>Complete the steps below to unlock the POS</div>
+        </div>
+
+        {row(
+          hasShift,
+          hasShift ? `Shift Active — ${currentShift.shift.shift_name}` : 'Shift Not Started',
+          hasShift
+            ? `${currentShift.shift.start_time?.slice(0,5)} – ${currentShift.shift.end_time?.slice(0,5)}`
+            : scheduledShift
+              ? `Scheduled: ${scheduledShift.shift_name} · ${scheduledShift.start_time?.slice(0,5)}–${scheduledShift.end_time?.slice(0,5)}`
+              : 'No shift scheduled for today — ask your manager',
+          scheduledShift
+            ? <button style={btnStyle('#f59e0b')} onClick={handleStartShift} disabled={!!acting}>
+                {acting === 'shift' ? '…' : '▶ Start Shift'}
+              </button>
+            : <a href="/my-shift" style={{ ...btnStyle('#444', '#fff'), textDecoration: 'none', display: 'inline-block' }}>My Shift ↗</a>
+        )}
+
+        {row(
+          isClockedIn,
+          isClockedIn ? 'Attendance — Clocked In' : 'Not Clocked In',
+          isClockedIn ? `Since ${currentShift?.attendance?.clocked_in_at ? new Date(currentShift.attendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}` : 'You must clock in before placing orders',
+          <button style={btnStyle('#27AE60', '#fff')} onClick={handleClockIn} disabled={!!acting}>
+            {acting === 'clock' ? '…' : '▶ Clock In'}
+          </button>
+        )}
+
+        <div style={{ marginTop: 20, textAlign: 'center' }}>
+          <a href="/attendance" style={{ fontSize: 12, color: '#666', textDecoration: 'none' }}>Go to Attendance ↗</a>
+        </div>
+      </div>
     </div>
   );
 }
