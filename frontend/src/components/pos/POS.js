@@ -64,18 +64,25 @@ export default function POS() {
   const { on, off } = useSocket();
   const { user } = useAuth();
 
+  const loadShift = useCallback(() => {
+    getCurrentShift()
+      .then(r => setCurrentShift(r.data))
+      .catch(() => setCurrentShift({ shift: null, allowed: false, reason: 'Could not verify shift status' }));
+  }, []);
+
   const load = useCallback(() => {
     const tablesCall = hasPermission('tables') ? getTables() : Promise.resolve({ data: [] });
-    Promise.all([getMenu(), tablesCall, getOrders({ order_type: 'online', status: 'pending' }), getCurrentShift()])
-      .then(([m, t, o, s]) => { setMenu(m.data); setTables(t.data); setOnlineOrders(o.data); setCurrentShift(s.data); })
+    Promise.all([getMenu(), tablesCall, getOrders({ order_type: 'online', status: 'pending' })])
+      .then(([m, t, o]) => { setMenu(m.data); setTables(t.data); setOnlineOrders(o.data); })
       .finally(() => setLoading(false));
   }, [hasPermission]);
 
   useEffect(() => {
     load();
+    loadShift();
     on('new_order', load);
     return () => off('new_order', load);
-  }, [load, on, off]);
+  }, [load, loadShift, on, off]);
 
   const cats = ['All', ...menu.categories.map(c => c.name)];
 
