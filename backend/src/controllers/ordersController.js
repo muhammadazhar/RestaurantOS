@@ -53,9 +53,44 @@ exports.createOrder = async (req, res) => {
     await client.query('BEGIN');
     const { restaurantId, id: employeeId } = req.user;
     const { table_id, order_type = 'dine_in', items, guest_count = 1,
-      customer_name, customer_phone, notes, source = 'pos' } = req.body;
+      customer_name, customer_phone, notes, source = 'pos', discount_amount } = req.body;
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' });
+
+    // ── Shift validation (only for POS orders placed by employees) ─────────────
+    let shiftId = null;
+    if (source === 'pos') {
+      const today   = new Date().toISOString().slice(0, 10);
+      const nowTime = new Date().toTimeString().slice(0, 5);
+
+      const shiftRes = await client.query(
+        `SELECT id, shift_number, shift_name, start_time, end_time, status
+         FROM shifts WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3
+         ORDER BY start_time LIMIT 1`,
+        [restaurantId, employeeId, today]
+      );
+
+      if (!shiftRes.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'No shift scheduled for you today. Contact your manager.' });
+      }
+
+      const shift = shiftRes.rows[0];
+
+      if (shift.status === 'absent') {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'You are marked absent. Cannot place orders.' });
+      }
+
+      const start = shift.start_time.slice(0, 5);
+      const end   = shift.end_time.slice(0, 5);
+      if (nowTime < start || nowTime > end) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: `Outside your shift hours (${start}–${end}). Contact your manager.` });
+      }
+
+      shiftId = shift.id;
+    }
 
     // Generate order number
     const count = await client.query(
@@ -63,17 +98,18 @@ exports.createOrder = async (req, res) => {
     );
     const orderNumber = `ORD-${String(parseInt(count.rows[0].count) + 1001).padStart(4, '0')}`;
 
-    const subtotal = items.reduce((s, i) => s + (i.unit_price * i.quantity), 0);
-    const taxAmount = Math.round(subtotal * 0.08 * 100) / 100;
-    const totalAmount = subtotal + taxAmount;
+    const subtotal   = items.reduce((s, i) => s + (i.unit_price * i.quantity), 0);
+    const discAmt    = Math.min(parseFloat(discount_amount) || 0, subtotal);
+    const taxAmount  = Math.round((subtotal - discAmt) * 0.08 * 100) / 100;
+    const totalAmount = subtotal - discAmt + taxAmount;
 
     const orderRes = await client.query(
-      `INSERT INTO orders(restaurant_id, table_id, employee_id, order_number, order_type,
-                          status, source, guest_count, subtotal, tax_amount, total_amount,
+      `INSERT INTO orders(restaurant_id, table_id, employee_id, shift_id, order_number, order_type,
+                          status, source, guest_count, subtotal, discount_amount, tax_amount, total_amount,
                           customer_name, customer_phone, notes)
-       VALUES($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [restaurantId, table_id || null, employeeId, orderNumber, order_type, source,
-        guest_count, subtotal, taxAmount, totalAmount,
+       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [restaurantId, table_id || null, employeeId, shiftId, orderNumber, order_type, source,
+        guest_count, subtotal, discAmt, taxAmount, totalAmount,
         customer_name || null, customer_phone || null, notes || null]
     );
     const order = orderRes.rows[0];

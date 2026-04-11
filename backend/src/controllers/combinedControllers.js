@@ -588,10 +588,14 @@ exports.bulkCreateShifts = async (req, res) => {
         [req.user.restaurantId, employee_id, date]
       );
       if (exists.rows.length > 0) continue;
+      const numRes = await db.query(
+        `SELECT COALESCE(MAX(shift_number), 0) + 1 AS next_num FROM shifts WHERE restaurant_id=$1 AND date=$2`,
+        [req.user.restaurantId, date]
+      );
       await db.query(
-        `INSERT INTO shifts(restaurant_id, employee_id, shift_name, start_time, end_time, date, status, notes)
-         VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7)`,
-        [req.user.restaurantId, employee_id, shift_name, start_time, end_time, date, notes || null]
+        `INSERT INTO shifts(restaurant_id, employee_id, shift_name, start_time, end_time, date, status, notes, shift_number)
+         VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7,$8)`,
+        [req.user.restaurantId, employee_id, shift_name, start_time, end_time, date, notes || null, numRes.rows[0].next_num]
       );
       created++;
     }
@@ -603,16 +607,52 @@ exports.bulkCreateShifts = async (req, res) => {
   }
 };
 
+exports.getCurrentShift = async (req, res) => {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const now   = new Date().toTimeString().slice(0, 5); // HH:MM
+
+    const result = await db.query(
+      `SELECT s.*, e.full_name as employee_name
+       FROM shifts s
+       JOIN employees e ON s.employee_id = e.id
+       WHERE s.restaurant_id=$1 AND s.employee_id=$2 AND s.date=$3
+       ORDER BY s.start_time LIMIT 1`,
+      [req.user.restaurantId, req.user.id, today]
+    );
+
+    if (!result.rows.length)
+      return res.json({ shift: null, allowed: false, reason: 'No shift scheduled for today' });
+
+    const shift = result.rows[0];
+
+    if (shift.status === 'absent')
+      return res.json({ shift, allowed: false, reason: 'You are marked absent for today' });
+
+    const withinHours = now >= shift.start_time.slice(0, 5) && now <= shift.end_time.slice(0, 5);
+    if (!withinHours)
+      return res.json({ shift, allowed: false, reason: `Outside shift hours (${shift.start_time.slice(0,5)}–${shift.end_time.slice(0,5)})` });
+
+    res.json({ shift, allowed: true, reason: null });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
 exports.createShift = async (req, res) => {
   try {
     const { employee_id, shift_name, start_time, end_time, date, notes } = req.body;
     if (!employee_id || !shift_name || !start_time || !end_time || !date)
       return res.status(400).json({ error: 'employee_id, shift_name, start_time, end_time, date required' });
 
+    const numRes = await db.query(
+      `SELECT COALESCE(MAX(shift_number), 0) + 1 AS next_num FROM shifts WHERE restaurant_id=$1 AND date=$2`,
+      [req.user.restaurantId, date]
+    );
+    const shiftNumber = numRes.rows[0].next_num;
+
     const result = await db.query(
-      `INSERT INTO shifts(restaurant_id, employee_id, shift_name, start_time, end_time, date, status, notes)
-       VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7) RETURNING *`,
-      [req.user.restaurantId, employee_id, shift_name, start_time, end_time, date, notes||null]
+      `INSERT INTO shifts(restaurant_id, employee_id, shift_name, start_time, end_time, date, status, notes, shift_number)
+       VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7,$8) RETURNING *`,
+      [req.user.restaurantId, employee_id, shift_name, start_time, end_time, date, notes||null, shiftNumber]
     );
     res.status(201).json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }

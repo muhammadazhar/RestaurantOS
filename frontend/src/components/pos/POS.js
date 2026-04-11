@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift } from '../../services/api';
 import { Card, Pill, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -60,12 +60,14 @@ export default function POS() {
   const [takePayMethod,setTakePayMethod]= useState('cash');
   const [takePaying,   setTakePaying]   = useState(false);
   const [takePrintRdy, setTakePrintRdy] = useState(false);
+  const [currentShift, setCurrentShift] = useState(null);   // { shift, allowed, reason }
   const { on, off } = useSocket();
+  const { user } = useAuth();
 
   const load = useCallback(() => {
     const tablesCall = hasPermission('tables') ? getTables() : Promise.resolve({ data: [] });
-    Promise.all([getMenu(), tablesCall, getOrders({ order_type: 'online', status: 'pending' })])
-      .then(([m, t, o]) => { setMenu(m.data); setTables(t.data); setOnlineOrders(o.data); })
+    Promise.all([getMenu(), tablesCall, getOrders({ order_type: 'online', status: 'pending' }), getCurrentShift()])
+      .then(([m, t, o, s]) => { setMenu(m.data); setTables(t.data); setOnlineOrders(o.data); setCurrentShift(s.data); })
       .finally(() => setLoading(false));
   }, [hasPermission]);
 
@@ -116,6 +118,7 @@ export default function POS() {
         table_id:       tableId || null,
         order_type:     orderType,
         guest_count:    parseInt(guestCount) || 1,
+        shift_id:       currentShift?.shift?.id || undefined,
         customer_name:  custName  || undefined,
         customer_phone: custPhone || undefined,
         notes:          orderNotes || undefined,
@@ -199,6 +202,8 @@ export default function POS() {
         <div class="row"><span>Customer:</span><span class="bold">${o.customer_name || o._custName || '—'}</span></div>
         ${(o.customer_phone || o._custPhone) ? `<div class="row"><span>Phone:</span><span>${o.customer_phone || o._custPhone}</span></div>` : ''}
         <div class="row"><span>Date:</span><span>${fmtD(o.created_at || new Date())}</span></div>
+        <div class="row"><span>Cashier:</span><span class="bold">${user?.full_name || user?.name || '—'}</span></div>
+        ${currentShift?.shift ? `<div class="row"><span>Shift:</span><span class="bold">#${currentShift.shift.shift_number || '—'} ${currentShift.shift.shift_name} (${currentShift.shift.start_time?.slice(0,5)}–${currentShift.shift.end_time?.slice(0,5)})</span></div>` : ''}
         <div class="line"></div>
         <div class="grid4">
           <span class="small">ITEM</span>
@@ -242,9 +247,20 @@ export default function POS() {
   if (loading) return <Spinner />;
 
   const needCustomer = ['takeaway', 'delivery', 'online'].includes(orderType);
+  const shiftBlocked = currentShift && !currentShift.allowed;
 
   return (
-    <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 56px)' }}>
+    <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 56px)', position: 'relative' }}>
+
+      {/* ── Shift blocked overlay ── */}
+      {shiftBlocked && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 12 }}>
+          <div style={{ fontSize: 56, marginBottom: 16 }}>🚫</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', marginBottom: 8 }}>POS Locked</div>
+          <div style={{ fontSize: 15, color: '#f87171', fontWeight: 600, marginBottom: 24, textAlign: 'center', maxWidth: 360 }}>{currentShift.reason}</div>
+          <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center' }}>Contact your manager to update your shift schedule.</div>
+        </div>
+      )}
 
       {/* ── Menu panel ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
@@ -252,6 +268,16 @@ export default function POS() {
         {/* Top bar */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>📲 POS</h1>
+          {currentShift?.shift && (
+            <div style={{ background: currentShift.allowed ? T.greenDim : T.redDim, border: `1px solid ${currentShift.allowed ? T.green : T.red}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: currentShift.allowed ? T.green : T.red }}>
+              {currentShift.allowed ? '🟢' : '🔴'} Shift #{currentShift.shift.shift_number} · {currentShift.shift.shift_name} · {currentShift.shift.start_time?.slice(0,5)}–{currentShift.shift.end_time?.slice(0,5)}
+            </div>
+          )}
+          {currentShift && !currentShift.shift && (
+            <div style={{ background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: T.red }}>
+              🔴 No shift today
+            </div>
+          )}
 
           {/* Order type */}
           <div style={{ display: 'flex', gap: 6 }}>
