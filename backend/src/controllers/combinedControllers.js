@@ -612,6 +612,10 @@ exports.getCurrentShift = async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const now   = new Date().toTimeString().slice(0, 5); // HH:MM
 
+    // Managers (settings permission) are always allowed — no shift required
+    const perms = req.user.permissions || [];
+    const isManager = perms.includes('settings');
+
     const result = await db.query(
       `SELECT s.*, e.full_name as employee_name
        FROM shifts s
@@ -621,19 +625,23 @@ exports.getCurrentShift = async (req, res) => {
       [req.user.restaurantId, req.user.id, today]
     );
 
-    if (!result.rows.length)
+    if (!result.rows.length) {
+      if (isManager) return res.json({ shift: null, allowed: true, reason: null, isManager: true });
       return res.json({ shift: null, allowed: false, reason: 'No shift scheduled for today' });
+    }
 
     const shift = result.rows[0];
 
-    if (shift.status === 'absent')
+    if (shift.status === 'absent') {
+      if (isManager) return res.json({ shift, allowed: true, reason: null, isManager: true });
       return res.json({ shift, allowed: false, reason: 'You are marked absent for today' });
+    }
 
     const withinHours = now >= shift.start_time.slice(0, 5) && now <= shift.end_time.slice(0, 5);
-    if (!withinHours)
+    if (!withinHours && !isManager)
       return res.json({ shift, allowed: false, reason: `Outside shift hours (${shift.start_time.slice(0,5)}–${shift.end_time.slice(0,5)})` });
 
-    res.json({ shift, allowed: true, reason: null });
+    res.json({ shift, allowed: true, reason: null, isManager });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
 

@@ -67,7 +67,7 @@ export default function POS() {
   const loadShift = useCallback(() => {
     getCurrentShift()
       .then(r => setCurrentShift(r.data))
-      .catch(() => setCurrentShift({ shift: null, allowed: false, reason: 'Could not verify shift status' }));
+      .catch(() => setCurrentShift({ shift: null, allowed: true, reason: null })); // fail open
   }, []);
 
   const load = useCallback(() => {
