@@ -618,12 +618,12 @@ exports.getCurrentShift = async (req, res) => {
         `SELECT s.*, e.full_name as employee_name
          FROM shifts s
          JOIN employees e ON s.employee_id = e.id
-         WHERE s.restaurant_id=$1 AND s.employee_id=$2 AND s.date=$3
+         WHERE s.restaurant_id=$1 AND s.employee_id=$2 AND DATE(s.date)=DATE($3::date)
          ORDER BY s.start_time`,
         [req.user.restaurantId, req.user.id, today]
       ),
       db.query(
-        `SELECT punch_type, punched_at
+        `SELECT log_type, punched_at
          FROM attendance_logs
          WHERE restaurant_id=$1 AND employee_id=$2
            AND punched_at >= NOW() - INTERVAL '36 hours'
@@ -634,7 +634,7 @@ exports.getCurrentShift = async (req, res) => {
 
     // Attendance: clocked in if the most recent punch within 36h is clock_in
     const lastPunch   = attendResult.rows[0] || null;
-    const isClockedIn = lastPunch?.punch_type === 'clock_in';
+    const isClockedIn = lastPunch?.log_type === 'clock_in';
     const attendance  = { is_clocked_in: isClockedIn, clocked_in_at: isClockedIn ? lastPunch.punched_at : null };
 
     const todayShifts = shiftResult.rows;
@@ -642,9 +642,9 @@ exports.getCurrentShift = async (req, res) => {
     if (!todayShifts.length)
       return res.json({ shift: null, shifts: [], allowed: false, reason: 'No shift scheduled for today', attendance });
 
-    // Find the best "active" shift: in_process first, then active-within-hours
+    // Find the best "active" shift: in_process first, then any active (employee explicitly opened it)
     const activeShift = todayShifts.find(s => s.status === 'in_process')
-      || todayShifts.find(s => s.status === 'active' && now >= s.start_time.slice(0,5) && now <= s.end_time.slice(0,5));
+      || todayShifts.find(s => s.status === 'active');
 
     if (activeShift) {
       if (!isClockedIn)

@@ -112,14 +112,14 @@ exports.createOrder = async (req, res) => {
 
       // ── Attendance clock-in check ──────────────────────────────────────────
       const attendRes = await client.query(
-        `SELECT punch_type FROM attendance_logs
+        `SELECT log_type FROM attendance_logs
          WHERE restaurant_id=$1 AND employee_id=$2
            AND punched_at >= NOW() - INTERVAL '36 hours'
          ORDER BY punched_at DESC LIMIT 1`,
         [restaurantId, employeeId]
       );
       const lastPunch = attendRes.rows[0];
-      if (!lastPunch || lastPunch.punch_type !== 'clock_in') {
+      if (!lastPunch || lastPunch.log_type !== 'clock_in') {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'You must be clocked in to place orders.' });
       }

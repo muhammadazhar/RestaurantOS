@@ -215,12 +215,11 @@ exports.clockIn = async (req, res) => {
     const empId = req.body.employee_id || req.user.id;
     const now = new Date();
 
-    // Ensure no open clock_in already
+    // Ensure no open clock_in already (within last 36 hours to avoid stale records blocking)
     const open = await client.query(
       `SELECT id FROM attendance_logs
        WHERE employee_id=$1 AND log_type='clock_in' AND is_voided=FALSE
-         AND attendance_date=(SELECT MAX(attendance_date) FROM attendance_logs
-                              WHERE employee_id=$1 AND log_type='clock_in' AND is_voided=FALSE)
+         AND punched_at >= NOW() - INTERVAL '36 hours'
        AND NOT EXISTS (
          SELECT 1 FROM attendance_logs lo2
          WHERE lo2.employee_id=$1 AND lo2.log_type='clock_out' AND lo2.is_voided=FALSE
