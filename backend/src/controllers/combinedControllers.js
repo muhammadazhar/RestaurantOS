@@ -539,12 +539,13 @@ exports.updateRole = async (req, res) => {
 
 exports.getShifts = async (req, res) => {
   try {
-    const { date, employee_id } = req.query;
+    const { date, employee_id, month } = req.query;
     let where = ['s.restaurant_id=$1'];
     const params = [req.user.restaurantId];
     let idx = 2;
-    if (date)        { where.push(`s.date=$${idx++}`);        params.push(date); }
-    if (employee_id) { where.push(`s.employee_id=$${idx++}`); params.push(employee_id); }
+    if (date)        { where.push(`s.date=$${idx++}`);                            params.push(date); }
+    if (month)       { where.push(`TO_CHAR(s.date,'YYYY-MM')=$${idx++}`);         params.push(month); }
+    if (employee_id) { where.push(`s.employee_id=$${idx++}`);                     params.push(employee_id); }
 
     const result = await db.query(
       `SELECT s.*, e.full_name as employee_name, e.avatar_url, r.name as role_name
