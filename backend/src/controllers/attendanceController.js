@@ -462,10 +462,10 @@ exports.getTodayOverview = async (req, res) => {
               da.status, da.clock_in_at, da.clock_out_at,
               da.worked_minutes, da.late_minutes, da.ot_minutes,
               s.shift_name, s.start_time, s.end_time,
-              -- Real-time: check if employee has an open clock-in today (no matching clock-out after it)
+              -- Real-time: open clock-in within last 36h (covers timezone & shift-date edge cases)
               (SELECT al.punched_at FROM attendance_logs al
                WHERE al.employee_id = e.id AND al.log_type = 'clock_in' AND al.is_voided = FALSE
-                 AND al.attendance_date = $2
+                 AND al.punched_at >= NOW() - INTERVAL '36 hours'
                  AND NOT EXISTS (
                    SELECT 1 FROM attendance_logs co
                    WHERE co.employee_id = e.id AND co.log_type = 'clock_out'
