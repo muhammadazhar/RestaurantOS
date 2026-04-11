@@ -16,12 +16,14 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-const requirePermission = (permission) => (req, res, next) => {
+// requirePermission accepts a single string or array of strings (OR logic)
+const requirePermission = (...permissions) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthenticated' });
   if (req.user.isSuperAdmin) return next();
   const perms = req.user.permissions || [];
-  if (!perms.includes(permission))
-    return res.status(403).json({ error: `Permission denied: ${permission}` });
+  const flat = permissions.flat();
+  if (!flat.some(p => perms.includes(p)))
+    return res.status(403).json({ error: `Permission denied: ${flat.join(' or ')}` });
   next();
 };
 

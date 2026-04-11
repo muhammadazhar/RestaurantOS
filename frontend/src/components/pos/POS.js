@@ -46,7 +46,7 @@ export default function POS() {
   const [search,       setSearch]       = useState('');
   const [cart,         setCart]         = useState([]);
   const [tableId,      setTableId]      = useState('');
-  const [orderType,    setOrderType]    = useState(hasPermission('tables') ? 'dine_in' : 'takeaway');
+  const [orderType,    setOrderType]    = useState('dine_in');
   const [guestCount,   setGuestCount]   = useState(1);
   const [discount,     setDiscount]     = useState('');
   const [custName,     setCustName]     = useState('');
@@ -289,7 +289,6 @@ export default function POS() {
           {/* Order type */}
           <div style={{ display: 'flex', gap: 6 }}>
             {[['dine_in','🪑','Dine In'],['takeaway','🛍','Takeaway'],['delivery','🛵','Delivery'],['online','📲','Online']]
-              .filter(([v]) => v !== 'dine_in' || hasPermission('tables'))
               .map(([v,ico,lbl]) => (
               <button key={v} onClick={() => setOrderType(v)} style={{
                 background: orderType === v ? T.accent : T.card, color: orderType === v ? '#000' : T.textMid,

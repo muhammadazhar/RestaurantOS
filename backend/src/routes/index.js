@@ -27,7 +27,7 @@ router.get('/dashboard/stats', orders.getDashboardStats);
 // ── Orders ────────────────────────────────────────────────────────────────────
 router.get('/orders',              requirePermission('pos'), orders.getOrders);
 router.post('/orders',             requirePermission('pos'), orders.createOrder);
-router.patch('/orders/:id/status', requirePermission('kitchen'), orders.updateOrderStatus);
+router.patch('/orders/:id/status', requirePermission('pos', 'kitchen'), orders.updateOrderStatus);
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 router.get('/tables',                      requirePermission('tables'),   ctrl.getTables);
