@@ -159,26 +159,67 @@ function TableView({ shifts, isManager, onAction, acting }) {
   );
 }
 
-// ── Open/Close panel ──────────────────────────────────────────────────────────
-function ShiftPanel({ shift, acting, onStart, onContinue, onClose }) {
+// ── Single shift row in the panel ────────────────────────────────────────────
+function ShiftRow({ shift, acting, onStart, onContinue, onClose }) {
   const [elapsed, setElapsed] = useState('');
   const timerRef = useRef(null);
 
   useEffect(() => {
-    if (shift?.status !== 'active' && shift?.status !== 'in_process') return;
-    const calcElapsed = () => {
+    if (shift.status !== 'active' && shift.status !== 'in_process') return;
+    const calc = () => {
       const start = new Date((shift.date + '').slice(0, 10) + 'T' + (shift.start_time || '00:00').slice(0, 5));
       const mins = Math.floor((Date.now() - start.getTime()) / 60000);
       if (mins < 0) { setElapsed(''); return; }
       const h = Math.floor(mins / 60), m = mins % 60;
       setElapsed(h > 0 ? `${h}h ${m}m` : `${m}m`);
     };
-    calcElapsed();
-    timerRef.current = setInterval(calcElapsed, 60000);
+    calc();
+    timerRef.current = setInterval(calc, 60000);
     return () => clearInterval(timerRef.current);
   }, [shift]);
 
-  if (!shift) {
+  const isOT     = shift.status === 'in_process';
+  const isActive = shift.status === 'active' || isOT;
+  const color    = shiftColor(shift.status);
+  const now      = new Date().toTimeString().slice(0, 5);
+  const ended    = now > (shift.end_time?.slice(0, 5) || '23:59');
+  const label    = isOT ? 'Working Overtime' : shift.status === 'completed' ? 'Completed' : shift.status === 'active' ? 'Active' : 'Scheduled';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: `1px solid ${T.border}`, flexWrap: 'wrap' }}>
+      <div style={{ width: 4, height: 40, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 160 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+          #{shift.shift_number} · {shift.shift_name}
+        </div>
+        <div style={{ fontSize: 12, color: T.textMid, marginTop: 2 }}>
+          {shift.start_time?.slice(0, 5)} – {shift.end_time?.slice(0, 5)}
+          {elapsed && <span style={{ marginLeft: 10, color, fontWeight: 700 }}>· {elapsed} elapsed</span>}
+          {isOT && <span style={{ marginLeft: 8, background: T.accent + '22', color: T.accent, borderRadius: 5, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>OVERTIME</span>}
+        </div>
+      </div>
+      <Badge color={color}>{label}</Badge>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {shift.status === 'scheduled' && (
+          <Btn size="sm" disabled={acting} style={{ background: T.green, color: '#fff', border: 'none' }}
+            onClick={() => onStart(shift.id)}>▶ Start</Btn>
+        )}
+        {isActive && ended && shift.status === 'active' && (
+          <Btn size="sm" disabled={acting} style={{ background: T.accent, color: '#000', border: 'none' }}
+            onClick={() => onContinue(shift.id)}>⏩ Continue</Btn>
+        )}
+        {isActive && (
+          <Btn size="sm" disabled={acting} style={{ background: T.red, color: '#fff', border: 'none' }}
+            onClick={() => onClose(shift.id)}>⏹ Close</Btn>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Open/Close panel — shows ALL of today's shifts ────────────────────────────
+function ShiftPanel({ todayShifts, acting, onStart, onContinue, onClose }) {
+  if (!todayShifts || todayShifts.length === 0) {
     return (
       <Card style={{ padding: 28, textAlign: 'center', marginBottom: 24 }}>
         <div style={{ fontSize: 40, marginBottom: 10 }}>📋</div>
@@ -188,53 +229,21 @@ function ShiftPanel({ shift, acting, onStart, onContinue, onClose }) {
     );
   }
 
-  const isOT = shift.status === 'in_process';
-  const isActive = shift.status === 'active' || isOT;
-  const panelColor = shift.status === 'scheduled' ? T.textMid : shift.status === 'active' ? T.green : shift.status === 'in_process' ? T.accent : shift.status === 'completed' ? T.blue : T.red;
-
-  const now = new Date().toTimeString().slice(0, 5);
-  const ended = now > (shift.end_time?.slice(0, 5) || '23:59');
+  const activeCount = todayShifts.filter(s => ['active','in_process'].includes(s.status)).length;
 
   return (
-    <Card style={{ padding: '20px 24px', marginBottom: 24, borderLeft: `4px solid ${panelColor}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, color: T.textMid, fontWeight: 700, marginBottom: 4 }}>
-            {shift.status === 'scheduled' ? 'Upcoming Shift' : shift.status === 'completed' ? 'Shift Completed' : isOT ? 'Working Overtime' : 'Current Shift'}
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>
-            #{shift.shift_number} · {shift.shift_name}
-          </div>
-          <div style={{ fontSize: 13, color: T.textMid, marginTop: 3 }}>
-            {shift.start_time?.slice(0, 5)} – {shift.end_time?.slice(0, 5)}
-            {elapsed && <span style={{ marginLeft: 10, color: panelColor, fontWeight: 700 }}>· {elapsed} elapsed</span>}
-            {isOT && <span style={{ marginLeft: 8, background: T.accent + '33', color: T.accent, borderRadius: 6, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>OVERTIME</span>}
-          </div>
+    <Card style={{ padding: '16px 20px', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: T.text, textTransform: 'uppercase', letterSpacing: 1 }}>
+          Today's Shifts
         </div>
-
-        <Badge color={panelColor} style={{ fontSize: 12 }}>{STATUS_LABEL[shift.status] || shift.status}</Badge>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          {shift.status === 'scheduled' && (
-            <Btn disabled={acting} style={{ background: T.green, color: '#fff', border: 'none', padding: '10px 20px', fontSize: 14, fontWeight: 700 }}
-              onClick={() => onStart(shift.id)}>
-              ▶ Start Shift
-            </Btn>
-          )}
-          {isActive && ended && shift.status === 'active' && (
-            <Btn disabled={acting} style={{ background: T.accent, color: '#000', border: 'none', padding: '10px 20px', fontSize: 14, fontWeight: 700 }}
-              onClick={() => onContinue(shift.id)}>
-              ⏩ Continue
-            </Btn>
-          )}
-          {isActive && (
-            <Btn disabled={acting} style={{ background: T.red, color: '#fff', border: 'none', padding: '10px 20px', fontSize: 14, fontWeight: 700 }}
-              onClick={() => onClose(shift.id)}>
-              ⏹ Close Shift
-            </Btn>
-          )}
-        </div>
+        <Badge color={activeCount > 0 ? T.green : T.textMid} small>{todayShifts.length} shift{todayShifts.length !== 1 ? 's' : ''}</Badge>
+        {activeCount > 0 && <Badge color={T.green} small>{activeCount} active</Badge>}
       </div>
+      {todayShifts.map(s => (
+        <ShiftRow key={s.id} shift={s} acting={acting}
+          onStart={onStart} onContinue={onContinue} onClose={onClose} />
+      ))}
     </Card>
   );
 }
@@ -273,7 +282,7 @@ export default function MyShift() {
   const [shifts,       setShifts]       = useState([]);
   const [employees,    setEmployees]    = useState([]);
   const [filterEmp,    setFilterEmp]    = useState('');
-  const [todayShift,   setTodayShift]   = useState(null); // for ShiftPanel (employee only)
+  const [todayShifts,  setTodayShifts]  = useState([]);   // for ShiftPanel
   const [loading,      setLoading]      = useState(true);
   const [acting,       setActing]       = useState(false);
   const [dayModal,     setDayModal]     = useState(null); // { date, shifts }
@@ -286,12 +295,7 @@ export default function MyShift() {
       // Always load own shifts to populate the ShiftPanel (regardless of role)
       const myRes = await getMyShifts();
       const today = new Date().toISOString().slice(0, 10);
-      const todayList = myRes.data.filter(s => (s.date + '').slice(0, 10) === today);
-      setTodayShift(
-        todayList.find(s => ['scheduled','active','in_process'].includes(s.status))
-        || todayList[0]
-        || null
-      );
+      setTodayShifts(myRes.data.filter(s => (s.date + '').slice(0, 10) === today));
 
       if (isManager) {
         const params = { month: monthStr };
@@ -372,7 +376,7 @@ export default function MyShift() {
 
       {/* Current shift panel — shown for everyone */}
       <ShiftPanel
-        shift={todayShift}
+        todayShifts={todayShifts}
         acting={acting}
         onStart={id => handleAction('start', { id })}
         onContinue={id => handleAction('continue', { id })}

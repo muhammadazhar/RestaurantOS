@@ -619,7 +619,7 @@ exports.getCurrentShift = async (req, res) => {
          FROM shifts s
          JOIN employees e ON s.employee_id = e.id
          WHERE s.restaurant_id=$1 AND s.employee_id=$2 AND s.date=$3
-         ORDER BY s.start_time LIMIT 1`,
+         ORDER BY s.start_time`,
         [req.user.restaurantId, req.user.id, today]
       ),
       db.query(
@@ -637,36 +637,40 @@ exports.getCurrentShift = async (req, res) => {
     const isClockedIn = lastPunch?.punch_type === 'clock_in';
     const attendance  = { is_clocked_in: isClockedIn, clocked_in_at: isClockedIn ? lastPunch.punched_at : null };
 
-    if (!shiftResult.rows.length)
-      return res.json({ shift: null, allowed: false, reason: 'No shift scheduled for today', attendance });
+    const todayShifts = shiftResult.rows;
 
-    const shift = shiftResult.rows[0];
+    if (!todayShifts.length)
+      return res.json({ shift: null, shifts: [], allowed: false, reason: 'No shift scheduled for today', attendance });
 
-    if (shift.status === 'absent')
-      return res.json({ shift, allowed: false, reason: 'You are marked absent for today', attendance });
+    // Find the best "active" shift: in_process first, then active-within-hours
+    const activeShift = todayShifts.find(s => s.status === 'in_process')
+      || todayShifts.find(s => s.status === 'active' && now >= s.start_time.slice(0,5) && now <= s.end_time.slice(0,5));
 
-    if (shift.status === 'completed')
-      return res.json({ shift, allowed: false, reason: 'Your shift has ended', attendance });
-
-    if (shift.status === 'in_process') {
+    if (activeShift) {
       if (!isClockedIn)
-        return res.json({ shift, allowed: false, reason: 'You must be clocked in to place orders', attendance });
-      return res.json({ shift, allowed: true, reason: null, attendance });
+        return res.json({ shift: activeShift, shifts: todayShifts, allowed: false, reason: 'You must be clocked in to place orders', attendance });
+      return res.json({ shift: activeShift, shifts: todayShifts, allowed: true, reason: null, attendance });
     }
 
-    if (shift.status === 'scheduled') {
-      return res.json({ shift, allowed: false, reason: 'Start your shift before placing orders', attendance });
-    }
+    // No active shift — find why
+    const scheduledNow = todayShifts.find(s => s.status === 'scheduled' && now >= s.start_time.slice(0,5) && now <= s.end_time.slice(0,5));
+    if (scheduledNow)
+      return res.json({ shift: scheduledNow, shifts: todayShifts, allowed: false, reason: 'Start your shift before placing orders', attendance });
 
-    // status = 'active'
-    const withinHours = now >= shift.start_time.slice(0, 5) && now <= shift.end_time.slice(0, 5);
-    if (!withinHours)
-      return res.json({ shift, allowed: false, reason: `Outside shift hours (${shift.start_time.slice(0,5)}–${shift.end_time.slice(0,5)})`, attendance });
+    const absentShift = todayShifts.find(s => s.status === 'absent');
+    if (absentShift && todayShifts.every(s => s.status === 'absent'))
+      return res.json({ shift: absentShift, shifts: todayShifts, allowed: false, reason: 'You are marked absent for today', attendance });
 
-    if (!isClockedIn)
-      return res.json({ shift, allowed: false, reason: 'You must be clocked in to place orders', attendance });
+    const allDone = todayShifts.every(s => ['completed','absent'].includes(s.status));
+    if (allDone)
+      return res.json({ shift: todayShifts[todayShifts.length - 1], shifts: todayShifts, allowed: false, reason: 'All your shifts have ended for today', attendance });
 
-    res.json({ shift, allowed: true, reason: null, attendance });
+    // Scheduled but outside hours
+    const upcoming = todayShifts.find(s => s.status === 'scheduled' && now < s.start_time.slice(0,5));
+    if (upcoming)
+      return res.json({ shift: upcoming, shifts: todayShifts, allowed: false, reason: `Next shift starts at ${upcoming.start_time.slice(0,5)}`, attendance });
+
+    return res.json({ shift: todayShifts[0], shifts: todayShifts, allowed: false, reason: 'No active shift right now', attendance });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
 

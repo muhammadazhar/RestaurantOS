@@ -73,38 +73,42 @@ exports.createOrder = async (req, res) => {
       const today   = new Date().toISOString().slice(0, 10);
       const nowTime = new Date().toTimeString().slice(0, 5);
 
+      // Find any active or in_process shift for today (employee may have multiple)
       const shiftRes = await client.query(
         `SELECT id, shift_number, shift_name, start_time, end_time, status
          FROM shifts WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3
-         ORDER BY start_time LIMIT 1`,
+           AND status IN ('active','in_process')
+         ORDER BY status DESC, start_time LIMIT 1`,
         [restaurantId, employeeId, today]
       );
 
       if (!shiftRes.rows.length) {
+        // Check why — give specific message
+        const anyRes = await client.query(
+          `SELECT status, start_time, end_time FROM shifts
+           WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3
+           ORDER BY start_time`,
+          [restaurantId, employeeId, today]
+        );
+        if (!anyRes.rows.length) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'No shift scheduled for you today. Contact your manager.' });
+        }
+        const scheduledNow = anyRes.rows.find(s => s.status === 'scheduled' && nowTime >= s.start_time.slice(0,5) && nowTime <= s.end_time.slice(0,5));
+        if (scheduledNow) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'Please start your shift before placing orders.' });
+        }
+        const allAbsent = anyRes.rows.every(s => s.status === 'absent');
+        if (allAbsent) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'You are marked absent. Cannot place orders.' });
+        }
         await client.query('ROLLBACK');
-        return res.status(403).json({ error: 'No shift scheduled for you today. Contact your manager.' });
+        return res.status(403).json({ error: 'No active shift right now. Start a scheduled shift or contact your manager.' });
       }
 
       const shift = shiftRes.rows[0];
-
-      if (shift.status === 'absent') {
-        await client.query('ROLLBACK');
-        return res.status(403).json({ error: 'You are marked absent. Cannot place orders.' });
-      }
-
-      if (shift.status === 'scheduled') {
-        await client.query('ROLLBACK');
-        return res.status(403).json({ error: 'Please start your shift before placing orders.' });
-      }
-
-      if (shift.status !== 'in_process') {
-        const start = shift.start_time.slice(0, 5);
-        const end   = shift.end_time.slice(0, 5);
-        if (nowTime < start || nowTime > end) {
-          await client.query('ROLLBACK');
-          return res.status(403).json({ error: `Outside your shift hours (${start}–${end}). Contact your manager.` });
-        }
-      }
 
       // ── Attendance clock-in check ──────────────────────────────────────────
       const attendRes = await client.query(
