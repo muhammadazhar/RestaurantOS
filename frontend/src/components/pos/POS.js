@@ -71,10 +71,14 @@ export default function POS() {
   }, []);
 
   const load = useCallback(() => {
-    Promise.all([getMenu(), getTables(), getOrders({ order_type: 'online', status: 'pending' })])
+    Promise.all([
+      getMenu(),
+      getTables().catch(() => ({ data: [] })),
+      getOrders({ order_type: 'online', status: 'pending' }),
+    ])
       .then(([m, t, o]) => { setMenu(m.data); setTables(t.data); setOnlineOrders(o.data); })
       .finally(() => setLoading(false));
-  }, [hasPermission]);
+  }, []);
 
   useEffect(() => {
     load();
