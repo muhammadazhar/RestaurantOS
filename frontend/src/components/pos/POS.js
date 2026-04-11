@@ -257,7 +257,7 @@ export default function POS() {
   if (loading) return <Spinner />;
 
   const needCustomer = ['takeaway', 'delivery', 'online'].includes(orderType);
-  const shiftBlocked = currentShift && !currentShift.allowed && !currentShift.isManager;
+  const shiftBlocked = currentShift && !currentShift.allowed;
   const isClockedIn   = currentShift?.attendance?.is_clocked_in;
   const attendColor   = isClockedIn ? T.green : T.red;
   const attendBg      = isClockedIn ? T.greenDim : T.redDim;
@@ -286,12 +286,12 @@ export default function POS() {
               {currentShift.allowed ? '🟢' : '🔴'} Shift #{currentShift.shift.shift_number} · {currentShift.shift.shift_name} · {currentShift.shift.start_time?.slice(0,5)}–{currentShift.shift.end_time?.slice(0,5)}
             </div>
           )}
-          {currentShift && !currentShift.shift && !currentShift.isManager && (
+          {currentShift && !currentShift.shift && (
             <div style={{ background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: T.red }}>
               🔴 No shift today
             </div>
           )}
-          {currentShift && !currentShift.isManager && (
+          {currentShift && (
             <div style={{ background: attendBg, border: `1px solid ${attendColor}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: attendColor }}>
               {isClockedIn ? '✅ Clocked In' : '⛔ Not Clocked In'}
             </div>

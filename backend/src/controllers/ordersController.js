@@ -61,16 +61,15 @@ exports.createOrder = async (req, res) => {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
-    const { restaurantId, id: employeeId, permissions: userPerms = [] } = req.user;
-    const isManager = userPerms.includes('settings');
+    const { restaurantId, id: employeeId } = req.user;
     const { table_id, order_type = 'dine_in', items, guest_count = 1,
       customer_name, customer_phone, notes, source = 'pos', discount_amount } = req.body;
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' });
 
-    // ── Shift + Attendance validation (POS only, non-managers) ─────────────────
+    // ── Shift + Attendance validation (all POS users, no exceptions) ───────────
     let shiftId = null;
-    if (source === 'pos' && !isManager) {
+    if (source === 'pos') {
       const today   = new Date().toISOString().slice(0, 10);
       const nowTime = new Date().toTimeString().slice(0, 5);
 

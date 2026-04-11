@@ -612,10 +612,6 @@ exports.getCurrentShift = async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const now   = new Date().toTimeString().slice(0, 5); // HH:MM
 
-    // Managers (settings permission) are always allowed — no shift/attendance required
-    const perms = req.user.permissions || [];
-    const isManager = perms.includes('settings');
-
     const [shiftResult, attendResult] = await Promise.all([
       db.query(
         `SELECT s.*, e.full_name as employee_name
@@ -636,30 +632,26 @@ exports.getCurrentShift = async (req, res) => {
     ]);
 
     // Attendance: clocked in if the most recent punch within 36h is clock_in
-    const lastPunch  = attendResult.rows[0] || null;
+    const lastPunch   = attendResult.rows[0] || null;
     const isClockedIn = lastPunch?.punch_type === 'clock_in';
     const attendance  = { is_clocked_in: isClockedIn, clocked_in_at: isClockedIn ? lastPunch.punched_at : null };
 
-    if (!shiftResult.rows.length) {
-      if (isManager) return res.json({ shift: null, allowed: true, reason: null, isManager: true, attendance });
+    if (!shiftResult.rows.length)
       return res.json({ shift: null, allowed: false, reason: 'No shift scheduled for today', attendance });
-    }
 
     const shift = shiftResult.rows[0];
 
-    if (shift.status === 'absent') {
-      if (isManager) return res.json({ shift, allowed: true, reason: null, isManager: true, attendance });
+    if (shift.status === 'absent')
       return res.json({ shift, allowed: false, reason: 'You are marked absent for today', attendance });
-    }
 
     const withinHours = now >= shift.start_time.slice(0, 5) && now <= shift.end_time.slice(0, 5);
-    if (!withinHours && !isManager)
+    if (!withinHours)
       return res.json({ shift, allowed: false, reason: `Outside shift hours (${shift.start_time.slice(0,5)}–${shift.end_time.slice(0,5)})`, attendance });
 
-    if (!isClockedIn && !isManager)
+    if (!isClockedIn)
       return res.json({ shift, allowed: false, reason: 'You must be clocked in to place orders', attendance });
 
-    res.json({ shift, allowed: true, reason: null, isManager, attendance });
+    res.json({ shift, allowed: true, reason: null, attendance });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
 
