@@ -283,6 +283,16 @@ export default function MyShift() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      // Always load own shifts to populate the ShiftPanel (regardless of role)
+      const myRes = await getMyShifts();
+      const today = new Date().toISOString().slice(0, 10);
+      const todayList = myRes.data.filter(s => (s.date + '').slice(0, 10) === today);
+      setTodayShift(
+        todayList.find(s => ['scheduled','active','in_process'].includes(s.status))
+        || todayList[0]
+        || null
+      );
+
       if (isManager) {
         const params = { month: monthStr };
         if (filterEmp) params.employee_id = filterEmp;
@@ -290,11 +300,7 @@ export default function MyShift() {
         setShifts(sr.data);
         if (er) setEmployees(er.data);
       } else {
-        const sr = await getMyShifts();
-        setShifts(sr.data);
-        const today = new Date().toISOString().slice(0, 10);
-        const todayList = sr.data.filter(s => (s.date + '').slice(0, 10) === today);
-        setTodayShift(todayList.find(s => ['scheduled','active','in_process'].includes(s.status)) || todayList[0] || null);
+        setShifts(myRes.data);
       }
     } catch { toast.error('Failed to load shifts'); }
     finally { setLoading(false); }
@@ -364,16 +370,14 @@ export default function MyShift() {
         </div>
       )}
 
-      {/* Current shift panel (employee only) */}
-      {!isManager && (
-        <ShiftPanel
-          shift={todayShift}
-          acting={acting}
-          onStart={id => handleAction('start', { id })}
-          onContinue={id => handleAction('continue', { id })}
-          onClose={id => handleAction('close', { id })}
-        />
-      )}
+      {/* Current shift panel — shown for everyone */}
+      <ShiftPanel
+        shift={todayShift}
+        acting={acting}
+        onStart={id => handleAction('start', { id })}
+        onContinue={id => handleAction('continue', { id })}
+        onClose={id => handleAction('close', { id })}
+      />
 
       {/* Month navigation */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
