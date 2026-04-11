@@ -205,7 +205,7 @@ exports.uploadMenuImage = async (req, res) => {
   try {
     const { id } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const imageUrl = `/uploads/${req.file.filename}`;
+    const imageUrl = req.file.path?.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     const result = await db.query(
       `UPDATE menu_items SET image_url=$1 WHERE id=$2 AND restaurant_id=$3 RETURNING *`,
       [imageUrl, id, req.user.restaurantId]
