@@ -612,36 +612,54 @@ exports.getCurrentShift = async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const now   = new Date().toTimeString().slice(0, 5); // HH:MM
 
-    // Managers (settings permission) are always allowed — no shift required
+    // Managers (settings permission) are always allowed — no shift/attendance required
     const perms = req.user.permissions || [];
     const isManager = perms.includes('settings');
 
-    const result = await db.query(
-      `SELECT s.*, e.full_name as employee_name
-       FROM shifts s
-       JOIN employees e ON s.employee_id = e.id
-       WHERE s.restaurant_id=$1 AND s.employee_id=$2 AND s.date=$3
-       ORDER BY s.start_time LIMIT 1`,
-      [req.user.restaurantId, req.user.id, today]
-    );
+    const [shiftResult, attendResult] = await Promise.all([
+      db.query(
+        `SELECT s.*, e.full_name as employee_name
+         FROM shifts s
+         JOIN employees e ON s.employee_id = e.id
+         WHERE s.restaurant_id=$1 AND s.employee_id=$2 AND s.date=$3
+         ORDER BY s.start_time LIMIT 1`,
+        [req.user.restaurantId, req.user.id, today]
+      ),
+      db.query(
+        `SELECT punch_type, punched_at
+         FROM attendance_logs
+         WHERE restaurant_id=$1 AND employee_id=$2
+           AND punched_at >= NOW() - INTERVAL '36 hours'
+         ORDER BY punched_at DESC LIMIT 1`,
+        [req.user.restaurantId, req.user.id]
+      ),
+    ]);
 
-    if (!result.rows.length) {
-      if (isManager) return res.json({ shift: null, allowed: true, reason: null, isManager: true });
-      return res.json({ shift: null, allowed: false, reason: 'No shift scheduled for today' });
+    // Attendance: clocked in if the most recent punch within 36h is clock_in
+    const lastPunch  = attendResult.rows[0] || null;
+    const isClockedIn = lastPunch?.punch_type === 'clock_in';
+    const attendance  = { is_clocked_in: isClockedIn, clocked_in_at: isClockedIn ? lastPunch.punched_at : null };
+
+    if (!shiftResult.rows.length) {
+      if (isManager) return res.json({ shift: null, allowed: true, reason: null, isManager: true, attendance });
+      return res.json({ shift: null, allowed: false, reason: 'No shift scheduled for today', attendance });
     }
 
-    const shift = result.rows[0];
+    const shift = shiftResult.rows[0];
 
     if (shift.status === 'absent') {
-      if (isManager) return res.json({ shift, allowed: true, reason: null, isManager: true });
-      return res.json({ shift, allowed: false, reason: 'You are marked absent for today' });
+      if (isManager) return res.json({ shift, allowed: true, reason: null, isManager: true, attendance });
+      return res.json({ shift, allowed: false, reason: 'You are marked absent for today', attendance });
     }
 
     const withinHours = now >= shift.start_time.slice(0, 5) && now <= shift.end_time.slice(0, 5);
     if (!withinHours && !isManager)
-      return res.json({ shift, allowed: false, reason: `Outside shift hours (${shift.start_time.slice(0,5)}–${shift.end_time.slice(0,5)})` });
+      return res.json({ shift, allowed: false, reason: `Outside shift hours (${shift.start_time.slice(0,5)}–${shift.end_time.slice(0,5)})`, attendance });
 
-    res.json({ shift, allowed: true, reason: null, isManager });
+    if (!isClockedIn && !isManager)
+      return res.json({ shift, allowed: false, reason: 'You must be clocked in to place orders', attendance });
+
+    res.json({ shift, allowed: true, reason: null, isManager, attendance });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
 

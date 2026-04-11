@@ -492,4 +492,5 @@ curl http://localhost:5000/api/health
 
 Check backend logs for database connectivity errors. Most issues are related to `.env` configuration or PostgreSQL connection settings.
 #   r e s t a u r a n t o s  
+ #   n e o n - r a i l w a y - e x a m p l e  
  

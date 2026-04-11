@@ -61,15 +61,16 @@ exports.createOrder = async (req, res) => {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
-    const { restaurantId, id: employeeId } = req.user;
+    const { restaurantId, id: employeeId, permissions: userPerms = [] } = req.user;
+    const isManager = userPerms.includes('settings');
     const { table_id, order_type = 'dine_in', items, guest_count = 1,
       customer_name, customer_phone, notes, source = 'pos', discount_amount } = req.body;
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' });
 
-    // ── Shift validation (only for POS orders placed by employees) ─────────────
+    // ── Shift + Attendance validation (POS only, non-managers) ─────────────────
     let shiftId = null;
-    if (source === 'pos') {
+    if (source === 'pos' && !isManager) {
       const today   = new Date().toISOString().slice(0, 10);
       const nowTime = new Date().toTimeString().slice(0, 5);
 
@@ -97,6 +98,20 @@ exports.createOrder = async (req, res) => {
       if (nowTime < start || nowTime > end) {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: `Outside your shift hours (${start}–${end}). Contact your manager.` });
+      }
+
+      // ── Attendance clock-in check ──────────────────────────────────────────
+      const attendRes = await client.query(
+        `SELECT punch_type FROM attendance_logs
+         WHERE restaurant_id=$1 AND employee_id=$2
+           AND punched_at >= NOW() - INTERVAL '36 hours'
+         ORDER BY punched_at DESC LIMIT 1`,
+        [restaurantId, employeeId]
+      );
+      const lastPunch = attendRes.rows[0];
+      if (!lastPunch || lastPunch.punch_type !== 'clock_in') {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'You must be clocked in to place orders.' });
       }
 
       shiftId = shift.id;
