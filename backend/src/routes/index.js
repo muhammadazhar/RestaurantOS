@@ -72,12 +72,15 @@ router.post('/roles',            requirePermission('employees'), ctrl.createRole
 router.patch('/roles/:id',       requirePermission('employees'), ctrl.updateRole);
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
-router.get('/shifts/current',    requirePermission('pos'),       ctrl.getCurrentShift);
-router.get('/shifts',            requirePermission('employees'), ctrl.getShifts);
-router.post('/shifts',           requirePermission('employees'), ctrl.createShift);
-router.post('/shifts/bulk',      requirePermission('employees'), ctrl.bulkCreateShifts);
-router.patch('/shifts/:id',      requirePermission('employees'), ctrl.updateShift);
-router.delete('/shifts/:id',     requirePermission('employees'), ctrl.deleteShift);
+router.get('/shifts/current',            requirePermission('pos'),       ctrl.getCurrentShift);
+router.get('/shifts/open',               requirePermission('employees'), ctrl.getOpenShifts);
+router.post('/shifts/auto-close',        requirePermission('employees'), ctrl.autoCloseShifts);
+router.get('/shifts',                    requirePermission('employees'), ctrl.getShifts);
+router.post('/shifts',                   requirePermission('employees'), ctrl.createShift);
+router.post('/shifts/bulk',              requirePermission('employees'), ctrl.bulkCreateShifts);
+router.patch('/shifts/:id',              requirePermission('employees'), ctrl.updateShift);
+router.patch('/shifts/:id/force-close',  requirePermission('employees'), ctrl.forceCloseShift);
+router.delete('/shifts/:id',             requirePermission('employees'), ctrl.deleteShift);
 
 // ── General Ledger ────────────────────────────────────────────────────────────
 router.get('/gl/accounts',         requirePermission('gl'), ctrl.getAccounts);

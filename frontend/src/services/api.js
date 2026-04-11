@@ -107,11 +107,14 @@ export const uploadEmployeePhoto = (id, file) => {
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
 export const getCurrentShift  = ()        => API.get('/shifts/current');
+export const getOpenShifts    = ()        => API.get('/shifts/open');
+export const autoCloseShifts  = ()        => API.post('/shifts/auto-close');
 export const getShifts        = (params)  => API.get('/shifts', { params });
-export const createShift      = (data)   => API.post('/shifts', data);
-export const bulkCreateShifts = (data)   => API.post('/shifts/bulk', data);
-export const updateShift      = (id, d)  => API.patch(`/shifts/${id}`, d);
-export const deleteShift      = (id)     => API.delete(`/shifts/${id}`);
+export const createShift      = (data)    => API.post('/shifts', data);
+export const bulkCreateShifts = (data)    => API.post('/shifts/bulk', data);
+export const updateShift      = (id, d)   => API.patch(`/shifts/${id}`, d);
+export const forceCloseShift  = (id)      => API.patch(`/shifts/${id}/force-close`);
+export const deleteShift      = (id)      => API.delete(`/shifts/${id}`);
 
 // ── GL ────────────────────────────────────────────────────────────────────────
 export const getGLAccounts      = ()       => API.get('/gl/accounts');

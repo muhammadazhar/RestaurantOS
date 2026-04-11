@@ -193,6 +193,19 @@ async function computeDaily(client, restaurantId, employeeId, dateStr, force = f
   );
 }
 
+// ── Exported helper — recompute one employee/date (used by other controllers) ─
+exports.recomputeEmployee = async (restaurantId, employeeId, dateStr) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await computeDaily(client, restaurantId, employeeId, dateStr, true);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('recomputeEmployee error:', err);
+  } finally { client.release(); }
+};
+
 // ── Clock-in ───────────────────────────────────────────────────────────────────
 exports.clockIn = async (req, res) => {
   const client = await db.getClient();

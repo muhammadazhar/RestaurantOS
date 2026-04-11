@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   getEmployees, createEmployee, updateEmployee, uploadEmployeePhoto,
   getRoles, getShifts, createShift, bulkCreateShifts, updateShift, deleteShift,
+  getOpenShifts, autoCloseShifts, forceCloseShift,
 } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, Input, Select, PageHeader, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
@@ -473,18 +474,65 @@ function EditShiftModal({ open, onClose, onSaved, shift }) {
   );
 }
 
+// ─── Shift row ────────────────────────────────────────────────────────────────
+function ShiftRow({ shift, onChangeStatus, onEdit, onRemove, onForceClose, isOpen }) {
+  const color = SHIFT_STATUS_COLOR[shift.status] || T.textMid;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.card, border: `1px solid ${color}44`, borderLeft: `3px solid ${color}`, borderRadius: 12, padding: '12px 16px', marginBottom: 8 }}>
+      <EmpAvatar emp={{ full_name: shift.employee_name || '?', avatar_url: shift.avatar_url }} size={36} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{shift.employee_name}</div>
+        <div style={{ fontSize: 11, color: T.textMid, marginTop: 2 }}>
+          {shift.role_name && <span style={{ marginRight: 8 }}>{shift.role_name}</span>}
+          {shift.date && <span style={{ marginRight: 8, color: T.textDim }}>{shift.date}</span>}
+          {shift.start_time} → {shift.end_time}
+        </div>
+      </div>
+      <Badge color={color} small>{shift.status}</Badge>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {isOpen ? (
+          <button onClick={() => onForceClose(shift.id)} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>⏹ Force Close</button>
+        ) : (
+          <>
+            {shift.status === 'scheduled' && (
+              <>
+                <button onClick={() => onChangeStatus(shift.id, 'active')} style={{ background: T.greenDim, color: T.green, border: `1px solid ${T.green}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Check In</button>
+                <button onClick={() => onChangeStatus(shift.id, 'absent')} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Absent</button>
+              </>
+            )}
+            {shift.status === 'active' && (
+              <button onClick={() => onChangeStatus(shift.id, 'completed')} style={{ background: T.blueDim, color: T.blue, border: `1px solid ${T.blue}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Check Out</button>
+            )}
+            <button onClick={() => onEdit(shift)} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>✏ Edit</button>
+            <button onClick={() => onRemove(shift.id)} style={{ background: 'none', border: 'none', color: T.textDim, cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>×</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Shifts Tab ───────────────────────────────────────────────────────────────
 function ShiftsTab({ employees }) {
-  const [shifts,     setShifts]     = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [addOpen,    setAddOpen]    = useState(false);
-  const [editShift,  setEditShift]  = useState(null);
-  const [dateFilter, setDateFilter] = useState(todayStr());
+  const [shifts,      setShifts]      = useState([]);
+  const [openShifts,  setOpenShifts]  = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [addOpen,     setAddOpen]     = useState(false);
+  const [editShift,   setEditShift]   = useState(null);
+  const [dateFilter,  setDateFilter]  = useState(todayStr());
+  const [autoClosing, setAutoClosing] = useState(false);
+
+  const loadOpen = useCallback(() => {
+    getOpenShifts().then(r => setOpenShifts(r.data)).catch(() => {});
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
-    getShifts({ date: dateFilter })
-      .then(r => setShifts(r.data))
+    Promise.all([
+      getShifts({ date: dateFilter }),
+      getOpenShifts(),
+    ])
+      .then(([sr, or]) => { setShifts(sr.data); setOpenShifts(or.data); })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [dateFilter]);
@@ -501,12 +549,46 @@ function ShiftsTab({ employees }) {
     catch { toast.error('Delete failed'); }
   };
 
+  const handleForceClose = async (id) => {
+    try { await forceCloseShift(id); toast.success('Shift closed & employee clocked out'); load(); }
+    catch { toast.error('Force close failed'); }
+  };
+
+  const handleAutoCloseAll = async () => {
+    setAutoClosing(true);
+    try {
+      const r = await autoCloseShifts();
+      toast.success(`${r.data.closed} open shift${r.data.closed !== 1 ? 's' : ''} closed`);
+      load();
+    } catch { toast.error('Auto-close failed'); }
+    finally { setAutoClosing(false); }
+  };
+
   const groups = [...new Set(shifts.map(s => s.shift_name))];
 
   if (loading) return <Spinner />;
 
   return (
     <div>
+      {/* ── Open / expired shifts panel ── */}
+      {openShifts.length > 0 && (
+        <div style={{ background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 14, padding: '16px 20px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.red }}>🔓 {openShifts.length} Open Shift{openShifts.length !== 1 ? 's' : ''} — Not Closed</div>
+              <div style={{ fontSize: 11, color: T.textMid, marginTop: 3 }}>These shifts have passed their end time. Close them individually or all at once.</div>
+            </div>
+            <button onClick={handleAutoCloseAll} disabled={autoClosing} style={{ background: T.red, color: '#fff', border: 'none', borderRadius: 9, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: autoClosing ? 'not-allowed' : 'pointer', fontFamily: "'Syne', sans-serif", opacity: autoClosing ? 0.6 : 1 }}>
+              {autoClosing ? '⏳ Closing…' : '⏹ Close All'}
+            </button>
+          </div>
+          {openShifts.map(shift => (
+            <ShiftRow key={shift.id} shift={shift} onForceClose={handleForceClose} isOpen onChangeStatus={changeStatus} onEdit={setEditShift} onRemove={remove} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Date filter + schedule button ── */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
         <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 14px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
         <span style={{ fontSize: 13, color: T.textMid }}>{shifts.length} shift{shifts.length !== 1 ? 's' : ''} scheduled</span>
@@ -528,30 +610,7 @@ function ShiftsTab({ employees }) {
               ⏰ {group} Shift
             </div>
             {shifts.filter(s => s.shift_name === group).map(shift => (
-              <div key={shift.id} style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.card, border: `1px solid ${SHIFT_STATUS_COLOR[shift.status]}44`, borderLeft: `3px solid ${SHIFT_STATUS_COLOR[shift.status]}`, borderRadius: 12, padding: '12px 16px', marginBottom: 8 }}>
-                <EmpAvatar emp={{ full_name: shift.employee_name || '?', avatar_url: shift.avatar_url, shift_status: shift.status === 'active' ? 'active' : '' }} size={36} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{shift.employee_name}</div>
-                  <div style={{ fontSize: 11, color: T.textMid, marginTop: 2 }}>
-                    {shift.role_name && <span style={{ marginRight: 8 }}>{shift.role_name}</span>}
-                    {shift.start_time} → {shift.end_time}
-                  </div>
-                </div>
-                <Badge color={SHIFT_STATUS_COLOR[shift.status]} small>{shift.status}</Badge>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {shift.status === 'scheduled' && (
-                    <>
-                      <button onClick={() => changeStatus(shift.id, 'active')} style={{ background: T.greenDim, color: T.green, border: `1px solid ${T.green}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Check In</button>
-                      <button onClick={() => changeStatus(shift.id, 'absent')} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Absent</button>
-                    </>
-                  )}
-                  {shift.status === 'active' && (
-                    <button onClick={() => changeStatus(shift.id, 'completed')} style={{ background: T.blueDim, color: T.blue, border: `1px solid ${T.blue}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Check Out</button>
-                  )}
-                  <button onClick={() => setEditShift(shift)} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>✏ Edit</button>
-                  <button onClick={() => remove(shift.id)} style={{ background: 'none', border: 'none', color: T.textDim, cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>×</button>
-                </div>
-              </div>
+              <ShiftRow key={shift.id} shift={shift} onChangeStatus={changeStatus} onEdit={setEditShift} onRemove={remove} onForceClose={handleForceClose} isOpen={false} />
             ))}
           </div>
         ))
