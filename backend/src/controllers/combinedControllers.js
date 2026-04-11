@@ -946,7 +946,9 @@ exports.createOvertimeAlert = async (req, res) => {
 
 /** Shared helper: close one shift and auto clock-out if the employee is still clocked in */
 async function _closeShift(client, restaurantId, shift, closedBy) {
-  const shiftEndTs = new Date(`${shift.date}T${shift.end_time}:00Z`);
+  // end_time is stored as HH:MM:SS by PostgreSQL — use first 8 chars to avoid double-seconds
+  const timeStr = (shift.end_time || '23:59:59').slice(0, 8);
+  const shiftEndTs = new Date(`${shift.date}T${timeStr}Z`);
 
   // Update shift status → completed
   await client.query(
@@ -954,18 +956,18 @@ async function _closeShift(client, restaurantId, shift, closedBy) {
     [shift.id, restaurantId]
   );
 
-  // Check for an open clock-in on this date (no matching clock-out after it)
+  // Check for an open clock-in (no matching clock-out) within last 36h
   const openLog = await client.query(
     `SELECT al.id, al.punched_at FROM attendance_logs al
      WHERE al.employee_id=$1 AND al.log_type='clock_in' AND al.is_voided=FALSE
-       AND al.attendance_date=$2
+       AND al.punched_at >= NOW() - INTERVAL '36 hours'
        AND NOT EXISTS (
          SELECT 1 FROM attendance_logs co
          WHERE co.employee_id=$1 AND co.log_type='clock_out'
            AND co.is_voided=FALSE AND co.punched_at > al.punched_at
        )
      ORDER BY al.punched_at DESC LIMIT 1`,
-    [shift.employee_id, shift.date]
+    [shift.employee_id]
   );
 
   if (openLog.rows.length) {
