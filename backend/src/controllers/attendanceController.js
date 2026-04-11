@@ -448,7 +448,18 @@ exports.getTodayOverview = async (req, res) => {
       `SELECT e.id, e.full_name, e.avatar_url, r.name as role_name,
               da.status, da.clock_in_at, da.clock_out_at,
               da.worked_minutes, da.late_minutes, da.ot_minutes,
-              s.shift_name, s.start_time, s.end_time
+              s.shift_name, s.start_time, s.end_time,
+              -- Real-time: check if employee has an open clock-in today (no matching clock-out after it)
+              (SELECT al.punched_at FROM attendance_logs al
+               WHERE al.employee_id = e.id AND al.log_type = 'clock_in' AND al.is_voided = FALSE
+                 AND al.attendance_date = $2
+                 AND NOT EXISTS (
+                   SELECT 1 FROM attendance_logs co
+                   WHERE co.employee_id = e.id AND co.log_type = 'clock_out'
+                     AND co.is_voided = FALSE AND co.punched_at > al.punched_at
+                 )
+               ORDER BY al.punched_at DESC LIMIT 1
+              ) AS live_clock_in_at
        FROM employees e
        LEFT JOIN roles r ON e.role_id = r.id
        LEFT JOIN daily_attendance da ON da.employee_id = e.id AND da.attendance_date=$2
@@ -458,7 +469,15 @@ exports.getTodayOverview = async (req, res) => {
       [rid, today]
     );
 
-    const rows = result.rows.map(r => ({ ...r, status: r.status || 'absent' }));
+    const rows = result.rows.map(r => {
+      // If daily_attendance says absent/null but there's a live open clock-in → override to present
+      let status = r.status || 'absent';
+      const clockInAt = r.clock_in_at || r.live_clock_in_at;
+      if (r.live_clock_in_at && status === 'absent') {
+        status = 'present';
+      }
+      return { ...r, status, clock_in_at: clockInAt };
+    });
     const summary = {
       total:   rows.length,
       present: rows.filter(r => ['present','late'].includes(r.status)).length,
