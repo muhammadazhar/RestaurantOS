@@ -107,6 +107,10 @@ export const uploadEmployeePhoto = (id, file) => {
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
 export const getCurrentShift  = ()        => API.get('/shifts/current');
+export const getMyShifts      = ()        => API.get('/shifts/my');
+export const startMyShift     = (id)      => API.patch(`/shifts/${id}/start`);
+export const continueMyShift  = (id)      => API.patch(`/shifts/${id}/continue`);
+export const closeMyShift     = (id)      => API.patch(`/shifts/${id}/close-my`);
 export const getOpenShifts    = ()        => API.get('/shifts/open');
 export const autoCloseShifts  = ()        => API.post('/shifts/auto-close');
 export const getShifts        = (params)  => API.get('/shifts', { params });

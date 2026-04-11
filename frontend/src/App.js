@@ -26,6 +26,7 @@ import SetupWizard     from './components/onboarding/SetupWizard';
 import SystemPanel     from './components/system/SystemPanel';
 import Attendance      from './components/attendance/Attendance';
 import Delivery        from './components/delivery/Delivery';
+import MyShift from './components/shifts/MyShift';
 
 function ThemedToaster() {
   const { theme: T } = useTheme();
@@ -64,6 +65,7 @@ function AppRoutes() {
       <Route path="/recipes"   element={<PrivateRoute><Layout><Recipes /></Layout></PrivateRoute>} />
       <Route path="/employees"  element={<PrivateRoute><Layout><Employees /></Layout></PrivateRoute>} />
       <Route path="/attendance" element={<PrivateRoute><Layout><Attendance /></Layout></PrivateRoute>} />
+      <Route path="/my-shift" element={<PrivateRoute><Layout><MyShift /></Layout></PrivateRoute>} />
       <Route path="/delivery"   element={<PrivateRoute><Layout><Delivery /></Layout></PrivateRoute>} />
       <Route path="/ledger"    element={<PrivateRoute><Layout><Ledger /></Layout></PrivateRoute>} />
       <Route path="/alerts"    element={<PrivateRoute><Layout><Alerts /></Layout></PrivateRoute>} />

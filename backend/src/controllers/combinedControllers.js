@@ -644,6 +644,20 @@ exports.getCurrentShift = async (req, res) => {
     if (shift.status === 'absent')
       return res.json({ shift, allowed: false, reason: 'You are marked absent for today', attendance });
 
+    if (shift.status === 'completed')
+      return res.json({ shift, allowed: false, reason: 'Your shift has ended', attendance });
+
+    if (shift.status === 'in_process') {
+      if (!isClockedIn)
+        return res.json({ shift, allowed: false, reason: 'You must be clocked in to place orders', attendance });
+      return res.json({ shift, allowed: true, reason: null, attendance });
+    }
+
+    if (shift.status === 'scheduled') {
+      return res.json({ shift, allowed: false, reason: 'Start your shift before placing orders', attendance });
+    }
+
+    // status = 'active'
     const withinHours = now >= shift.start_time.slice(0, 5) && now <= shift.end_time.slice(0, 5);
     if (!withinHours)
       return res.json({ shift, allowed: false, reason: `Outside shift hours (${shift.start_time.slice(0,5)}–${shift.end_time.slice(0,5)})`, attendance });
@@ -955,10 +969,11 @@ exports.createOvertimeAlert = async (req, res) => {
 // ── Open / expired shifts ──────────────────────────────────────────────────────
 
 /** Shared helper: close one shift and auto clock-out if the employee is still clocked in */
-async function _closeShift(client, restaurantId, shift, closedBy) {
+async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = null) {
   // end_time is stored as HH:MM:SS by PostgreSQL — use first 8 chars to avoid double-seconds
   const timeStr = (shift.end_time || '23:59:59').slice(0, 8);
   const shiftEndTs = new Date(`${shift.date}T${timeStr}Z`);
+  const clockOutTs = clockOutAt || shiftEndTs;
 
   // Update shift status → completed
   await client.query(
@@ -981,12 +996,11 @@ async function _closeShift(client, restaurantId, shift, closedBy) {
   );
 
   if (openLog.rows.length) {
-    // Auto clock-out at shift end time
     await client.query(
       `INSERT INTO attendance_logs(restaurant_id, employee_id, shift_id, log_type,
          punched_at, attendance_date, source, notes, created_by)
        VALUES($1,$2,$3,'clock_out',$4,$5,'system','Auto clock-out at shift end',$6)`,
-      [restaurantId, shift.employee_id, shift.id, shiftEndTs, shift.date, closedBy]
+      [restaurantId, shift.employee_id, shift.id, clockOutTs, shift.date, closedBy]
     );
   }
 }
@@ -1004,8 +1018,10 @@ exports.getOpenShifts = async (req, res) => {
        JOIN employees e ON s.employee_id = e.id
        LEFT JOIN roles r ON e.role_id = r.id
        WHERE s.restaurant_id=$1
-         AND s.status IN ('scheduled','active')
-         AND (s.date < $2 OR (s.date = $2 AND s.end_time < $3))
+         AND (
+           (s.status IN ('scheduled','active') AND (s.date < $2 OR (s.date = $2 AND s.end_time < $3)))
+           OR s.status = 'in_process'
+         )
        ORDER BY s.date DESC, s.end_time DESC`,
       [rid, today, nowTime]
     );
@@ -1075,6 +1091,92 @@ exports.autoCloseShifts = async (req, res) => {
     } catch (_) {}
 
     res.json({ closed: expired.rows.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally { client.release(); }
+};
+
+// GET /shifts/my — logged-in employee's own shift history
+exports.getMyShifts = async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT s.*, e.full_name as employee_name
+       FROM shifts s
+       JOIN employees e ON s.employee_id = e.id
+       WHERE s.restaurant_id=$1 AND s.employee_id=$2
+       ORDER BY s.date DESC, s.start_time DESC
+       LIMIT 60`,
+      [req.user.restaurantId, req.user.id]
+    );
+    res.json(result.rows);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// PATCH /shifts/:id/start — employee starts their own scheduled shift
+exports.startMyShift = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const today = new Date().toISOString().slice(0, 10);
+    const result = await db.query(
+      `UPDATE shifts SET status='active'
+       WHERE id=$1 AND restaurant_id=$2 AND employee_id=$3
+         AND date=$4 AND status='scheduled'
+       RETURNING *`,
+      [id, req.user.restaurantId, req.user.id, today]
+    );
+    if (!result.rows.length)
+      return res.status(400).json({ error: 'Shift not found or cannot be started' });
+    res.json(result.rows[0]);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// PATCH /shifts/:id/continue — employee continues working past shift end_time (active → in_process)
+exports.continueMyShift = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(
+      `UPDATE shifts SET status='in_process'
+       WHERE id=$1 AND restaurant_id=$2 AND employee_id=$3
+         AND status='active'
+       RETURNING *`,
+      [id, req.user.restaurantId, req.user.id]
+    );
+    if (!result.rows.length)
+      return res.status(400).json({ error: 'Shift not found or not active' });
+    res.json(result.rows[0]);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// PATCH /shifts/:id/close-my — employee closes their own shift; clock-out at NOW()
+exports.closeMyShift = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const rid = req.user.restaurantId;
+    const { id } = req.params;
+
+    const sr = await client.query(
+      `SELECT * FROM shifts WHERE id=$1 AND restaurant_id=$2 AND employee_id=$3
+         AND status IN ('active','in_process') LIMIT 1`,
+      [id, rid, req.user.id]
+    );
+    if (!sr.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Shift not found or already closed' });
+    }
+    const shift = sr.rows[0];
+
+    await _closeShift(client, rid, shift, req.user.id, new Date());
+    await client.query('COMMIT');
+
+    try {
+      const { recomputeEmployee } = require('./attendanceController');
+      recomputeEmployee(rid, shift.employee_id, shift.date).catch(() => {});
+    } catch (_) {}
+
+    res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);

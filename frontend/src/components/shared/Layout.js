@@ -21,6 +21,7 @@ const NAV = [
   { to: '/menu-mgmt',   icon: '🍽', label: 'Menu Management',  perm: 'settings' },
   { to: '/employees',   icon: '👥', label: 'Employees',        perm: 'employees' },
   { to: '/attendance',  icon: '🕐', label: 'Attendance',        perm: 'attendance' },
+  { to: '/my-shift', icon: '⏱', label: 'My Shift', perm: 'pos' },
   { to: '/delivery',    icon: '🛵', label: 'Online Delivery',   perm: 'pos' },
   { to: '/reports',     icon: '📈', label: 'Reports',           perm: 'pos' },
   { to: '/ledger',      icon: '📊', label: 'General Ledger',   perm: 'gl' },

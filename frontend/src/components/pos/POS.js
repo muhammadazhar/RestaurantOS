@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift } from '../../services/api';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift } from '../../services/api';
 import { Card, Pill, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -61,6 +61,8 @@ export default function POS() {
   const [takePaying,   setTakePaying]   = useState(false);
   const [takePrintRdy, setTakePrintRdy] = useState(false);
   const [currentShift, setCurrentShift] = useState(null);   // { shift, allowed, reason }
+  const [shiftEndModal, setShiftEndModal] = useState(false);
+  const shiftEndAlerted = useRef(false);
   const { on, off } = useSocket();
   const { user } = useAuth();
 
@@ -86,6 +88,24 @@ export default function POS() {
     on('new_order', load);
     return () => off('new_order', load);
   }, [load, loadShift, on, off]);
+
+  // Detect shift end while on POS — prompt user to close or continue
+  useEffect(() => {
+    const check = () => {
+      if (!currentShift?.shift) return;
+      if (currentShift.shift.status !== 'active') return;
+      if (shiftEndAlerted.current) return;
+      const now = new Date().toTimeString().slice(0, 5);
+      const end = currentShift.shift.end_time?.slice(0, 5);
+      if (end && now > end) {
+        shiftEndAlerted.current = true;
+        setShiftEndModal(true);
+      }
+    };
+    check();
+    const timer = setInterval(check, 30000);
+    return () => clearInterval(timer);
+  }, [currentShift]);
 
   const cats = ['All', ...menu.categories.map(c => c.name)];
 
@@ -275,17 +295,68 @@ export default function POS() {
         </div>
       )}
 
+      {/* ── Shift-end confirmation modal ── */}
+      {shiftEndModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 400, width: '90%', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⏰</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 8 }}>Shift Ended</div>
+            <div style={{ fontSize: 14, color: T.textMid, marginBottom: 8 }}>
+              Your shift ended at <b style={{ color: T.text }}>{currentShift?.shift?.end_time?.slice(0,5)}</b>
+            </div>
+            <div style={{ fontSize: 13, color: T.textDim, marginBottom: 24 }}>
+              Would you like to close your shift or continue working?
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={async () => {
+                  try {
+                    await continueMyShift(currentShift.shift.id);
+                    toast.success('Continuing in overtime');
+                    shiftEndAlerted.current = false;
+                    setShiftEndModal(false);
+                    loadShift();
+                  } catch { toast.error('Failed'); }
+                }}
+                style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                ⏩ Continue Working
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await closeMyShift(currentShift.shift.id);
+                    toast.success('Shift closed');
+                    setShiftEndModal(false);
+                    loadShift();
+                  } catch { toast.error('Failed to close shift'); }
+                }}
+                style={{ flex: 1, background: T.red, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                ⏹ Close Shift
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Menu panel ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
 
         {/* Top bar */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>📲 POS</h1>
-          {currentShift?.shift && (
-            <div style={{ background: currentShift.allowed ? T.greenDim : T.redDim, border: `1px solid ${currentShift.allowed ? T.green : T.red}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: currentShift.allowed ? T.green : T.red }}>
-              {currentShift.allowed ? '🟢' : '🔴'} Shift #{currentShift.shift.shift_number} · {currentShift.shift.shift_name} · {currentShift.shift.start_time?.slice(0,5)}–{currentShift.shift.end_time?.slice(0,5)}
-            </div>
-          )}
+          {currentShift?.shift && (() => {
+            const s = currentShift.shift;
+            const isOT = s.status === 'in_process';
+            const bg = isOT ? T.accentGlow : currentShift.allowed ? T.greenDim : T.redDim;
+            const clr = isOT ? T.accent : currentShift.allowed ? T.green : T.red;
+            const ico = isOT ? '🟡' : currentShift.allowed ? '🟢' : '🔴';
+            return (
+              <div style={{ background: bg, border: `1px solid ${clr}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: clr }}>
+                {ico} Shift #{s.shift_number} · {s.shift_name} · {s.start_time?.slice(0,5)}–{s.end_time?.slice(0,5)}
+                {isOT && <span style={{ marginLeft: 6, fontSize: 10 }}>OVERTIME</span>}
+              </div>
+            );
+          })()}
           {currentShift && !currentShift.shift && (
             <div style={{ background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: T.red }}>
               🔴 No shift today

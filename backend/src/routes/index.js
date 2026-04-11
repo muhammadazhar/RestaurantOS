@@ -73,6 +73,10 @@ router.patch('/roles/:id',       requirePermission('employees'), ctrl.updateRole
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
 router.get('/shifts/current',            requirePermission('pos'),       ctrl.getCurrentShift);
+router.get('/shifts/my',                 requirePermission('pos'),       ctrl.getMyShifts);
+router.patch('/shifts/:id/start',        requirePermission('pos'),       ctrl.startMyShift);
+router.patch('/shifts/:id/continue',     requirePermission('pos'),       ctrl.continueMyShift);
+router.patch('/shifts/:id/close-my',     requirePermission('pos'),       ctrl.closeMyShift);
 router.get('/shifts/open',               requirePermission('employees'), ctrl.getOpenShifts);
 router.post('/shifts/auto-close',        requirePermission('employees'), ctrl.autoCloseShifts);
 router.get('/shifts',                    requirePermission('employees'), ctrl.getShifts);

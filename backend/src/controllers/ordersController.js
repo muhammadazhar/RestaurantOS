@@ -92,11 +92,18 @@ exports.createOrder = async (req, res) => {
         return res.status(403).json({ error: 'You are marked absent. Cannot place orders.' });
       }
 
-      const start = shift.start_time.slice(0, 5);
-      const end   = shift.end_time.slice(0, 5);
-      if (nowTime < start || nowTime > end) {
+      if (shift.status === 'scheduled') {
         await client.query('ROLLBACK');
-        return res.status(403).json({ error: `Outside your shift hours (${start}–${end}). Contact your manager.` });
+        return res.status(403).json({ error: 'Please start your shift before placing orders.' });
+      }
+
+      if (shift.status !== 'in_process') {
+        const start = shift.start_time.slice(0, 5);
+        const end   = shift.end_time.slice(0, 5);
+        if (nowTime < start || nowTime > end) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: `Outside your shift hours (${start}–${end}). Contact your manager.` });
+        }
       }
 
       // ── Attendance clock-in check ──────────────────────────────────────────
