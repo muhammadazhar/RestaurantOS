@@ -128,10 +128,10 @@ exports.createOrder = async (req, res) => {
       shiftId = shift.id;
     }
 
-    // Generate order number — use MAX to avoid duplicates when orders are cancelled
+    // Generate order number — use MAX of ORD-* series to avoid duplicates after cancellations
     const numRes = await client.query(
       `SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 5) AS INTEGER)), 1000) AS last_num
-       FROM orders WHERE restaurant_id = $1`, [restaurantId]
+       FROM orders WHERE restaurant_id = $1 AND order_number ~ '^ORD-[0-9]+$'`, [restaurantId]
     );
     const orderNumber = `ORD-${numRes.rows[0].last_num + 1}`;
 
