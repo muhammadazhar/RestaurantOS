@@ -88,6 +88,28 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS ready_at      TIMESTAMPTZ;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS served_at     TIMESTAMPTZ;
   `).catch(e => console.warn('Migration note:', e.message));
+
+  // Migration 006: delivery columns (idempotent)
+  await db.query(`
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS shift_id      UUID REFERENCES shifts(id) ON DELETE SET NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_lat  DECIMAL(10,7) DEFAULT NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_lng  DECIMAL(10,7) DEFAULT NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_id      UUID REFERENCES employees(id) ON DELETE SET NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS picked_at     TIMESTAMPTZ DEFAULT NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at  TIMESTAMPTZ DEFAULT NULL;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS assignment_expires_at TIMESTAMPTZ DEFAULT NULL;
+    ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS pickup_timeout_minutes INT NOT NULL DEFAULT 10;
+  `).catch(e => console.warn('Migration 006 note:', e.message));
+
+  // Update status CHECK to include delivery statuses (idempotent)
+  await db.query(`
+    ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+    ALTER TABLE orders ADD CONSTRAINT orders_status_check
+      CHECK (status IN (
+        'pending','confirmed','preparing','ready','served','paid','cancelled',
+        'picked','out_for_delivery','delivered'
+      ));
+  `).catch(e => console.warn('Status constraint note:', e.message));
   server.listen(PORT, () => {
     console.log(`✓ RestaurantOS API running on http://localhost:${PORT}`);
     console.log(`✓ WebSocket ready`);

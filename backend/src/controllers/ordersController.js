@@ -181,8 +181,8 @@ exports.createOrder = async (req, res) => {
     res.status(201).json(order);
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('createOrder error:', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Server error' });
   } finally { client.release(); }
 };
 

@@ -186,13 +186,19 @@ function OrderCard({ order, actions }) {
         {/* Right: amount + actions */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: T.accent }}>{fmtCur(order.total_amount)}</div>
-          {order.customer_lat && order.customer_lng && (
+          {(order.customer_lat && order.customer_lng) ? (
             <a href={`https://www.google.com/maps/dir/?api=1&destination=${order.customer_lat},${order.customer_lng}`}
               target="_blank" rel="noopener noreferrer"
               style={{ padding: '7px 12px', background: '#4285F422', border: '1px solid #4285F4', color: '#4285F4', borderRadius: 10, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
               📍 Navigate
             </a>
-          )}
+          ) : order.delivery_address?.address ? (
+            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.delivery_address.address)}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ padding: '7px 12px', background: '#4285F422', border: '1px solid #4285F4', color: '#4285F4', borderRadius: 10, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+              📍 Map
+            </a>
+          ) : null}
           {actions}
         </div>
       </div>

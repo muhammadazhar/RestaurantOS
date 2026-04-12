@@ -588,7 +588,7 @@ export default function POS() {
               <Btn onClick={sendToKitchen} disabled={sending} style={{ width: '100%', padding: '13px' }}>
                 {sending ? '⏳ Sending…' : orderType === 'delivery' ? '🏍 Place Delivery Order' : '🍳 Send to Kitchen'}
               </Btn>
-              <Btn variant="ghost" onClick={() => setCart([])} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
+              <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setOrderNotes(''); }} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
             </div>
           )}
         </Card>
