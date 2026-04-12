@@ -234,7 +234,9 @@ export default function RiderDashboard() {
     try {
       const res = await getRiderMyOrders({ date: new Date().toISOString().slice(0, 10) });
       setMyOrders(res.data);
-    } catch { /* silent */ }
+    } catch (e) {
+      if (e.response?.status === 403) toast.error('Your role does not have Rider permission. Ask your manager to assign you the Rider role.');
+    }
     setLoadingM(false);
   }, []);
 
@@ -278,9 +280,22 @@ export default function RiderDashboard() {
     setPicking(orderId);
     try {
       await pickOrder(orderId);
-      toast.success('Order marked as collected from restaurant');
+      toast.success('Order picked up — head to customer!');
       loadMine();
-    } catch (e) { toast.error(e.response?.data?.error || 'Cannot collect order'); }
+    } catch (e) { toast.error(e.response?.data?.error || 'Cannot pick order'); }
+    setPicking(null);
+  };
+
+  const handleMarkDelivered = async (order) => {
+    setPicking(order.id);
+    try {
+      await riderCollectPayment({
+        order_id: order.id, payment_method: order.payment_method || 'prepaid',
+        cash_amount: 0, card_amount: 0, tendered_amount: 0, notes: 'Pre-paid order',
+      });
+      toast.success('Order marked as delivered!');
+      loadMine();
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to mark delivered'); }
     setPicking(null);
   };
 
@@ -374,37 +389,43 @@ export default function RiderDashboard() {
           : (
             <div style={{ display: 'grid', gap: 12 }}>
               {myOrders.map(order => {
-                const isReadyToPick = order.status === 'ready' && !order.picked_at;
-                const canCollect   = ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status) && !order.picked_at;
-                const canGetPaid   = order.status === 'picked' && !order.collection_status;
-                const isDone       = order.status === 'delivered';
+                const isReady       = order.status === 'ready';
+                const isPicked      = order.status === 'picked';
+                const isCOD         = order.payment_status !== 'paid';
+                const canPickUp     = isReady && !order.picked_at;
+                const canGetPaid    = isPicked && isCOD && !order.collection_status;
+                const canDeliver    = isPicked && !isCOD;
 
                 return (
                   <OrderCard key={order.id} order={order} actions={
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
-                      {isReadyToPick && (
+                      {isReady && (
                         <span style={{ padding: '4px 12px', background: '#27AE6022', border: '1px solid #27AE60', borderRadius: 20, fontSize: 11, fontWeight: 800, color: '#27AE60', letterSpacing: 0.5 }}>
                           🟢 READY TO PICK
                         </span>
                       )}
-                      {canCollect && (
+                      {canPickUp && (
                         <Btn
                           onClick={() => handlePick(order.id)}
                           disabled={picking === order.id}
-                          style={{ minWidth: 130 }}
+                          style={{ minWidth: 140, background: '#27AE60', color: '#fff', border: 'none' }}
                         >
-                          {picking === order.id ? 'Updating...' : 'Mark Collected'}
+                          {picking === order.id ? 'Updating...' : '✓ Pick Up Order'}
                         </Btn>
                       )}
                       {canGetPaid && (
-                        <Btn onClick={() => setCollectOrder(order)} style={{ minWidth: 130 }}>
-                          Collect Payment
+                        <Btn onClick={() => setCollectOrder(order)} style={{ minWidth: 140 }}>
+                          💰 Collect Payment
                         </Btn>
                       )}
-                      {isDone && (
-                        <span style={{ fontSize: 12, color: T.green, fontWeight: 700 }}>
-                          ✓ Collected {fmtCur(order.total_collected)}
-                        </span>
+                      {canDeliver && (
+                        <Btn
+                          onClick={() => handleMarkDelivered(order)}
+                          disabled={picking === order.id}
+                          style={{ minWidth: 140, background: T.green, color: '#fff', border: 'none' }}
+                        >
+                          {picking === order.id ? 'Updating...' : '✓ Mark Delivered'}
+                        </Btn>
                       )}
                     </div>
                   } />

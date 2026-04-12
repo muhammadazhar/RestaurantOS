@@ -101,6 +101,16 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS pickup_timeout_minutes INT NOT NULL DEFAULT 10;
   `).catch(e => console.warn('Migration 006 note:', e.message));
 
+  // Migration: ensure every restaurant has a Rider role with rider permission
+  await db.query(`
+    INSERT INTO roles (restaurant_id, name, permissions, is_system)
+    SELECT r.id, 'Rider', '["rider","alerts"]', false
+    FROM restaurants r
+    WHERE NOT EXISTS (
+      SELECT 1 FROM roles ro WHERE ro.restaurant_id = r.id AND ro.name = 'Rider'
+    )
+  `).catch(e => console.warn('Rider role migration:', e.message));
+
   // Update status CHECK to include delivery statuses (idempotent)
   await db.query(`
     ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;

@@ -178,11 +178,12 @@ exports.register = async (req, res) => {
 
     // Create all default roles
     const roleNames = [
-      ['Manager', '["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","gl","alerts","settings"]', true],
+      ['Manager', '["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","gl","alerts","settings","rider"]', true],
       ['Head Server', '["pos","kitchen","tables","alerts"]', false],
       ['Server', '["pos","tables","alerts"]', false],
       ['Chef', '["kitchen","recipes","inventory","alerts"]', false],
       ['Cashier', '["pos","alerts"]', false],
+      ['Rider', '["rider","alerts"]', false],
     ];
     const roleIds = {};
     for (const [name, perms, isSystem] of roleNames) {
