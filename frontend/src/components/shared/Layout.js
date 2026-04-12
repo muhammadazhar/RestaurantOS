@@ -57,6 +57,7 @@ export default function Layout({ children }) {
   const visibleNav = NAV.filter(item => {
     if (item.superAdmin) return user?.isSuperAdmin;
     if (!item.perm) return true;
+    if (hasPermission('settings')) return true;
     return hasPermission(item.perm);
   });
 
