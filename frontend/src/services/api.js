@@ -204,6 +204,7 @@ export const deleteIncentiveRule    = (id)      => API.delete(`/rider/incentives
 export const processIncentives      = (d)       => API.post('/rider/incentives/process', d);
 export const getIncentivePayments   = (p)       => API.get('/rider/incentives/payments', { params: p });
 export const updateIncentivePayment = (id, d)   => API.patch(`/rider/incentives/payments/${id}`, d);
+export const getIncentivePaymentDeliveries = (id) => API.get(`/rider/incentives/payments/${id}/deliveries`);
 
 export const getRiderReport         = (p)       => API.get('/rider/reports', { params: p });
 

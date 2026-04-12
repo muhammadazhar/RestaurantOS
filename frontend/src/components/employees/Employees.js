@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   getEmployees, createEmployee, updateEmployee, uploadEmployeePhoto,
   getRoles, getShifts, createShift, bulkCreateShifts, updateShift, deleteShift,
-  getOpenShifts, autoCloseShifts, forceCloseShift,
+  getOpenShifts, autoCloseShifts, forceCloseShift, getIncentivePayments,
 } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, Input, Select, PageHeader, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
@@ -97,7 +97,7 @@ const EmpAvatar = ({ emp, size = 48 }) => {
   );
 };
 
-const EmpCard = ({ emp, onEdit }) => (
+const EmpCard = ({ emp, onEdit, incentiveAmount }) => (
   <Card hover style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
     <EmpAvatar emp={emp} />
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -113,6 +113,9 @@ const EmpCard = ({ emp, onEdit }) => (
         )}
         {emp.shift_name && <Badge color={T.blue} small>⏰ {emp.shift_name} {emp.start_time ? `${emp.start_time}–${emp.end_time}` : ''}</Badge>}
         <Badge color={emp.status === 'active' ? T.green : T.textDim} small>{emp.status}</Badge>
+        {incentiveAmount > 0 && (
+          <Badge color="#F39C12" small>🏆 PKR {incentiveAmount.toLocaleString()} incentive</Badge>
+        )}
       </div>
     </div>
     <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -625,18 +628,32 @@ function ShiftsTab({ employees }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Employees() {
   useT();
-  const [employees, setEmployees] = useState([]);
-  const [roles,     setRoles]     = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [tab,       setTab]       = useState('staff');
-  const [addOpen,   setAddOpen]   = useState(false);
-  const [editEmp,   setEditEmp]   = useState(null);
+  const [employees,     setEmployees]     = useState([]);
+  const [roles,         setRoles]         = useState([]);
+  const [incentiveMap,  setIncentiveMap]  = useState({}); // rider_id -> total pending incentive
+  const [loading,       setLoading]       = useState(true);
+  const [tab,           setTab]           = useState('staff');
+  const [addOpen,       setAddOpen]       = useState(false);
+  const [editEmp,       setEditEmp]       = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [empRes, roleRes] = await Promise.all([getEmployees(), getRoles()]);
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const [empRes, roleRes, incRes] = await Promise.all([
+        getEmployees(),
+        getRoles(),
+        getIncentivePayments({ month: currentMonth }).catch(() => ({ data: [] })),
+      ]);
       setEmployees(empRes.data);
       setRoles(roleRes.data);
+      // Build map: rider_id -> sum of pending+approved incentive amounts this month
+      const map = {};
+      for (const p of incRes.data) {
+        if (['pending', 'approved'].includes(p.status)) {
+          map[p.rider_id] = (map[p.rider_id] || 0) + parseFloat(p.amount || 0);
+        }
+      }
+      setIncentiveMap(map);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
@@ -679,7 +696,7 @@ export default function Employees() {
             <>
               <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: T.green, fontWeight: 700, marginBottom: 10 }}>🟢 On Duty ({onDuty.length})</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 12, marginBottom: 24 }}>
-                {onDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} />)}
+                {onDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} incentiveAmount={incentiveMap[e.id] || 0} />)}
               </div>
             </>
           )}
@@ -688,7 +705,7 @@ export default function Employees() {
             <>
               <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: T.textMid, fontWeight: 700, marginBottom: 10 }}>⚫ Off Duty ({offDuty.length})</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 12 }}>
-                {offDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} />)}
+                {offDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} incentiveAmount={incentiveMap[e.id] || 0} />)}
               </div>
             </>
           )}

@@ -729,6 +729,18 @@ exports.processIncentives = async (req, res) => {
     const ridersRes = await client.query(riderQuery, riderParams);
     const riders = ridersRes.rows;
 
+    // Delete existing payments for this period/riders so re-processing starts fresh
+    const riderIdsToProcess = riders.map(r => r.id);
+    if (riderIdsToProcess.length) {
+      await client.query(
+        `DELETE FROM rider_incentive_payments
+         WHERE restaurant_id = $1
+           AND period_start = $2 AND period_end = $3
+           AND rider_id = ANY($4::uuid[])`,
+        [restaurantId, period_start, period_end, riderIdsToProcess]
+      );
+    }
+
     const created = [];
     for (const rider of riders) {
       // Count deliveries in period
@@ -889,6 +901,36 @@ exports.getRiderReport = async (req, res) => {
       riders: performance.rows,
       daily:  daily.rows,
     });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+// GET /api/rider/incentives/payments/:id/deliveries  — list delivered orders for a payment
+exports.getIncentivePaymentDeliveries = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const { id } = req.params;
+
+    // Get payment to find rider + period
+    const payRes = await db.query(
+      `SELECT * FROM rider_incentive_payments WHERE id = $1 AND restaurant_id = $2`,
+      [id, restaurantId]
+    );
+    if (!payRes.rows.length) return res.status(404).json({ error: 'Payment not found' });
+    const pay = payRes.rows[0];
+
+    const result = await db.query(
+      `SELECT o.id, o.order_number, o.customer_name, o.customer_phone,
+              o.delivery_address, o.total_amount, o.status,
+              o.picked_at, o.delivered_at,
+              EXTRACT(EPOCH FROM (o.delivered_at - o.picked_at))/60 as delivery_minutes
+       FROM orders o
+       WHERE o.restaurant_id = $1 AND o.rider_id = $2
+         AND o.status = 'delivered'
+         AND DATE(o.delivered_at) BETWEEN $3 AND $4
+       ORDER BY o.delivered_at ASC`,
+      [restaurantId, pay.rider_id, pay.period_start, pay.period_end]
+    );
+    res.json({ payment: pay, orders: result.rows });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
 

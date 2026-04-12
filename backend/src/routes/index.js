@@ -184,8 +184,9 @@ router.post('/rider/incentives/rules',              requirePermission('employees
 router.patch('/rider/incentives/rules/:id',         requirePermission('employees'),  rider.updateIncentiveRule);
 router.delete('/rider/incentives/rules/:id',        requirePermission('employees'),  rider.deleteIncentiveRule);
 router.post('/rider/incentives/process',            requirePermission('employees'),  rider.processIncentives);
-router.get('/rider/incentives/payments',            requirePermission('employees'),  rider.getIncentivePayments);
-router.patch('/rider/incentives/payments/:id',      requirePermission('employees'),  rider.updateIncentivePayment);
+router.get('/rider/incentives/payments',                      requirePermission('employees'),  rider.getIncentivePayments);
+router.patch('/rider/incentives/payments/:id',               requirePermission('employees'),  rider.updateIncentivePayment);
+router.get('/rider/incentives/payments/:id/deliveries',      requirePermission('employees'),  rider.getIncentivePaymentDeliveries);
 
 // Rider reports
 router.get('/rider/reports',                        requirePermission('pos'),        rider.getRiderReport);

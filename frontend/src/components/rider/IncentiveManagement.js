@@ -2,13 +2,15 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   getIncentiveRules, createIncentiveRule, updateIncentiveRule, deleteIncentiveRule,
   processIncentives, getIncentivePayments, updateIncentivePayment,
-  getRiders, getRiderReport
+  getRiders, getIncentivePaymentDeliveries,
 } from '../../services/api';
 import { Card, PageHeader, Btn, Input, Select, Modal, Spinner, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
 
 function fmtCur(v) { return 'PKR ' + parseFloat(v || 0).toLocaleString('en-PK', { minimumFractionDigits: 0 }); }
 function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('en-PK'); }
+function fmtTime(ts) { if (!ts) return '—'; return new Date(ts).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }); }
+function fmtMin(v) { const m = Math.round(parseFloat(v || 0)); return m ? `${m} min` : '—'; }
 
 const RULE_TYPE_LABEL = {
   per_delivery:  'Per Delivery',
@@ -17,7 +19,14 @@ const RULE_TYPE_LABEL = {
   rating_bonus:  'Rating Bonus',
 };
 
-// Rule Form Modal
+const STATUS_COLOR = {
+  pending:  '#F39C12',
+  approved: '#3498DB',
+  paid:     '#27AE60',
+  rejected: '#E74C3C',
+};
+
+// ── Rule Form Modal ────────────────────────────────────────────────────────────
 function RuleModal({ rule, open, onClose, onSaved }) {
   useT();
   const isEdit = !!rule?.id;
@@ -118,7 +127,7 @@ function RuleModal({ rule, open, onClose, onSaved }) {
   );
 }
 
-// Process Incentives Modal
+// ── Process Incentives Modal ───────────────────────────────────────────────────
 function ProcessModal({ open, onClose, riders, onDone }) {
   useT();
   const today = new Date().toISOString().slice(0, 10);
@@ -163,8 +172,8 @@ function ProcessModal({ open, onClose, riders, onDone }) {
           ))}
         </div>
       </div>
-      <div style={{ background: T.surface, borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: T.textMid }}>
-        All active incentive rules will be applied to the selected riders for the period.
+      <div style={{ background: '#F39C1222', border: '1px solid #F39C12', borderRadius: 10, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: T.text }}>
+        ⚠️ Re-processing the same date range will <strong>replace</strong> existing pending/approved payments for those riders and recalculate from scratch.
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</Btn>
@@ -174,8 +183,95 @@ function ProcessModal({ open, onClose, riders, onDone }) {
   );
 }
 
-const STATUS_COLOR = { pending: '#F39C12', approved: '#3498DB', paid: '#27AE60' };
+// ── Delivery Detail Modal ──────────────────────────────────────────────────────
+function DeliveryDetailModal({ paymentId, open, onClose }) {
+  useT();
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!open || !paymentId) return;
+    setLoading(true);
+    getIncentivePaymentDeliveries(paymentId)
+      .then(res => setData(res.data))
+      .catch(() => toast.error('Failed to load deliveries'))
+      .finally(() => setLoading(false));
+  }, [open, paymentId]);
+
+  const pay    = data?.payment;
+  const orders = data?.orders || [];
+
+  return (
+    <Modal open={open} onClose={onClose} title="Delivery Detail" width={620}>
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '30px 0' }}><Spinner /></div>
+      ) : !pay ? null : (
+        <>
+          {/* Payment summary header */}
+          <div style={{ background: T.surface, borderRadius: 12, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, textTransform: 'uppercase' }}>Rider</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{pay.rider_name || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, textTransform: 'uppercase' }}>Rule</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{pay.rule_name}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, textTransform: 'uppercase' }}>Period</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{fmtDate(pay.period_start)} – {fmtDate(pay.period_end)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, textTransform: 'uppercase' }}>Deliveries</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.accent }}>{pay.deliveries_count}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: T.textDim, textTransform: 'uppercase' }}>Amount</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#27AE60' }}>{fmtCur(pay.amount)}</div>
+            </div>
+          </div>
+
+          {orders.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '30px 0', color: T.textDim }}>No delivered orders found for this period</div>
+          ) : (
+            <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: T.surface, position: 'sticky', top: 0 }}>
+                    {['Order #', 'Customer', 'Amount', 'Picked', 'Delivered', 'Duration'].map(h => (
+                      <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: T.textMid, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map(o => (
+                    <tr key={o.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: '10px 12px', fontSize: 12, fontWeight: 700, color: T.text }}>#{o.order_number}</td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{o.customer_name}</div>
+                        <div style={{ fontSize: 11, color: T.textDim }}>{o.customer_phone}</div>
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 700, color: T.accent }}>{fmtCur(o.total_amount)}</td>
+                      <td style={{ padding: '10px 12px', fontSize: 11, color: T.textMid }}>{fmtTime(o.picked_at)}</td>
+                      <td style={{ padding: '10px 12px', fontSize: 11, color: T.textMid }}>{fmtTime(o.delivered_at)}</td>
+                      <td style={{ padding: '10px 12px', fontSize: 11, color: T.textDim }}>{fmtMin(o.delivery_minutes)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <Btn variant="ghost" onClick={onClose}>Close</Btn>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────────
 export default function IncentiveManagement() {
   useT();
   const [tab,      setTab]      = useState('rules');
@@ -187,6 +283,7 @@ export default function IncentiveManagement() {
   const [editRule,      setEditRule]      = useState(null);
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [showProcess,   setShowProcess]   = useState(false);
+  const [detailPayId,   setDetailPayId]   = useState(null);
 
   // Payments filter
   const [pFilter, setPFilter] = useState({ status: '', rider_id: '', month: '' });
@@ -310,6 +407,7 @@ export default function IncentiveManagement() {
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
               <option value="paid">Paid</option>
+              <option value="rejected">Rejected</option>
             </select>
             <select value={pFilter.rider_id} onChange={e => setPFilter(p => ({ ...p, rider_id: e.target.value }))}
               style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 12px', color: T.text, fontSize: 13, outline: 'none' }}>
@@ -328,7 +426,7 @@ export default function IncentiveManagement() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: T.surface }}>
-                      {['Rider','Rule','Period','Deliveries','Amount','Status','Actions'].map(h => (
+                      {['Rider', 'Rule', 'Period', 'Deliveries', 'Amount', 'Status', 'Actions'].map(h => (
                         <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, color: T.textMid, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600 }}>{h}</th>
                       ))}
                     </tr>
@@ -339,7 +437,18 @@ export default function IncentiveManagement() {
                         <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 700, color: T.text }}>{p.rider_name}</td>
                         <td style={{ padding: '12px 16px', fontSize: 12, color: T.textMid }}>{p.rule_name}</td>
                         <td style={{ padding: '12px 16px', fontSize: 12, color: T.textMid }}>{fmtDate(p.period_start)} – {fmtDate(p.period_end)}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 13, color: T.text }}>{p.deliveries_count}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <button
+                            onClick={() => setDetailPayId(p.id)}
+                            style={{
+                              fontSize: 13, color: T.accent, fontWeight: 700, background: T.accentGlow,
+                              border: `1px solid ${T.accent}`, borderRadius: 8, padding: '3px 10px', cursor: 'pointer',
+                            }}
+                            title="View deliveries"
+                          >
+                            {p.deliveries_count} 🔍
+                          </button>
+                        </td>
                         <td style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700, color: T.accent }}>{fmtCur(p.amount)}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: (STATUS_COLOR[p.status] || '#888') + '22', color: STATUS_COLOR[p.status] || '#888' }}>
@@ -349,10 +458,16 @@ export default function IncentiveManagement() {
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ display: 'flex', gap: 6 }}>
                             {p.status === 'pending' && (
-                              <Btn size="sm" onClick={() => handlePaymentStatus(p.id, 'approved')}>Approve</Btn>
+                              <>
+                                <Btn size="sm" onClick={() => handlePaymentStatus(p.id, 'approved')}>Approve</Btn>
+                                <Btn size="sm" variant="danger" onClick={() => handlePaymentStatus(p.id, 'rejected')}>Reject</Btn>
+                              </>
                             )}
                             {p.status === 'approved' && (
-                              <Btn size="sm" onClick={() => handlePaymentStatus(p.id, 'paid')}>Mark Paid</Btn>
+                              <>
+                                <Btn size="sm" onClick={() => handlePaymentStatus(p.id, 'paid')}>Mark Paid</Btn>
+                                <Btn size="sm" variant="danger" onClick={() => handlePaymentStatus(p.id, 'rejected')}>Reject</Btn>
+                              </>
                             )}
                           </div>
                         </td>
@@ -376,7 +491,12 @@ export default function IncentiveManagement() {
         open={showProcess}
         onClose={() => setShowProcess(false)}
         riders={riders}
-        onDone={loadPayments}
+        onDone={() => { load(); if (tab === 'payments') loadPayments(); }}
+      />
+      <DeliveryDetailModal
+        paymentId={detailPayId}
+        open={!!detailPayId}
+        onClose={() => setDetailPayId(null)}
       />
     </div>
   );
