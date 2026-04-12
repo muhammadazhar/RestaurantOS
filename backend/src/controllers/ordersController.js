@@ -128,11 +128,12 @@ exports.createOrder = async (req, res) => {
       shiftId = shift.id;
     }
 
-    // Generate order number
-    const count = await client.query(
-      `SELECT COUNT(*) FROM orders WHERE restaurant_id = $1`, [restaurantId]
+    // Generate order number — use MAX to avoid duplicates when orders are cancelled
+    const numRes = await client.query(
+      `SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 5) AS INTEGER)), 1000) AS last_num
+       FROM orders WHERE restaurant_id = $1`, [restaurantId]
     );
-    const orderNumber = `ORD-${String(parseInt(count.rows[0].count) + 1001).padStart(4, '0')}`;
+    const orderNumber = `ORD-${numRes.rows[0].last_num + 1}`;
 
     const subtotal   = items.reduce((s, i) => s + (i.unit_price * i.quantity), 0);
     const discAmt    = Math.min(parseFloat(discount_amount) || 0, subtotal);
