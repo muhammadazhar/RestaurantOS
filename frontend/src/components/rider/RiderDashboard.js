@@ -389,7 +389,7 @@ export default function RiderDashboard() {
           : (
             <div style={{ display: 'grid', gap: 12 }}>
               {myOrders.map(order => {
-                const isReady       = order.status === 'ready';
+                const isReady       = ['ready', 'served'].includes(order.status); // 'served' for legacy delivery orders
                 const isPicked      = order.status === 'picked';
                 const isCOD         = order.payment_status !== 'paid';
                 const canPickUp     = isReady && !order.picked_at;

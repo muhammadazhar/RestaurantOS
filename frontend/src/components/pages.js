@@ -66,6 +66,8 @@ export function Kitchen() {
   }, [load, on, off]);
 
   const advance = async (order) => {
+    // Delivery orders stop at 'ready' — rider picks them up, not kitchen
+    if (order.status === 'ready' && order.order_type === 'delivery') return;
     const next = NEXT[order.status];
     if (!next) return;
     try {
@@ -103,39 +105,52 @@ export function Kitchen() {
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: PHASE_COLOR[phase] }} />
               {phase} ({orders.filter(o => o.status === phase).length})
             </div>
-            {orders.filter(o => o.status === phase).map(o => (
-              <Card
-                key={o.id}
-                onClick={() => advance(o)}
-                style={{ marginBottom: 12, borderLeft: `3px solid ${PHASE_COLOR[phase]}`, cursor: 'pointer', padding: 16 }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14, color: T.text }}>
-                    {o.order_number}
-                  </span>
-                  <Badge color={PHASE_COLOR[phase]} small>{elapsed(o.created_at)}</Badge>
-                </div>
-                <div style={{ fontSize: 12, color: T.textMid, marginBottom: 10 }}>
-                  {o.table_label ? `Table ${o.table_label}` : 'Online'} {o.server_name ? `· ${o.server_name}` : ''}
-                </div>
-                {(o.items || []).map((item, i) => (
-                  <div key={i} style={{ fontSize: 12, padding: '4px 0', borderBottom: `1px solid ${T.border}`, color: T.text }}>
-                    <span style={{ color: PHASE_COLOR[phase] }}>• </span>
-                    {item.name} x{item.quantity}
+            {orders.filter(o => o.status === phase).map(o => {
+              const isDelivery = o.order_type === 'delivery';
+              const isReadyDelivery = phase === 'ready' && isDelivery;
+              return (
+                <Card
+                  key={o.id}
+                  onClick={() => advance(o)}
+                  style={{ marginBottom: 12, borderLeft: `3px solid ${PHASE_COLOR[phase]}`, cursor: isReadyDelivery ? 'default' : 'pointer', padding: 16 }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 14, color: T.text }}>
+                      {o.order_number}
+                    </span>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {isDelivery && <Badge color="#3498DB" small>🏍 Delivery</Badge>}
+                      <Badge color={PHASE_COLOR[phase]} small>{elapsed(o.created_at)}</Badge>
+                    </div>
                   </div>
-                ))}
-                <div style={{ marginTop: 10 }}>
-                  <Btn size="sm" style={{
-                    width: '100%',
-                    background: PHASE_COLOR[phase],
-                    color: phase === 'preparing' ? '#000' : '#fff',
-                    border: 'none',
-                  }}>
-                    {phase === 'pending' ? 'Start Cooking' : phase === 'preparing' ? 'Mark Ready' : 'Served'}
-                  </Btn>
-                </div>
-              </Card>
-            ))}
+                  <div style={{ fontSize: 12, color: T.textMid, marginBottom: 10 }}>
+                    {o.table_label ? `Table ${o.table_label}` : isDelivery ? o.customer_name || 'Delivery' : 'Online'} {o.server_name ? `· ${o.server_name}` : ''}
+                  </div>
+                  {(o.items || []).map((item, i) => (
+                    <div key={i} style={{ fontSize: 12, padding: '4px 0', borderBottom: `1px solid ${T.border}`, color: T.text }}>
+                      <span style={{ color: PHASE_COLOR[phase] }}>• </span>
+                      {item.name} x{item.quantity}
+                    </div>
+                  ))}
+                  <div style={{ marginTop: 10 }}>
+                    {isReadyDelivery ? (
+                      <div style={{ width: '100%', padding: '7px 0', textAlign: 'center', borderRadius: 8, background: '#3498DB22', border: '1px solid #3498DB', color: '#3498DB', fontSize: 12, fontWeight: 700 }}>
+                        🏍 Awaiting Rider Pickup
+                      </div>
+                    ) : (
+                      <Btn size="sm" style={{
+                        width: '100%',
+                        background: PHASE_COLOR[phase],
+                        color: phase === 'preparing' ? '#000' : '#fff',
+                        border: 'none',
+                      }}>
+                        {phase === 'pending' ? 'Start Cooking' : phase === 'preparing' ? 'Mark Ready' : 'Mark Served'}
+                      </Btn>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
             {orders.filter(o => o.status === phase).length === 0 && (
               <div style={{ textAlign: 'center', padding: 24, color: T.textDim, fontSize: 13 }}>No orders</div>
             )}

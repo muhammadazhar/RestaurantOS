@@ -305,7 +305,7 @@ exports.pickOrder = async (req, res) => {
            assignment_expires_at = NULL,
            updated_at = NOW()
        WHERE id = $1 AND restaurant_id = $2 AND rider_id = $3
-         AND status IN ('pending','confirmed','preparing','ready')
+         AND status IN ('pending','confirmed','preparing','ready','served')
        RETURNING *`,
       [id, restaurantId, riderId]
     );
