@@ -32,6 +32,7 @@ import RiderDashboard    from './components/rider/RiderDashboard';
 import CollectionScreen  from './components/rider/CollectionScreen';
 import DailyAudit        from './components/rider/DailyAudit';
 import IncentiveManagement from './components/rider/IncentiveManagement';
+import RiderReports        from './components/rider/RiderReports';
 
 function ThemedToaster() {
   const { theme: T } = useTheme();
@@ -88,6 +89,7 @@ function AppRoutes() {
       <Route path="/collections"   element={<PrivateRoute><Layout><CollectionScreen /></Layout></PrivateRoute>} />
       <Route path="/daily-audit"   element={<PrivateRoute><Layout><DailyAudit /></Layout></PrivateRoute>} />
       <Route path="/incentives"    element={<PrivateRoute><Layout><IncentiveManagement /></Layout></PrivateRoute>} />
+      <Route path="/rider-reports" element={<PrivateRoute><Layout><RiderReports /></Layout></PrivateRoute>} />
 
       <Route path="*"          element={<Navigate to="/dashboard" replace />} />
     </Routes>
