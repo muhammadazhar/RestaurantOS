@@ -110,6 +110,48 @@ exports.createPhoneOrder = async (req, res) => {
   } finally { client.release(); }
 };
 
+// GET /api/rider/phone-orders  — all phone delivery orders (for manager/POS view)
+exports.getPhoneOrders = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const { date, status } = req.query;
+    const targetDate = date || new Date().toISOString().slice(0, 10);
+
+    let where = [
+      `o.restaurant_id = $1`,
+      `o.order_type = 'delivery'`,
+      `o.source = 'phone'`,
+      `DATE(o.created_at) = $2`,
+    ];
+    const params = [restaurantId, targetDate];
+    let idx = 3;
+
+    if (status && status !== 'all') {
+      const statuses = status.split(',').map(s => s.trim()).filter(Boolean);
+      where.push(`o.status = ANY($${idx++}::text[])`);
+      params.push(statuses);
+    }
+
+    const result = await db.query(
+      `SELECT o.*,
+              e.full_name as rider_name,
+              e.phone as rider_mobile,
+              json_agg(json_build_object(
+                'id', oi.id, 'name', oi.name, 'quantity', oi.quantity,
+                'unit_price', oi.unit_price, 'total_price', oi.total_price
+              ) ORDER BY oi.created_at) as items
+       FROM orders o
+       LEFT JOIN employees e ON e.id = o.rider_id
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       WHERE ${where.join(' AND ')}
+       GROUP BY o.id, e.full_name, e.phone
+       ORDER BY o.created_at DESC`,
+      params
+    );
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
 // PATCH /api/rider/orders/:id/assign  — assign a rider to an existing order
 exports.assignRider = async (req, res) => {
   try {
@@ -126,6 +168,86 @@ exports.assignRider = async (req, res) => {
     if (!result.rows.length) return res.status(404).json({ error: 'Order not found' });
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RIDER POOL — available orders any rider can claim
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/rider/available-orders  — phone delivery orders open for claiming
+exports.getAvailableOrders = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const result = await db.query(
+      `SELECT o.*,
+              e.full_name as rider_name,
+              json_agg(json_build_object(
+                'id', oi.id, 'name', oi.name, 'quantity', oi.quantity,
+                'unit_price', oi.unit_price, 'total_price', oi.total_price
+              ) ORDER BY oi.created_at) as items
+       FROM orders o
+       LEFT JOIN employees e ON e.id = o.rider_id
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       WHERE o.restaurant_id = $1
+         AND o.order_type = 'delivery'
+         AND o.source = 'phone'
+         AND o.status NOT IN ('delivered','paid','cancelled')
+         AND (
+           o.rider_id IS NULL
+           OR (o.assignment_expires_at IS NOT NULL AND o.assignment_expires_at < NOW() AND o.picked_at IS NULL)
+         )
+       GROUP BY o.id, e.full_name
+       ORDER BY o.created_at ASC`,
+      [restaurantId]
+    );
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+// POST /api/rider/orders/:id/claim  — rider atomically claims an available order
+exports.claimOrder = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const { restaurantId, id: riderId } = req.user;
+    const { id } = req.params;
+
+    // Get restaurant's timeout setting
+    const settRes = await client.query(
+      `SELECT pickup_timeout_minutes FROM restaurants WHERE id = $1`, [restaurantId]
+    );
+    const timeoutMin = parseInt(settRes.rows[0]?.pickup_timeout_minutes) || 10;
+
+    // Atomic claim: only succeed if order is still unclaimed or expired
+    const result = await client.query(
+      `UPDATE orders
+       SET rider_id               = $1,
+           status                 = 'confirmed',
+           assignment_expires_at  = NOW() + ($2 || ' minutes')::interval,
+           updated_at             = NOW()
+       WHERE id = $3
+         AND restaurant_id = $4
+         AND status NOT IN ('picked','delivered','paid','cancelled')
+         AND (
+           rider_id IS NULL
+           OR (assignment_expires_at IS NOT NULL AND assignment_expires_at < NOW() AND picked_at IS NULL)
+         )
+       RETURNING *`,
+      [riderId, timeoutMin, id, restaurantId]
+    );
+
+    if (!result.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Order already claimed by another rider' });
+    }
+
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally { client.release(); }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -151,6 +273,7 @@ exports.getMyOrders = async (req, res) => {
 
     const result = await db.query(
       `SELECT o.*,
+              EXTRACT(EPOCH FROM (o.assignment_expires_at - NOW()))::int as seconds_until_expiry,
               json_agg(json_build_object(
                 'id', oi.id, 'name', oi.name, 'quantity', oi.quantity,
                 'unit_price', oi.unit_price, 'total_price', oi.total_price
@@ -161,6 +284,7 @@ exports.getMyOrders = async (req, res) => {
        LEFT JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN rider_collections rc ON rc.order_id = o.id
        WHERE ${where.join(' AND ')}
+         AND o.status NOT IN ('delivered','cancelled')
        GROUP BY o.id, rc.status, rc.total_collected, rc.payment_method
        ORDER BY o.created_at ASC`,
       params
@@ -169,7 +293,7 @@ exports.getMyOrders = async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
 
-// PATCH /api/rider/orders/:id/pick  — rider marks order as picked up
+// PATCH /api/rider/orders/:id/pick  — rider marks order as collected from restaurant
 exports.pickOrder = async (req, res) => {
   try {
     const { restaurantId, id: riderId } = req.user;
@@ -177,13 +301,15 @@ exports.pickOrder = async (req, res) => {
 
     const result = await db.query(
       `UPDATE orders
-       SET status = 'picked', picked_at = NOW(), updated_at = NOW()
+       SET status = 'picked', picked_at = NOW(),
+           assignment_expires_at = NULL,
+           updated_at = NOW()
        WHERE id = $1 AND restaurant_id = $2 AND rider_id = $3
-         AND status IN ('ready','confirmed','preparing')
+         AND status IN ('pending','confirmed','preparing','ready')
        RETURNING *`,
       [id, restaurantId, riderId]
     );
-    if (!result.rows.length) return res.status(404).json({ error: 'Order not found or cannot be picked' });
+    if (!result.rows.length) return res.status(404).json({ error: 'Order not found or cannot be collected' });
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };

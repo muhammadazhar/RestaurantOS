@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getOrders, updateOrderStatus } from '../../services/api';
-import { Card, Badge, Spinner, Btn, Modal, PageHeader, T, useT } from '../shared/UI';
+import { getOrders, updateOrderStatus, getPhoneOrders, assignRider, getRiders } from '../../services/api';
+import { Card, Badge, Spinner, Btn, Modal, Select, PageHeader, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
 
 const STATUS_COLOR = {
@@ -190,11 +190,151 @@ function OrderDetailModal({ order, open, onClose, onStatusChange }) {
   );
 }
 
+// ─── Phone Orders Panel ───────────────────────────────────────────────────────
+const PHONE_STATUS_COLOR = {
+  pending: '#F39C12', confirmed: '#3498DB', preparing: '#9B59B6',
+  ready: '#27AE60', picked: '#2ECC71', delivered: '#27AE60',
+  cancelled: '#E74C3C',
+};
+
+function PhoneOrdersPanel() {
+  useT();
+  const [orders,        setOrders]        = useState([]);
+  const [riders,        setRiders]        = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [date,          setDate]          = useState(new Date().toISOString().slice(0, 10));
+  const [statusFilter,  setStatusFilter]  = useState('all');
+  const [assignModal,   setAssignModal]   = useState(null);
+  const [assignRiderId, setAssignRiderId] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [ordersR, ridersR] = await Promise.all([
+        getPhoneOrders({ date, ...(statusFilter !== 'all' ? { status: statusFilter } : {}) }),
+        getRiders(),
+      ]);
+      setOrders(ordersR.data);
+      setRiders(ridersR.data);
+    } catch { toast.error('Failed to load phone orders'); }
+    setLoading(false);
+  }, [date, statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAssign = async () => {
+    if (!assignRiderId) return toast.error('Select a rider');
+    try {
+      await assignRider(assignModal.orderId, { rider_id: assignRiderId });
+      toast.success('Rider assigned');
+      setAssignModal(null); setAssignRiderId('');
+      load();
+    } catch { toast.error('Failed to assign rider'); }
+  };
+
+  const fmtT = ts => ts ? new Date(ts).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }) : '—';
+  const fmtM = v  => 'PKR ' + parseFloat(v || 0).toLocaleString('en-PK', { minimumFractionDigits: 0 });
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div>
+          <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Date</div>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Syne', sans-serif" }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Status</div>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Syne', sans-serif" }}>
+            <option value="all">All</option>
+            {['pending','confirmed','preparing','ready','picked','delivered','cancelled'].map(s => (
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            ))}
+          </select>
+        </div>
+        <Btn size="sm" variant="ghost" onClick={load}>↻ Refresh</Btn>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12 }}>
+          {[
+            { label: 'Total',     value: orders.length },
+            { label: 'Delivered', value: orders.filter(o => o.status === 'delivered').length },
+            { label: 'Revenue',   value: fmtM(orders.filter(o => o.status === 'delivered').reduce((s, o) => s + parseFloat(o.total_amount || 0), 0)) },
+          ].map(s => (
+            <div key={s.label} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '6px 14px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: T.textMid }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {loading ? <Spinner /> : orders.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '60px 0', color: T.textDim }}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>📞</div>
+          <div style={{ fontWeight: 700, color: T.textMid }}>No phone orders for {date}</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {orders.map(order => (
+            <div key={order.id} style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              background: T.card, border: `1px solid ${T.border}`,
+              borderLeft: `3px solid ${PHONE_STATUS_COLOR[order.status] || T.textDim}`,
+              borderRadius: 12, padding: '12px 16px',
+            }}>
+              <div style={{ fontSize: 20, flexShrink: 0 }}>📞</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 13, color: T.text }}>{order.order_number}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: (PHONE_STATUS_COLOR[order.status] || '#888') + '22', color: PHONE_STATUS_COLOR[order.status] || '#888' }}>
+                    {order.status.replace(/_/g, ' ').toUpperCase()}
+                  </span>
+                  {order.payment_status === 'paid' && <Badge color={T.green} small>✓ Paid</Badge>}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{order.customer_name}</div>
+                <div style={{ fontSize: 11, color: T.textMid }}>{order.customer_phone}</div>
+                {order.delivery_address?.address && <div style={{ fontSize: 11, color: T.textMid }}>{order.delivery_address.address}</div>}
+                <div style={{ fontSize: 10, color: T.textDim, marginTop: 3 }}>
+                  {order.items?.filter(i => i?.name).length || 0} items · {fmtT(order.created_at)}
+                  {order.rider_name && <span style={{ color: T.green }}> · 🏍 {order.rider_name}</span>}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: T.accent, fontFamily: 'monospace', marginBottom: 6 }}>
+                  PKR {Number(order.total_amount).toLocaleString()}
+                </div>
+                {!order.rider_id && order.status !== 'cancelled' && (
+                  <Btn size="sm" onClick={() => { setAssignModal({ orderId: order.id }); setAssignRiderId(''); }}>
+                    Assign Rider
+                  </Btn>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal open={!!assignModal} onClose={() => setAssignModal(null)} title="Assign Rider" width={380}>
+        <Select label="Select Rider" value={assignRiderId} onChange={e => setAssignRiderId(e.target.value)}>
+          <option value="">-- Choose a rider --</option>
+          {riders.map(r => <option key={r.id} value={r.id}>{r.full_name} · {r.active_orders} active</option>)}
+        </Select>
+        <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+          <Btn variant="ghost" onClick={() => setAssignModal(null)} style={{ flex: 1 }}>Cancel</Btn>
+          <Btn onClick={handleAssign} style={{ flex: 1 }}>Assign</Btn>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
 // ─── Main Orders page ─────────────────────────────────────────────────────────
 const today = () => new Date().toISOString().slice(0,10);
 
 export default function Orders() {
   useT();
+  const [mainTab,  setMainTab]  = useState('all'); // 'all' | 'phone'
   const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [detail,   setDetail]   = useState(null);
@@ -253,10 +393,25 @@ export default function Orders() {
     <div>
       <PageHeader
         title="📋 Orders"
-        subtitle={`${filtered.length} orders · PKR ${totalRevenue.toLocaleString()} collected`}
+        subtitle={mainTab === 'all' ? `${filtered.length} orders · PKR ${totalRevenue.toLocaleString()} collected` : 'Phone delivery orders'}
         action={<Btn onClick={load} variant="ghost">↻ Refresh</Btn>}
       />
 
+      {/* Main tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: `1px solid ${T.border}`, paddingBottom: 10 }}>
+        {[['all', '📋 All Orders'], ['phone', '📞 Phone Orders']].map(([key, label]) => (
+          <button key={key} onClick={() => setMainTab(key)} style={{
+            padding: '8px 20px', borderRadius: 10, border: 'none',
+            background: mainTab === key ? T.accent : 'transparent',
+            color: mainTab === key ? '#000' : T.textMid,
+            fontWeight: 700, fontSize: 13, cursor: 'pointer',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {mainTab === 'phone' && <PhoneOrdersPanel />}
+
+      {mainTab === 'all' && <>
       {/* Summary pills */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         {[['Total', filtered.length, T.accent], ['Paid', paidCount, T.green], ['Unpaid', unpaidCount, T.red], ['Revenue', `PKR ${totalRevenue.toLocaleString()}`, T.accent]].map(([l,v,c]) => (
@@ -396,6 +551,7 @@ export default function Orders() {
         onClose={() => setDetail(null)}
         onStatusChange={handleStatus}
       />
+      </>}
     </div>
   );
 }

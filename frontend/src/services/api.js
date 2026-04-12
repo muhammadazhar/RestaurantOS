@@ -181,8 +181,11 @@ export const getDeliveryStats      = ()            => API.get('/delivery/stats')
 // ── Rider Delivery Management ─────────────────────────────────────────────────
 export const getRiders              = ()        => API.get('/rider/riders');
 export const createPhoneOrder       = (d)       => API.post('/rider/phone-orders', d);
+export const getPhoneOrders         = (p)       => API.get('/rider/phone-orders', { params: p });
 export const assignRider            = (id, d)   => API.patch(`/rider/orders/${id}/assign`, d);
 
+export const getAvailableOrders     = ()        => API.get('/rider/available-orders');
+export const claimOrder             = (id)      => API.post(`/rider/orders/${id}/claim`);
 export const getRiderMyOrders       = (p)       => API.get('/rider/my-orders', { params: p });
 export const pickOrder              = (id)      => API.patch(`/rider/orders/${id}/pick`);
 export const riderCollectPayment    = (d)       => API.post('/rider/collections', d);

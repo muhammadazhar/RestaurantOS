@@ -158,6 +158,11 @@ router.get('/delivery/stats',                 requirePermission('pos'), delivery
 router.get('/rider/riders',                         requirePermission('pos'),        rider.getRiders);
 router.post('/rider/phone-orders',                  requirePermission('pos'),        rider.createPhoneOrder);
 router.patch('/rider/orders/:id/assign',            requirePermission('pos'),        rider.assignRider);
+router.get('/rider/phone-orders',                   requirePermission('pos'),        rider.getPhoneOrders);
+
+// Rider pool — available orders any rider can claim
+router.get('/rider/available-orders',               requirePermission('rider'),      rider.getAvailableOrders);
+router.post('/rider/orders/:id/claim',              requirePermission('rider'),      rider.claimOrder);
 
 // Rider dashboard (self-service — rider sees own orders)
 router.get('/rider/my-orders',                      requirePermission('rider'),      rider.getMyOrders);
