@@ -1004,7 +1004,7 @@ async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = n
     await client.query(
       `INSERT INTO attendance_logs(restaurant_id, employee_id, shift_id, log_type,
          punched_at, attendance_date, source, notes, created_by)
-       VALUES($1,$2,$3,'clock_out',$4,$5,'system','Auto clock-out at shift end',$6)`,
+       VALUES($1,$2,$3,'clock_out',$4,$5,'manual','Auto clock-out at shift end',$6)`,
       [restaurantId, shift.employee_id, shift.id, clockOutTs, shift.date, closedBy]
     );
   }

@@ -315,11 +315,10 @@ export default function POS() {
                 onClick={async () => {
                   try {
                     await continueMyShift(currentShift.shift.id);
-                    toast.success('Continuing in overtime');
-                    shiftEndAlerted.current = false;
                     setShiftEndModal(false);
+                    toast.success('Continuing in overtime');
                     loadShift();
-                  } catch { toast.error('Failed'); }
+                  } catch (e) { toast.error(e.response?.data?.error || 'Failed to continue shift'); }
                 }}
                 style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
                 ⏩ Continue Working
@@ -328,10 +327,10 @@ export default function POS() {
                 onClick={async () => {
                   try {
                     await closeMyShift(currentShift.shift.id);
-                    toast.success('Shift closed');
                     setShiftEndModal(false);
+                    toast.success('Shift closed');
                     loadShift();
-                  } catch { toast.error('Failed to close shift'); }
+                  } catch (e) { toast.error(e.response?.data?.error || 'Failed to close shift'); }
                 }}
                 style={{ flex: 1, background: T.red, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
                 ⏹ Close Shift
