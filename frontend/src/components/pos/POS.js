@@ -181,7 +181,7 @@ export default function POS() {
           _custName:   custName,
           _custPhone:  custPhone,
         });
-        setTakePayMethod('cash');
+        setTakePayMethod(orderType === 'delivery' ? 'cod' : 'cash');
         setTakePrintRdy(false);
         setShowPayModal(true);
       } else {
@@ -195,6 +195,11 @@ export default function POS() {
 
   const handleTakeawayPay = async () => {
     if (!createdOrder) return;
+    // COD: order already in kitchen, payment collected by rider — skip status update
+    if (takePayMethod === 'cod') {
+      setTakePrintRdy(true);
+      return;
+    }
     setTakePaying(true);
     try {
       await updateOrderStatus(createdOrder.id, 'paid', takePayMethod);
@@ -208,7 +213,8 @@ export default function POS() {
   const printTakeawayReceipt = () => {
     if (!createdOrder) return;
     const o = createdOrder;
-    const methodLabel = { cash: 'Cash', card: 'Card', jazzcash: 'JazzCash', easypaisa: 'Easypaisa' }[takePayMethod] || takePayMethod;
+    const methodLabel = { cash: 'Cash', card: 'Card', jazzcash: 'JazzCash', easypaisa: 'Easypaisa', cod: 'Cash on Delivery' }[takePayMethod] || takePayMethod;
+    const isCOD = takePayMethod === 'cod';
     const fmtD = (d) => new Date(d).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' });
     const items = (o.items && o.items.length ? o.items : o._cartItems.map(c => ({
       name: c.name, quantity: c.qty, unit_price: c.price, total_price: c.price * c.qty, notes: c.notes,
@@ -231,6 +237,7 @@ export default function POS() {
         .big    { font-size: 16px; font-weight: bold; }
         .small  { font-size: 11px; color: #666; }
         .paid-stamp { border: 3px solid #000; border-radius: 6px; padding: 6px 16px; display: inline-block; font-size: 18px; font-weight: bold; letter-spacing: 3px; margin-top: 14px; }
+        .cod-stamp  { border: 3px solid #e67e22; border-radius: 6px; padding: 6px 16px; display: inline-block; font-size: 15px; font-weight: bold; letter-spacing: 2px; margin-top: 14px; color: #e67e22; }
         @media print { body { padding: 0 4px; } }
       </style></head>
       <body>
@@ -241,6 +248,7 @@ export default function POS() {
         <div class="row"><span>Type:</span><span>${(o.order_type || orderType).replace('_',' ').toUpperCase()}</span></div>
         <div class="row"><span>Customer:</span><span class="bold">${o.customer_name || o._custName || '—'}</span></div>
         ${(o.customer_phone || o._custPhone) ? `<div class="row"><span>Phone:</span><span>${o.customer_phone || o._custPhone}</span></div>` : ''}
+        ${isCOD && (o.delivery_address?.address || custAddr) ? `<div class="row"><span>Address:</span><span>${o.delivery_address?.address || custAddr}</span></div>` : ''}
         <div class="row"><span>Date:</span><span>${fmtD(o.created_at || new Date())}</span></div>
         <div class="row"><span>Cashier:</span><span class="bold">${user?.full_name || user?.name || '—'}</span></div>
         ${currentShift?.shift ? `<div class="row"><span>Shift:</span><span class="bold">#${currentShift.shift.shift_number || '—'} ${currentShift.shift.shift_name} (${currentShift.shift.start_time?.slice(0,5)}–${currentShift.shift.end_time?.slice(0,5)})</span></div>` : ''}
@@ -267,7 +275,11 @@ export default function POS() {
         <div class="row big"><span>TOTAL</span><span>PKR ${ttl.toLocaleString()}</span></div>
         <div class="line"></div>
         <div class="row"><span>Payment</span><span class="bold">${methodLabel}</span></div>
-        <div class="center" style="margin-top:12px"><span class="paid-stamp">★ PAID ★</span></div>
+        <div class="center" style="margin-top:12px">
+          ${isCOD
+            ? `<span class="cod-stamp">🏍 CASH ON DELIVERY</span>`
+            : `<span class="paid-stamp">★ PAID ★</span>`}
+        </div>
         <div class="center small" style="margin-top:20px; line-height:1.8">
           Thank you for your order!<br>Please come again soon.<br>★★★★★
         </div>
@@ -281,7 +293,7 @@ export default function POS() {
     setShowPayModal(false);
     setCreatedOrder(null);
     setTakePrintRdy(false);
-    setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setOrderNotes(''); setGuestCount(1);
+    setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setOrderNotes(''); setGuestCount(1);
   };
 
   if (loading) return <Spinner />;
@@ -671,6 +683,17 @@ export default function POS() {
               {!takePrintRdy && (
                 <div style={{ marginTop: 16, background: T.surface, borderRadius: 12, padding: '14px 16px', border: `1px solid ${T.accent}44` }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Payment Method</div>
+                  {/* COD — delivery only, shown full-width first */}
+                  {(createdOrder.order_type || orderType) === 'delivery' && (
+                    <div onClick={() => setTakePayMethod('cod')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', marginBottom: 8, background: takePayMethod === 'cod' ? '#E67E2222' : T.card, border: `2px solid ${takePayMethod === 'cod' ? '#E67E22' : T.border}`, transition: 'all 0.15s' }}>
+                      <span style={{ fontSize: 20 }}>🏍</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: takePayMethod === 'cod' ? 700 : 500, color: takePayMethod === 'cod' ? '#E67E22' : T.text }}>Cash on Delivery</div>
+                        <div style={{ fontSize: 11, color: T.textDim }}>Rider collects payment at door</div>
+                      </div>
+                      {takePayMethod === 'cod' && <span style={{ color: '#E67E22', fontWeight: 800 }}>✓</span>}
+                    </div>
+                  )}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {[['cash','💵','Cash'],['card','💳','Card'],['jazzcash','📱','JazzCash'],['easypaisa','📲','Easypaisa']].map(([id, icon, label]) => (
                       <div key={id} onClick={() => setTakePayMethod(id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: takePayMethod === id ? T.accentGlow : T.card, border: `1px solid ${takePayMethod === id ? T.accent + '88' : T.border}`, transition: 'all 0.15s' }}>
@@ -688,9 +711,13 @@ export default function POS() {
             {takePrintRdy ? (
               <div style={{ padding: '20px 24px', borderTop: `1px solid ${T.border}`, background: T.surface, flexShrink: 0 }}>
                 <div style={{ textAlign: 'center', marginBottom: 14 }}>
-                  <div style={{ fontSize: 32, marginBottom: 6 }}>🖨</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>Payment Confirmed!</div>
-                  <div style={{ fontSize: 13, color: T.textMid }}>Would you like to print the receipt?</div>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>{takePayMethod === 'cod' ? '🏍' : '🖨'}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>
+                    {takePayMethod === 'cod' ? 'Order Sent to Kitchen!' : 'Payment Confirmed!'}
+                  </div>
+                  <div style={{ fontSize: 13, color: T.textMid }}>
+                    {takePayMethod === 'cod' ? 'Rider will collect payment on delivery.' : 'Would you like to print the receipt?'}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={() => { printTakeawayReceipt(); closeTakeawayModal(); }} style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 800, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
@@ -707,7 +734,7 @@ export default function POS() {
                   Cancel
                 </button>
                 <button onClick={handleTakeawayPay} disabled={takePaying} style={{ flex: 1, background: takePaying ? T.border : T.green, color: takePaying ? T.textMid : '#fff', border: 'none', borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 800, cursor: takePaying ? 'not-allowed' : 'pointer', fontFamily: "'Syne', sans-serif", transition: 'all 0.2s' }}>
-                  {takePaying ? '⏳ Processing…' : `✓ Confirm ${takePayMethod.charAt(0).toUpperCase() + takePayMethod.slice(1)} Payment`}
+                  {takePaying ? '⏳ Processing…' : takePayMethod === 'cod' ? '🏍 Confirm Cash on Delivery' : `✓ Confirm ${takePayMethod.charAt(0).toUpperCase() + takePayMethod.slice(1)} Payment`}
                 </button>
               </div>
             )}
