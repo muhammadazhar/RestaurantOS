@@ -23,7 +23,7 @@ const NAV = [
   { to: '/attendance',  icon: '🕐', label: 'Attendance',        perm: 'attendance' },
   { to: '/my-shift', icon: '⏱', label: 'My Shift', perm: 'pos' },
   { to: '/delivery',    icon: '🛵', label: 'Online Delivery',   perm: 'pos' },
-  { to: '/phone-orders',icon: '📞', label: 'Phone Orders',      perm: 'pos' },
+  // { to: '/phone-orders',icon: '📞', label: 'Phone Orders',      perm: 'pos' },  // hidden — integrated into POS Delivery
   { to: '/rider',       icon: '🏍', label: 'My Deliveries',     perm: 'rider' },
   { to: '/collections', icon: '💵', label: 'Collections',       perm: 'pos' },
   { to: '/daily-audit', icon: '🗒', label: 'Daily Audit',       perm: 'pos' },

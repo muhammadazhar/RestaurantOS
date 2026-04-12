@@ -190,7 +190,6 @@ exports.getAvailableOrders = async (req, res) => {
        LEFT JOIN order_items oi ON oi.order_id = o.id
        WHERE o.restaurant_id = $1
          AND o.order_type = 'delivery'
-         AND o.source = 'phone'
          AND o.status NOT IN ('delivered','paid','cancelled')
          AND (
            o.rider_id IS NULL

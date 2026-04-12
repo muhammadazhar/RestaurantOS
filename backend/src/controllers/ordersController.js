@@ -63,7 +63,8 @@ exports.createOrder = async (req, res) => {
     await client.query('BEGIN');
     const { restaurantId, id: employeeId } = req.user;
     const { table_id, order_type = 'dine_in', items, guest_count = 1,
-      customer_name, customer_phone, notes, source = 'pos', discount_amount } = req.body;
+      customer_name, customer_phone, customer_address, customer_lat, customer_lng,
+      rider_id, notes, source = 'pos', discount_amount } = req.body;
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' });
 
@@ -138,14 +139,21 @@ exports.createOrder = async (req, res) => {
     const taxAmount  = Math.round((subtotal - discAmt) * 0.08 * 100) / 100;
     const totalAmount = subtotal - discAmt + taxAmount;
 
+    const deliveryAddress = customer_address
+      ? JSON.stringify({ address: customer_address })
+      : null;
+
     const orderRes = await client.query(
       `INSERT INTO orders(restaurant_id, table_id, employee_id, shift_id, order_number, order_type,
                           status, source, guest_count, subtotal, discount_amount, tax_amount, total_amount,
-                          customer_name, customer_phone, notes)
-       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+                          customer_name, customer_phone, customer_lat, customer_lng,
+                          delivery_address, rider_id, notes)
+       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [restaurantId, table_id || null, employeeId, shiftId, orderNumber, order_type, source,
         guest_count, subtotal, discAmt, taxAmount, totalAmount,
-        customer_name || null, customer_phone || null, notes || null]
+        customer_name || null, customer_phone || null,
+        customer_lat || null, customer_lng || null,
+        deliveryAddress, rider_id || null, notes || null]
     );
     const order = orderRes.rows[0];
 

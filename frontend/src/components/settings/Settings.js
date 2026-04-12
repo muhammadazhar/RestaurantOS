@@ -419,7 +419,6 @@ function RolesPermissions() {
   const role = roles.find(r => r.id === selected);
 
   const togglePerm = (key) => {
-    if (role?.system) return;
     setRoles(rs => rs.map(r => r.id === selected
       ? { ...r, permissions: r.permissions.includes(key) ? r.permissions.filter(p => p !== key) : [...r.permissions, key] }
       : r
@@ -441,7 +440,7 @@ function RolesPermissions() {
   };
 
   const save = async () => {
-    if (!role || role.system) return;
+    if (!role) return;
     setSaving(true);
     try {
       await updateRole(role.id, { permissions: role.permissions });
@@ -488,7 +487,7 @@ function RolesPermissions() {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 11, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>
             Permissions for: <span style={{ color: T.accent }}>{role?.name}</span>
-            {role?.system && <span style={{ color: T.blue, marginLeft: 8 }}>(read-only)</span>}
+            {role?.system && <span style={{ color: T.blue, marginLeft: 8 }}>(system role)</span>}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {ALL_PERMS.map(p => {
@@ -499,8 +498,7 @@ function RolesPermissions() {
                   padding: '12px 14px', borderRadius: 10,
                   background: active ? T.accentGlow : T.surface,
                   border: `1px solid ${active ? T.accent + '55' : T.border}`,
-                  cursor: role?.system ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
-                  opacity: role?.system ? 0.85 : 1,
+                  cursor: 'pointer', transition: 'all 0.15s',
                 }}>
                   <span style={{ fontSize: 16 }}>{p.icon}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: active ? T.accent : T.textMid, flex: 1 }}>{p.label}</span>

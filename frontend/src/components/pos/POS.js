@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders } from '../../services/api';
 import { Card, Pill, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +51,11 @@ export default function POS() {
   const [discount,     setDiscount]     = useState('');
   const [custName,     setCustName]     = useState('');
   const [custPhone,    setCustPhone]    = useState('');
+  const [custAddr,     setCustAddr]     = useState('');
+  const [custLat,      setCustLat]      = useState('');
+  const [custLng,      setCustLng]      = useState('');
+  const [delivRiderId, setDelivRiderId] = useState('');
+  const [riders,       setRiders]       = useState([]);
   const [orderNotes,   setOrderNotes]   = useState('');
   const [loading,      setLoading]      = useState(true);
   const [sending,      setSending]      = useState(false);
@@ -85,6 +90,7 @@ export default function POS() {
   useEffect(() => {
     load();
     loadShift();
+    getRiders().then(r => setRiders(r.data)).catch(() => {});
     on('new_order', load);
     return () => off('new_order', load);
   }, [load, loadShift, on, off]);
@@ -145,14 +151,18 @@ export default function POS() {
     setSending(true);
     try {
       const res = await createOrder({
-        table_id:       tableId || null,
-        order_type:     orderType,
-        guest_count:    parseInt(guestCount) || 1,
-        shift_id:       currentShift?.shift?.id || undefined,
-        customer_name:  custName  || undefined,
-        customer_phone: custPhone || undefined,
-        notes:          orderNotes || undefined,
-        discount_amount: discountAmt || undefined,
+        table_id:          tableId || null,
+        order_type:        orderType,
+        guest_count:       parseInt(guestCount) || 1,
+        shift_id:          currentShift?.shift?.id || undefined,
+        customer_name:     custName  || undefined,
+        customer_phone:    custPhone || undefined,
+        customer_address:  orderType === 'delivery' ? custAddr || undefined : undefined,
+        customer_lat:      orderType === 'delivery' ? custLat  || undefined : undefined,
+        customer_lng:      orderType === 'delivery' ? custLng  || undefined : undefined,
+        rider_id:          orderType === 'delivery' ? delivRiderId || undefined : undefined,
+        notes:             orderNotes || undefined,
+        discount_amount:   discountAmt || undefined,
         items: cart.map(c => ({
           menu_item_id: c.id, name: c.name,
           quantity: c.qty, unit_price: c.price,
@@ -176,7 +186,7 @@ export default function POS() {
         setShowPayModal(true);
       } else {
         toast.success('Order sent to kitchen! 🍳');
-        setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setOrderNotes(''); setGuestCount(1);
+        setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setOrderNotes(''); setGuestCount(1);
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send order');
@@ -448,10 +458,42 @@ export default function POS() {
           {/* Customer info for takeaway/delivery */}
           {needCustomer && (
             <div style={{ marginBottom: 10, background: T.surface, borderRadius: 10, padding: '10px 12px' }}>
+              {/* Name + Phone — always shown for takeaway & delivery */}
               <input value={custName} onChange={e => setCustName(e.target.value)}
-                placeholder="Customer name *" style={{ width: '100%', background: 'none', border: 'none', color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none', marginBottom: 6 }} />
+                placeholder="Customer name *" style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 6, marginBottom: 6 }} />
               <input value={custPhone} onChange={e => setCustPhone(e.target.value)}
                 placeholder="Phone number" style={{ width: '100%', background: 'none', border: 'none', color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+
+              {/* Extra fields — delivery only */}
+              {orderType === 'delivery' && (
+                <>
+                  <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 8 }}>
+                    <input value={custAddr} onChange={e => setCustAddr(e.target.value)}
+                      placeholder="Delivery address" style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 6, marginBottom: 6 }} />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input value={custLat} onChange={e => setCustLat(e.target.value)}
+                        placeholder="Lat" type="number" step="any"
+                        style={{ flex: 1, background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 4, minWidth: 0 }} />
+                      <input value={custLng} onChange={e => setCustLng(e.target.value)}
+                        placeholder="Lng" type="number" step="any"
+                        style={{ flex: 1, background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 4, minWidth: 0 }} />
+                    </div>
+                    {custLat && custLng && (
+                      <a href={`https://www.google.com/maps?q=${custLat},${custLng}`} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 10, color: T.accent, display: 'inline-block', marginTop: 4 }}>📍 View on Map</a>
+                    )}
+                  </div>
+                  <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 8 }}>
+                    <select value={delivRiderId} onChange={e => setDelivRiderId(e.target.value)}
+                      style={{ width: '100%', background: 'none', border: 'none', color: delivRiderId ? T.text : T.textDim, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }}>
+                      <option value="">🏍 Assign rider (optional)</option>
+                      {riders.map(r => (
+                        <option key={r.id} value={r.id}>{r.full_name} ({r.active_orders} active)</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -533,7 +575,7 @@ export default function POS() {
                 <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.accent }}>PKR {total.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
               </div>
               <Btn onClick={sendToKitchen} disabled={sending} style={{ width: '100%', padding: '13px' }}>
-                {sending ? '⏳ Sending…' : '🍳 Send to Kitchen'}
+                {sending ? '⏳ Sending…' : orderType === 'delivery' ? '🏍 Place Delivery Order' : '🍳 Send to Kitchen'}
               </Btn>
               <Btn variant="ghost" onClick={() => setCart([])} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
             </div>
