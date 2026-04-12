@@ -23,6 +23,38 @@ function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
 }
 
+// ─── Item thumbnail (same as POS) ─────────────────────────────────────────────
+const ItemImage = ({ src, name }) => {
+  const [err, setErr] = useState(false);
+  const url = src && !err ? (src.startsWith('http') ? src : `${IMG_BASE}${src}`) : null;
+  return (
+    <div style={{ fontSize: url ? 0 : 28, width: 56, height: 56, borderRadius: 10, overflow: 'hidden', background: T.surface, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      {url
+        ? <img src={url} alt={name} onError={() => setErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : '🍽'
+      }
+    </div>
+  );
+};
+
+// ─── Per-item notes modal (same as POS) ───────────────────────────────────────
+function ItemNotesModal({ item, open, onClose, onSave }) {
+  const [notes, setNotes] = useState('');
+  useEffect(() => { if (open) setNotes(item?.notes || ''); }, [open, item]);
+  return (
+    <Modal open={open} onClose={onClose} title={`Notes — ${item?.name}`} width={380}>
+      <textarea value={notes} onChange={e => setNotes(e.target.value)}
+        placeholder="e.g. No onions, extra spicy, medium-well…"
+        style={{ width: '100%', minHeight: 90, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+      />
+      <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+        <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</Btn>
+        <Btn onClick={() => { onSave(notes); onClose(); }} style={{ flex: 1 }}>Save Notes</Btn>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Menu item card with image ─────────────────────────────────────────────────
 function MenuItemCard({ item, inCart, onAdd, onRemove }) {
   useT();
@@ -179,21 +211,22 @@ export default function PhoneOrder() {
   const [orders,    setOrders]    = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [sending,   setSending]   = useState(false);
-  const [tab,       setTab]       = useState('new');       // 'new' | 'orders'
+  const [tab,       setTab]       = useState('new');
   const [date,      setDate]      = useState(new Date().toISOString().slice(0, 10));
 
   // Form state
-  const [cat,       setCat]       = useState('All');
-  const [search,    setSearch]    = useState('');
-  const [cart,      setCart]      = useState([]);
-  const [custName,  setCustName]  = useState('');
-  const [custPhone, setCustPhone] = useState('');
-  const [custAddr,  setCustAddr]  = useState('');
-  const [custLat,   setCustLat]   = useState('');
-  const [custLng,   setCustLng]   = useState('');
-  const [riderId,   setRiderId]   = useState('');
-  const [discount,  setDiscount]  = useState('');
-  const [notes,     setNotes]     = useState('');
+  const [cat,        setCat]       = useState('All');
+  const [search,     setSearch]    = useState('');
+  const [cart,       setCart]      = useState([]);
+  const [notesItem,  setNotesItem] = useState(null);
+  const [orderNotes, setOrderNotes] = useState('');
+  const [custName,   setCustName]  = useState('');
+  const [custPhone,  setCustPhone] = useState('');
+  const [custAddr,   setCustAddr]  = useState('');
+  const [custLat,    setCustLat]   = useState('');
+  const [custLng,    setCustLng]   = useState('');
+  const [riderId,    setRiderId]   = useState('');
+  const [discount,   setDiscount]  = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,29 +256,49 @@ export default function PhoneOrder() {
 
   const addToCart = (item) => {
     setCart(c => {
-      const idx = c.findIndex(x => x.menu_item_id === item.id);
+      const idx = c.findIndex(x => x.id === item.id);
       if (idx >= 0) {
         const n = [...c];
-        n[idx] = { ...n[idx], quantity: n[idx].quantity + 1, total_price: (n[idx].quantity + 1) * n[idx].unit_price };
+        n[idx] = { ...n[idx], quantity: n[idx].quantity + 1 };
         return n;
       }
-      return [...c, { menu_item_id: item.id, name: item.name, quantity: 1, unit_price: parseFloat(item.price), total_price: parseFloat(item.price) }];
+      return [...c, {
+        id: item.id,
+        name: item.name,
+        price: parseFloat(item.price),
+        image_url: item.image_url || null,
+        quantity: 1,
+        notes: '',
+      }];
     });
   };
 
-  const removeFromCart = (id) => setCart(c => {
-    const idx = c.findIndex(x => x.menu_item_id === id);
-    if (idx < 0) return c;
-    const item = c[idx];
-    if (item.quantity <= 1) return c.filter(x => x.menu_item_id !== id);
-    const n = [...c];
-    n[idx] = { ...item, quantity: item.quantity - 1, total_price: (item.quantity - 1) * item.unit_price };
-    return n;
-  });
+  const changeQty = (id, delta) => {
+    setCart(c => c
+      .map(x => x.id === id ? { ...x, quantity: x.quantity + delta } : x)
+      .filter(x => x.quantity > 0)
+    );
+  };
 
-  const subtotal = cart.reduce((s, i) => s + i.total_price, 0);
-  const disc     = parseFloat(discount) || 0;
-  const total    = Math.max(0, subtotal - disc);
+  const removeItem = (id) => setCart(c => c.filter(x => x.id !== id));
+
+  const setItemNotes = (id, notes) => {
+    setCart(c => c.map(x => x.id === id ? { ...x, notes } : x));
+  };
+
+  // For MenuItemCard backward compat (uses menu_item_id key)
+  const addToCartFromCard = (item) => addToCart(item);
+  const removeFromCartForCard = (id) => changeQty(id, -1);
+  const cartForCard = (itemId) => {
+    const found = cart.find(x => x.id === itemId);
+    return found ? { quantity: found.quantity } : null;
+  };
+
+  const subtotal    = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+  const discountAmt = Math.min(parseFloat(discount) || 0, subtotal);
+  const taxable     = subtotal - discountAmt;
+  const tax         = Math.round(taxable * 0.08 * 100) / 100;
+  const total       = taxable + tax;
 
   const handleSubmit = async () => {
     if (!custName.trim()) return toast.error('Customer name required');
@@ -257,12 +310,19 @@ export default function PhoneOrder() {
         customer_name: custName, customer_phone: custPhone,
         customer_address: custAddr, customer_lat: custLat || null,
         customer_lng: custLng || null,
-        items: cart, discount_amount: disc, notes,
+        items: cart.map(i => ({
+          menu_item_id: i.id, name: i.name,
+          quantity: i.quantity, unit_price: i.price,
+          total_price: i.price * i.quantity, notes: i.notes || undefined,
+        })),
+        discount_amount: discountAmt || undefined,
+        notes: orderNotes || undefined,
         rider_id: riderId || null,
       });
       toast.success('Order placed!');
       setCart([]); setCustName(''); setCustPhone(''); setCustAddr('');
-      setCustLat(''); setCustLng(''); setRiderId(''); setDiscount(''); setNotes('');
+      setCustLat(''); setCustLng(''); setRiderId(''); setDiscount('');
+      setOrderNotes('');
       loadOrders();
       setTab('orders');
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to create order'); }
@@ -305,7 +365,7 @@ export default function PhoneOrder() {
 
       {/* ── New order tab ── */}
       {tab === 'new' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
 
           {/* Left: Customer Info + Menu */}
           <div>
@@ -333,7 +393,6 @@ export default function PhoneOrder() {
             <Card>
               <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 12 }}>Select Items</div>
 
-              {/* Search + Categories */}
               <Input
                 placeholder="Search menu items..."
                 value={search} onChange={e => setSearch(e.target.value)}
@@ -351,94 +410,132 @@ export default function PhoneOrder() {
                 ))}
               </div>
 
-              {/* Menu grid — image cards, consistent sizing */}
               {filteredItems.length === 0
                 ? <div style={{ textAlign: 'center', padding: '30px 0', color: T.textDim }}>No items found</div>
                 : (
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                    gap: 12,
-                  }}>
-                    {filteredItems.map(item => {
-                      const inCart = cart.find(x => x.menu_item_id === item.id) || null;
-                      return (
-                        <MenuItemCard
-                          key={item.id}
-                          item={item}
-                          inCart={inCart}
-                          onAdd={addToCart}
-                          onRemove={removeFromCart}
-                        />
-                      );
-                    })}
-                  </div>
-                )
-              }
-            </Card>
-          </div>
-
-          {/* Right: Cart + Submit */}
-          <div style={{ position: 'sticky', top: 20 }}>
-            <Card>
-              <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 14 }}>Order Summary</div>
-
-              {!cart.length
-                ? <div style={{ color: T.textDim, fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Tap items to add</div>
-                : (
-                  <div style={{ maxHeight: 260, overflowY: 'auto', marginBottom: 4 }}>
-                    {cart.map(item => (
-                      <div key={item.menu_item_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                          <div style={{ fontSize: 11, color: T.textMid }}>{fmtCur(item.unit_price)}</div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 8 }}>
-                          <button onClick={() => removeFromCart(item.menu_item_id)} style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${T.border}`, background: T.surface, color: T.text, cursor: 'pointer' }}>-</button>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: T.text, minWidth: 16, textAlign: 'center' }}>{item.quantity}</span>
-                          <button onClick={() => addToCart({ id: item.menu_item_id, name: item.name, price: item.unit_price })} style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${T.border}`, background: T.surface, color: T.text, cursor: 'pointer' }}>+</button>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, minWidth: 56, textAlign: 'right' }}>{fmtCur(item.total_price)}</span>
-                        </div>
-                      </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+                    {filteredItems.map(item => (
+                      <MenuItemCard
+                        key={item.id}
+                        item={item}
+                        inCart={cartForCard(item.id)}
+                        onAdd={addToCartFromCard}
+                        onRemove={removeFromCartForCard}
+                      />
                     ))}
                   </div>
                 )
               }
+            </Card>
+          </div>
 
-              <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 12 }}>
-                <Input label="Discount (PKR)" value={discount} onChange={e => setDiscount(e.target.value)} type="number" placeholder="0" />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: T.textMid, marginBottom: 4 }}>
-                  <span>Subtotal</span><span>{fmtCur(subtotal)}</span>
-                </div>
-                {disc > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: T.red }}>
-                  <span>Discount</span><span>-{fmtCur(disc)}</span>
-                </div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, color: T.accent, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
-                  <span>Total</span><span>{fmtCur(total)}</span>
-                </div>
+          {/* Right: Order Summary — same structure as POS */}
+          <div style={{ position: 'sticky', top: 20 }}>
+            <Card style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
+                Phone Order
+              </div>
+              <div style={{ fontSize: 11, color: T.textMid, marginBottom: 12 }}>
+                {cart.length} item{cart.length !== 1 ? 's' : ''} · tap to add
               </div>
 
-              <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 12, paddingTop: 12 }}>
-                <Select label="Assign Rider (optional)" value={riderId} onChange={e => setRiderId(e.target.value)}>
-                  <option value="">-- Riders will see this order --</option>
+              {/* Assign Rider (phone-order specific, like guest count in POS) */}
+              <div style={{ marginBottom: 10, background: T.surface, borderRadius: 10, padding: '8px 10px' }}>
+                <select
+                  value={riderId} onChange={e => setRiderId(e.target.value)}
+                  style={{ width: '100%', background: 'none', border: 'none', color: riderId ? T.text : T.textDim, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }}
+                >
+                  <option value="">🏍 Assign rider (optional)</option>
                   {riders.map(r => (
                     <option key={r.id} value={r.id}>{r.full_name} ({r.active_orders} active)</option>
                   ))}
-                </Select>
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6, fontWeight: 600 }}>Notes</div>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)}
-                    placeholder="Special instructions..."
-                    style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 12px', color: T.text, fontSize: 13, width: '100%', outline: 'none', resize: 'none', minHeight: 54, fontFamily: "'Syne', sans-serif" }} />
-                </div>
-                <Btn onClick={handleSubmit} disabled={sending || !cart.length} style={{ width: '100%' }}>
-                  {sending ? 'Placing...' : 'Place Phone Order'}
-                </Btn>
+                </select>
               </div>
+
+              {/* Cart items */}
+              <div style={{ flex: 1, overflowY: 'auto', maxHeight: 320 }}>
+                {cart.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: T.textDim }}>
+                    <div style={{ fontSize: 32 }}>🛒</div>
+                    <div style={{ fontSize: 12, marginTop: 8 }}>Cart is empty</div>
+                  </div>
+                )}
+                {cart.map(item => (
+                  <div key={item.id} style={{ marginBottom: 8, background: T.surface, borderRadius: 10, padding: '8px 10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <ItemImage src={item.image_url} name={item.name} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                        <div style={{ fontSize: 11, color: T.textMid }}>PKR {Number(item.price).toLocaleString()}</div>
+                        {item.notes && <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>📝 {item.notes}</div>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <button onClick={() => changeQty(item.id, -1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>−</button>
+                        <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 12, color: T.text, minWidth: 16, textAlign: 'center' }}>{item.quantity}</span>
+                        <button onClick={() => changeQty(item.id, 1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>+</button>
+                      </div>
+                    </div>
+                    {/* Per-item action row */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
+                      <button onClick={() => setNotesItem(item)} style={{ flex: 1, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 6, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>📝 Notes</button>
+                      <button onClick={() => removeItem(item.id)} style={{ background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Remove</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Order notes */}
+              {cart.length > 0 && (
+                <input value={orderNotes} onChange={e => setOrderNotes(e.target.value)}
+                  placeholder="Order notes (optional)…"
+                  style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 11, fontFamily: "'Syne', sans-serif", outline: 'none', width: '100%', marginTop: 8, boxSizing: 'border-box' }} />
+              )}
+
+              {/* Totals */}
+              {cart.length > 0 && (
+                <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: T.textMid }}>Subtotal</span>
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.text }}>PKR {subtotal.toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: T.textMid, flex: 1 }}>Discount (PKR)</span>
+                    <input type="number" value={discount} onChange={e => setDiscount(e.target.value)}
+                      placeholder="0" min="0" max={subtotal}
+                      style={{ width: 80, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: '3px 8px', color: T.accent, fontSize: 12, fontFamily: 'monospace', outline: 'none', textAlign: 'right' }} />
+                  </div>
+                  {discountAmt > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: T.green }}>Discount applied</span>
+                      <span style={{ fontSize: 12, color: T.green, fontFamily: 'monospace' }}>− PKR {discountAmt.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, color: T.textMid }}>Tax (8%)</span>
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.text }}>PKR {tax.toLocaleString(undefined, { minimumFractionDigits: 0 })}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>Total</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.accent }}>PKR {total.toLocaleString(undefined, { minimumFractionDigits: 0 })}</span>
+                  </div>
+                  <Btn onClick={handleSubmit} disabled={sending} style={{ width: '100%', padding: '13px' }}>
+                    {sending ? '⏳ Sending…' : '🏍 Place Phone Order'}
+                  </Btn>
+                  <Btn variant="ghost" onClick={() => setCart([])} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
+                </div>
+              )}
             </Card>
           </div>
         </div>
       )}
+
+      {/* Per-item notes modal */}
+      <ItemNotesModal
+        item={notesItem}
+        open={!!notesItem}
+        onClose={() => setNotesItem(null)}
+        onSave={(notes) => notesItem && setItemNotes(notesItem.id, notes)}
+      />
     </div>
   );
 }
