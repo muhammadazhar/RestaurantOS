@@ -190,7 +190,7 @@ exports.getAvailableOrders = async (req, res) => {
        LEFT JOIN order_items oi ON oi.order_id = o.id
        WHERE o.restaurant_id = $1
          AND o.order_type = 'delivery'
-         AND o.status NOT IN ('delivered','paid','cancelled')
+         AND o.status = 'ready'
          AND (
            o.rider_id IS NULL
            OR (o.assignment_expires_at IS NOT NULL AND o.assignment_expires_at < NOW() AND o.picked_at IS NULL)
@@ -221,7 +221,8 @@ exports.claimOrder = async (req, res) => {
     const result = await client.query(
       `UPDATE orders
        SET rider_id               = $1,
-           status                 = 'confirmed',
+           -- keep 'ready' status so kitchen knows order is still ready; otherwise confirm
+           status                 = CASE WHEN status = 'ready' THEN 'ready' ELSE 'confirmed' END,
            assignment_expires_at  = NOW() + ($2 || ' minutes')::interval,
            updated_at             = NOW()
        WHERE id = $3

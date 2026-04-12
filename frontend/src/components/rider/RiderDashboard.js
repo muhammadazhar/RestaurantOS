@@ -4,6 +4,7 @@ import {
   getRiderMyOrders, pickOrder, riderCollectPayment
 } from '../../services/api';
 import { Card, PageHeader, Btn, Input, Modal, Spinner, T, useT } from '../shared/UI';
+import { useSocket } from '../../context/SocketContext';
 import toast from 'react-hot-toast';
 
 function fmtCur(v) { return 'PKR ' + parseFloat(v || 0).toLocaleString('en-PK', { minimumFractionDigits: 0 }); }
@@ -202,6 +203,7 @@ function OrderCard({ order, actions }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function RiderDashboard() {
   useT();
+  const { on, off } = useSocket();
   const [tab,          setTab]          = useState('available');
   const [available,    setAvailable]    = useState([]);
   const [myOrders,     setMyOrders]     = useState([]);
@@ -236,6 +238,21 @@ export default function RiderDashboard() {
     pollRef.current = setInterval(() => { loadAvailable(); loadMine(); }, 30000);
     return () => clearInterval(pollRef.current);
   }, [loadAvailable, loadMine]);
+
+  // Real-time: delivery order ready notification
+  useEffect(() => {
+    const handler = ({ orderNumber, assignedRiderId }) => {
+      loadAvailable();
+      loadMine();
+      if (!assignedRiderId) {
+        toast('🏍 Order #' + orderNumber + ' is ready — claim it now!', { duration: 6000 });
+      } else {
+        toast.success('🟢 Order #' + orderNumber + ' is ready for pickup', { duration: 5000 });
+      }
+    };
+    on('delivery_order_ready', handler);
+    return () => off('delivery_order_ready', handler);
+  }, [on, off, loadAvailable, loadMine]);
 
   const handleClaim = async (orderId) => {
     setClaiming(orderId);
@@ -315,7 +332,7 @@ export default function RiderDashboard() {
               <div style={{ textAlign: 'center', padding: '50px 0', color: T.textDim }}>
                 <div style={{ fontSize: 40, marginBottom: 10 }}>📭</div>
                 <div style={{ fontWeight: 700, color: T.textMid }}>No orders available right now</div>
-                <div style={{ fontSize: 12, marginTop: 6 }}>New phone orders will appear here automatically</div>
+                <div style={{ fontSize: 12, marginTop: 6 }}>Delivery orders will appear here once the kitchen marks them ready</div>
               </div>
             </Card>
           )
@@ -351,6 +368,7 @@ export default function RiderDashboard() {
           : (
             <div style={{ display: 'grid', gap: 12 }}>
               {myOrders.map(order => {
+                const isReadyToPick = order.status === 'ready' && !order.picked_at;
                 const canCollect   = ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status) && !order.picked_at;
                 const canGetPaid   = order.status === 'picked' && !order.collection_status;
                 const isDone       = order.status === 'delivered';
@@ -358,6 +376,11 @@ export default function RiderDashboard() {
                 return (
                   <OrderCard key={order.id} order={order} actions={
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+                      {isReadyToPick && (
+                        <span style={{ padding: '4px 12px', background: '#27AE6022', border: '1px solid #27AE60', borderRadius: 20, fontSize: 11, fontWeight: 800, color: '#27AE60', letterSpacing: 0.5 }}>
+                          🟢 READY TO PICK
+                        </span>
+                      )}
                       {canCollect && (
                         <Btn
                           onClick={() => handlePick(order.id)}

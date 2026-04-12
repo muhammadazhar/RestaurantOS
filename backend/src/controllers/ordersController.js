@@ -225,6 +225,15 @@ exports.updateOrderStatus = async (req, res) => {
     const io = req.app.get('io');
     if (io) {
       io.to(restaurantId).emit('order_updated', { orderId: id, status, tableId: result.rows[0].table_id });
+
+      // Notify riders when a delivery order is ready for pickup
+      if (status === 'ready' && result.rows[0].order_type === 'delivery') {
+        io.to(restaurantId).emit('delivery_order_ready', {
+          orderId: id,
+          orderNumber: result.rows[0].order_number,
+          assignedRiderId: result.rows[0].rider_id || null,
+        });
+      }
     }
 
     res.json(result.rows[0]);
