@@ -10,6 +10,7 @@ const ctrl       = require('../controllers/combinedControllers');
 const system     = require('../controllers/systemController');
 const attendance = require('../controllers/attendanceController');
 const delivery   = require('../controllers/deliveryController');
+const rider      = require('../controllers/riderController');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.post('/auth/register',     auth.register);   // public self-registration
@@ -151,6 +152,38 @@ router.patch('/delivery/orders/:id/reject',   requirePermission('pos'), delivery
 router.get('/delivery/platforms',             requirePermission('settings'), delivery.getPlatforms);
 router.patch('/delivery/platforms/:platform', requirePermission('settings'), delivery.updatePlatform);
 router.get('/delivery/stats',                 requirePermission('pos'), delivery.getDeliveryStats);
+
+// ── Rider Delivery Management ─────────────────────────────────────────────────
+// Phone order intake
+router.get('/rider/riders',                         requirePermission('pos'),        rider.getRiders);
+router.post('/rider/phone-orders',                  requirePermission('pos'),        rider.createPhoneOrder);
+router.patch('/rider/orders/:id/assign',            requirePermission('pos'),        rider.assignRider);
+
+// Rider dashboard (self-service — rider sees own orders)
+router.get('/rider/my-orders',                      requirePermission('rider'),      rider.getMyOrders);
+router.patch('/rider/orders/:id/pick',              requirePermission('rider'),      rider.pickOrder);
+router.post('/rider/collections',                   requirePermission('rider'),      rider.collectPayment);
+
+// Cashier collection screen
+router.get('/rider/cashier/summary',                requirePermission('pos'),        rider.getCashierSummary);
+router.get('/rider/cashier/rider/:riderId/orders',  requirePermission('pos'),        rider.getRiderOrdersForCashier);
+router.post('/rider/cashier/collect',               requirePermission('pos'),        rider.cashierCollect);
+router.patch('/rider/cashier/collections/:id',      requirePermission('pos'),        rider.updateCashierCollection);
+
+// Daily audit
+router.get('/rider/audit',                          requirePermission('pos'),        rider.getDailyAudit);
+
+// Incentive management
+router.get('/rider/incentives/rules',               requirePermission('employees'),  rider.getIncentiveRules);
+router.post('/rider/incentives/rules',              requirePermission('employees'),  rider.createIncentiveRule);
+router.patch('/rider/incentives/rules/:id',         requirePermission('employees'),  rider.updateIncentiveRule);
+router.delete('/rider/incentives/rules/:id',        requirePermission('employees'),  rider.deleteIncentiveRule);
+router.post('/rider/incentives/process',            requirePermission('employees'),  rider.processIncentives);
+router.get('/rider/incentives/payments',            requirePermission('employees'),  rider.getIncentivePayments);
+router.patch('/rider/incentives/payments/:id',      requirePermission('employees'),  rider.updateIncentivePayment);
+
+// Rider reports
+router.get('/rider/reports',                        requirePermission('pos'),        rider.getRiderReport);
 
 // ── Admin (super admin only) ──────────────────────────────────────────────────
 router.get('/admin/restaurants',     requireSuperAdmin, ctrl.getAllRestaurants);

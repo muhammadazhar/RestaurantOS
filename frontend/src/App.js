@@ -27,6 +27,11 @@ import SystemPanel     from './components/system/SystemPanel';
 import Attendance      from './components/attendance/Attendance';
 import Delivery        from './components/delivery/Delivery';
 import MyShift from './components/shifts/MyShift';
+import PhoneOrder        from './components/rider/PhoneOrder';
+import RiderDashboard    from './components/rider/RiderDashboard';
+import CollectionScreen  from './components/rider/CollectionScreen';
+import DailyAudit        from './components/rider/DailyAudit';
+import IncentiveManagement from './components/rider/IncentiveManagement';
 
 function ThemedToaster() {
   const { theme: T } = useTheme();
@@ -76,6 +81,13 @@ function AppRoutes() {
       <Route path="/reports"   element={<PrivateRoute><Layout><Reports /></Layout></PrivateRoute>} />
       <Route path="/settings"  element={<PrivateRoute><Layout><Settings /></Layout></PrivateRoute>} />
       <Route path="/system"    element={<PrivateRoute><Layout><SystemPanel /></Layout></PrivateRoute>} />
+
+      {/* Rider Delivery Management */}
+      <Route path="/phone-orders"  element={<PrivateRoute><Layout><PhoneOrder /></Layout></PrivateRoute>} />
+      <Route path="/rider"         element={<PrivateRoute><Layout><RiderDashboard /></Layout></PrivateRoute>} />
+      <Route path="/collections"   element={<PrivateRoute><Layout><CollectionScreen /></Layout></PrivateRoute>} />
+      <Route path="/daily-audit"   element={<PrivateRoute><Layout><DailyAudit /></Layout></PrivateRoute>} />
+      <Route path="/incentives"    element={<PrivateRoute><Layout><IncentiveManagement /></Layout></PrivateRoute>} />
 
       <Route path="*"          element={<Navigate to="/dashboard" replace />} />
     </Routes>

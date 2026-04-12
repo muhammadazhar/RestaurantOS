@@ -178,6 +178,32 @@ export const getDeliveryPlatforms  = ()            => API.get('/delivery/platfor
 export const updateDeliveryPlatform= (platform, d) => API.patch(`/delivery/platforms/${platform}`, d);
 export const getDeliveryStats      = ()            => API.get('/delivery/stats');
 
+// ── Rider Delivery Management ─────────────────────────────────────────────────
+export const getRiders              = ()        => API.get('/rider/riders');
+export const createPhoneOrder       = (d)       => API.post('/rider/phone-orders', d);
+export const assignRider            = (id, d)   => API.patch(`/rider/orders/${id}/assign`, d);
+
+export const getRiderMyOrders       = (p)       => API.get('/rider/my-orders', { params: p });
+export const pickOrder              = (id)      => API.patch(`/rider/orders/${id}/pick`);
+export const riderCollectPayment    = (d)       => API.post('/rider/collections', d);
+
+export const getCashierSummary      = (p)       => API.get('/rider/cashier/summary', { params: p });
+export const getRiderOrdersForCashier = (riderId, p) => API.get(`/rider/cashier/rider/${riderId}/orders`, { params: p });
+export const cashierCollect         = (d)       => API.post('/rider/cashier/collect', d);
+export const updateCashierCollection= (id, d)   => API.patch(`/rider/cashier/collections/${id}`, d);
+
+export const getDailyAudit          = (p)       => API.get('/rider/audit', { params: p });
+
+export const getIncentiveRules      = ()        => API.get('/rider/incentives/rules');
+export const createIncentiveRule    = (d)       => API.post('/rider/incentives/rules', d);
+export const updateIncentiveRule    = (id, d)   => API.patch(`/rider/incentives/rules/${id}`, d);
+export const deleteIncentiveRule    = (id)      => API.delete(`/rider/incentives/rules/${id}`);
+export const processIncentives      = (d)       => API.post('/rider/incentives/process', d);
+export const getIncentivePayments   = (p)       => API.get('/rider/incentives/payments', { params: p });
+export const updateIncentivePayment = (id, d)   => API.patch(`/rider/incentives/payments/${id}`, d);
+
+export const getRiderReport         = (p)       => API.get('/rider/reports', { params: p });
+
 // ── Admin ─────────────────────────────────────────────────────────────────────
 export const getAllRestaurants    = ()     => API.get('/admin/restaurants');
 export const registerRestaurant  = (data) => API.post('/admin/restaurants', data);
