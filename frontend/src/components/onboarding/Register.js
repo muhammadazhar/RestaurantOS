@@ -5,6 +5,14 @@ import { useTheme } from '../../context/ThemeContext';
 import { register } from '../../services/api';
 import toast from 'react-hot-toast';
 
+const THEME_OPTIONS = [
+  { id: 'dark',    name: 'Dark Orange',   bg: '#0A0C10', card: '#181C24', accent: '#F5A623' },
+  { id: 'ocean',   name: 'Ocean Blue',    bg: '#070D17', card: '#111E2D', accent: '#3498DB' },
+  { id: 'purple',  name: 'Royal Purple',  bg: '#0C0910', card: '#1A1525', accent: '#9B59B6' },
+  { id: 'emerald', name: 'Emerald Green', bg: '#071210', card: '#112420', accent: '#2ECC71' },
+  { id: 'light',   name: 'Light Mode',    bg: '#ECEEF2', card: '#FFFFFF', accent: '#C47A0A' },
+];
+
 const PLANS = [
   { id: 'starter',    name: 'Starter',    price: 'PKR 8,000/mo',  tables: 10,  staff: 15,  features: ['POS', 'Tables', 'Inventory', 'Basic Reports'] },
   { id: 'pro',        name: 'Pro',        price: 'PKR 22,000/mo', tables: 30,  staff: 50,  features: ['Everything in Starter', 'Online Orders', 'GL & Accounting', 'Recipes', 'Analytics'], popular: true },
@@ -15,7 +23,7 @@ const STEPS = ['Restaurant', 'Admin Account', 'Choose Plan', 'Review'];
 
 export default function Register() {
   const { loginFromToken } = useAuth();
-  const { mode, theme: T, toggle } = useTheme();
+  const { mode, theme: T, toggle, setMode } = useTheme();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
@@ -30,6 +38,8 @@ export default function Register() {
     admin_name: '', admin_password: '', admin_confirm: '', admin_pin: '',
     // Step 2 — Plan
     plan: 'pro',
+    // Theme
+    theme_id: localStorage.getItem('ros_theme') || 'dark',
   });
 
   const set = k => e => {
@@ -239,6 +249,37 @@ export default function Register() {
                   <input style={inp} value={form.address} onChange={set('address')} placeholder="Street address" />
                 </div>
               </div>
+
+              {/* Theme picker */}
+              <div style={{ marginTop: 8, marginBottom: 4 }}>
+                <label style={{ fontSize: 12, color: T.textMid, fontWeight: 600, display: 'block', marginBottom: 10 }}>Choose Your Theme</label>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {THEME_OPTIONS.map(opt => {
+                    const selected = form.theme_id === opt.id;
+                    return (
+                      <div
+                        key={opt.id}
+                        onClick={() => { setVal('theme_id', opt.id); setMode(opt.id); }}
+                        style={{
+                          cursor: 'pointer', borderRadius: 14,
+                          border: `2px solid ${selected ? opt.accent : T.border}`,
+                          padding: 10, background: opt.bg,
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                          minWidth: 80, transition: 'all 0.2s',
+                          boxShadow: selected ? `0 0 0 3px ${opt.accent}44` : 'none',
+                        }}
+                      >
+                        {/* Mini preview */}
+                        <div style={{ width: 48, height: 32, borderRadius: 8, background: opt.card, border: `1px solid ${opt.accent}55`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: 24, height: 6, borderRadius: 3, background: opt.accent }} />
+                        </div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: opt.accent, textAlign: 'center', lineHeight: 1.3 }}>{opt.name}</div>
+                        {selected && <div style={{ fontSize: 9, color: opt.accent }}>✓ Selected</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -352,6 +393,7 @@ export default function Register() {
                   ['💰 Currency', form.currency],
                   ['👤 Manager', form.admin_name],
                   ['📋 Plan', `${selectedPlan?.name} — ${selectedPlan?.price} (14-day trial)`],
+                  ['🎨 Theme', THEME_OPTIONS.find(t => t.id === form.theme_id)?.name || 'Dark Orange'],
                 ].map(([label, value], i) => (
                   <div key={label} style={{ display: 'flex', padding: '13px 18px', borderTop: i ? `1px solid ${T.border}` : 'none' }}>
                     <span style={{ fontSize: 13, color: T.textMid, width: 150, flexShrink: 0 }}>{label}</span>

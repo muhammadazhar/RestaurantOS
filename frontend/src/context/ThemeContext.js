@@ -22,6 +22,66 @@ export const THEMES = {
     textMid:     '#8A94A8',
     textDim:     '#4A5568',
   },
+  ocean: {
+    bg:          '#070D17',
+    surface:     '#0D1520',
+    card:        '#111E2D',
+    border:      '#1A2A3D',
+    borderLight: '#243750',
+    accent:      '#3498DB',
+    accentGlow:  'rgba(52,152,219,0.18)',
+    accentDim:   '#2475B0',
+    green:       '#2ECC71',
+    greenDim:    'rgba(46,204,113,0.15)',
+    red:         '#E74C3C',
+    redDim:      'rgba(231,76,60,0.15)',
+    blue:        '#3498DB',
+    blueDim:     'rgba(52,152,219,0.15)',
+    purple:      '#9B59B6',
+    text:        '#E8ECF4',
+    textMid:     '#8A94A8',
+    textDim:     '#4A5568',
+  },
+  purple: {
+    bg:          '#0C0910',
+    surface:     '#130F1A',
+    card:        '#1A1525',
+    border:      '#28203A',
+    borderLight: '#352A4D',
+    accent:      '#9B59B6',
+    accentGlow:  'rgba(155,89,182,0.18)',
+    accentDim:   '#7D3C98',
+    green:       '#2ECC71',
+    greenDim:    'rgba(46,204,113,0.15)',
+    red:         '#E74C3C',
+    redDim:      'rgba(231,76,60,0.15)',
+    blue:        '#3498DB',
+    blueDim:     'rgba(52,152,219,0.15)',
+    purple:      '#9B59B6',
+    text:        '#E8ECF4',
+    textMid:     '#8A94A8',
+    textDim:     '#4A5568',
+  },
+  emerald: {
+    bg:          '#071210',
+    surface:     '#0D1B19',
+    card:        '#112420',
+    border:      '#1A3330',
+    borderLight: '#234540',
+    accent:      '#2ECC71',
+    accentGlow:  'rgba(46,204,113,0.18)',
+    accentDim:   '#1E8449',
+    green:       '#2ECC71',
+    greenDim:    'rgba(46,204,113,0.15)',
+    red:         '#E74C3C',
+    redDim:      'rgba(231,76,60,0.15)',
+    blue:        '#3498DB',
+    blueDim:     'rgba(52,152,219,0.15)',
+    purple:      '#9B59B6',
+    text:        '#E8ECF4',
+    textMid:     '#8A94A8',
+    textDim:     '#4A5568',
+  },
   light: {
     bg:          '#ECEEF2',        // slightly deeper — distinguishes bg from surface
     surface:     '#F5F6F8',        // sidebar / panels — off-white, clearly ≠ card
@@ -47,9 +107,12 @@ export const THEMES = {
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
-  const [mode, setMode] = useState(() => localStorage.getItem('ros_theme') || 'dark');
+  const [mode, setMode] = useState(() => {
+    const saved = localStorage.getItem('ros_theme');
+    return (saved && THEMES[saved]) ? saved : 'dark';
+  });
 
-  const theme = THEMES[mode];
+  const theme = THEMES[mode] || THEMES.dark;
 
   // Inject CSS variables onto :root whenever mode changes
   useEffect(() => {
@@ -68,7 +131,7 @@ export function ThemeProvider({ children }) {
   const toggle = () => setMode(m => m === 'dark' ? 'light' : 'dark');
 
   return (
-    <ThemeContext.Provider value={{ mode, theme, toggle }}>
+    <ThemeContext.Provider value={{ mode, theme, toggle, setMode }}>
       {children}
     </ThemeContext.Provider>
   );

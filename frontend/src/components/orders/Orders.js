@@ -185,6 +185,19 @@ function OrderDetailModal({ order, open, onClose, onStatusChange }) {
         <Btn variant="ghost" onClick={() => printReceipt(order)} style={{ width: '100%' }}>
           🖨 Print Receipt
         </Btn>
+        {order.payment_status !== 'paid' && order.status !== 'cancelled' && (
+          <Btn
+            onClick={() => {
+              if (window.confirm('Cancel this order? This cannot be undone.')) {
+                onStatusChange(order.id, 'cancelled');
+                onClose();
+              }
+            }}
+            style={{ width: '100%', background: T.redDim, color: T.red, border: `1px solid ${T.red}44` }}
+          >
+            ✕ Cancel Order
+          </Btn>
+        )}
       </div>
     </Modal>
   );
