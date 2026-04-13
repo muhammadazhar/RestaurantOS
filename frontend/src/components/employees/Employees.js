@@ -646,10 +646,10 @@ export default function Employees() {
       ]);
       setEmployees(empRes.data);
       setRoles(roleRes.data);
-      // Build map: rider_id -> sum of pending+approved incentive amounts this month
+      // Build map: rider_id -> sum of approved (not yet received) incentive amounts this month
       const map = {};
       for (const p of incRes.data) {
-        if (['pending', 'approved'].includes(p.status)) {
+        if (p.status === 'approved') {
           map[p.rider_id] = (map[p.rider_id] || 0) + parseFloat(p.amount || 0);
         }
       }

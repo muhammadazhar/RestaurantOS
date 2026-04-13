@@ -120,6 +120,19 @@ db.query('SELECT NOW()').then(async () => {
         'picked','out_for_delivery','delivered'
       ));
   `).catch(e => console.warn('Status constraint note:', e.message));
+
+  // Migration 007: extend incentive payment statuses + add received_at/updated_at
+  await db.query(`
+    ALTER TABLE rider_incentive_payments
+      DROP CONSTRAINT IF EXISTS rider_incentive_payments_status_check;
+    ALTER TABLE rider_incentive_payments
+      ADD CONSTRAINT rider_incentive_payments_status_check
+        CHECK (status IN ('pending','approved','paid','rejected','received'));
+    ALTER TABLE rider_incentive_payments
+      ADD COLUMN IF NOT EXISTS received_at TIMESTAMPTZ DEFAULT NULL;
+    ALTER TABLE rider_incentive_payments
+      ADD COLUMN IF NOT EXISTS updated_at  TIMESTAMPTZ DEFAULT NOW();
+  `).catch(e => console.warn('Migration 007 note:', e.message));
   server.listen(PORT, () => {
     console.log(`✓ RestaurantOS API running on http://localhost:${PORT}`);
     console.log(`✓ WebSocket ready`);

@@ -816,25 +816,56 @@ exports.getIncentivePayments = async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
 
-// PATCH /api/rider/incentives/payments/:id  — approve or mark paid
+// PATCH /api/rider/incentives/payments/:id  — update status (approve/reject/received/paid)
 exports.updateIncentivePayment = async (req, res) => {
   try {
     const { restaurantId, id: userId } = req.user;
     const { id } = req.params;
     const { status, notes } = req.body;
 
+    const validStatuses = ['approved', 'rejected', 'received', 'paid'];
+    if (!validStatuses.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    // Build parameterised extra columns to avoid string interpolation
+    const extraParams = [];
     let extraCols = '';
-    if (status === 'approved') extraCols = `, approved_by = '${userId}', approved_at = NOW()`;
-    if (status === 'paid')     extraCols = `, paid_at = NOW()`;
+    let paramIdx = 5; // $1=status $2=notes $3=id $4=restaurantId, extras start at $5
+
+    if (status === 'approved') {
+      extraCols += `, approved_by = $${paramIdx++}, approved_at = NOW()`;
+      extraParams.push(userId);
+    }
+    if (status === 'paid') {
+      extraCols += `, paid_at = NOW()`;
+    }
+    if (status === 'received') {
+      extraCols += `, received_at = NOW()`;
+    }
 
     const result = await db.query(
       `UPDATE rider_incentive_payments
-       SET status = $1, notes = COALESCE($2, notes) ${extraCols}
+       SET status = $1, notes = COALESCE($2, notes), updated_at = NOW() ${extraCols}
        WHERE id = $3 AND restaurant_id = $4 RETURNING *`,
-      [status, notes, id, restaurantId]
+      [status, notes ?? null, id, restaurantId, ...extraParams]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Payment not found' });
     res.json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+// DELETE /api/rider/incentives/payments/:id  — delete a pending payment
+exports.deleteIncentivePayment = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const { id } = req.params;
+    const result = await db.query(
+      `DELETE FROM rider_incentive_payments
+       WHERE id = $1 AND restaurant_id = $2 AND status = 'pending'
+       RETURNING id`,
+      [id, restaurantId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Pending payment not found' });
+    res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
 

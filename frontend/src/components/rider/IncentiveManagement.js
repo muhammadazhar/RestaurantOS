@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   getIncentiveRules, createIncentiveRule, updateIncentiveRule, deleteIncentiveRule,
-  processIncentives, getIncentivePayments, updateIncentivePayment,
+  processIncentives, getIncentivePayments, updateIncentivePayment, deleteIncentivePayment,
   getRiders, getIncentivePaymentDeliveries,
 } from '../../services/api';
 import { Card, PageHeader, Btn, Input, Select, Modal, Spinner, T, useT } from '../shared/UI';
@@ -23,6 +23,7 @@ const STATUS_COLOR = {
   pending:  '#F39C12',
   approved: '#3498DB',
   paid:     '#27AE60',
+  received: '#8E44AD',
   rejected: '#E74C3C',
 };
 
@@ -320,9 +321,18 @@ export default function IncentiveManagement() {
   const handlePaymentStatus = async (id, status) => {
     try {
       await updateIncentivePayment(id, { status });
-      toast.success(`Payment ${status}`);
+      toast.success(`Payment marked as ${status}`);
       loadPayments();
-    } catch { toast.error('Failed to update'); }
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to update'); }
+  };
+
+  const handleDeletePayment = async (id) => {
+    if (!window.confirm('Delete this pending incentive payment?')) return;
+    try {
+      await deleteIncentivePayment(id);
+      toast.success('Payment deleted');
+      loadPayments();
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to delete'); }
   };
 
   if (loading) return <Spinner />;
@@ -406,6 +416,7 @@ export default function IncentiveManagement() {
               <option value="">All Statuses</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
+              <option value="received">Received</option>
               <option value="paid">Paid</option>
               <option value="rejected">Rejected</option>
             </select>
@@ -456,16 +467,17 @@ export default function IncentiveManagement() {
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px' }}>
-                          <div style={{ display: 'flex', gap: 6 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             {p.status === 'pending' && (
                               <>
                                 <Btn size="sm" onClick={() => handlePaymentStatus(p.id, 'approved')}>Approve</Btn>
                                 <Btn size="sm" variant="danger" onClick={() => handlePaymentStatus(p.id, 'rejected')}>Reject</Btn>
+                                <Btn size="sm" variant="danger" onClick={() => handleDeletePayment(p.id)}>Delete</Btn>
                               </>
                             )}
                             {p.status === 'approved' && (
                               <>
-                                <Btn size="sm" onClick={() => handlePaymentStatus(p.id, 'paid')}>Mark Paid</Btn>
+                                <Btn size="sm" onClick={() => handlePaymentStatus(p.id, 'received')}>✓ Received</Btn>
                                 <Btn size="sm" variant="danger" onClick={() => handlePaymentStatus(p.id, 'rejected')}>Reject</Btn>
                               </>
                             )}
