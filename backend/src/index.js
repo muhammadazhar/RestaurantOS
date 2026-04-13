@@ -133,6 +133,12 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE rider_incentive_payments
       ADD COLUMN IF NOT EXISTS updated_at  TIMESTAMPTZ DEFAULT NOW();
   `).catch(e => console.warn('Migration 007 note:', e.message));
+
+  // Migration 008: ensure shifts.updated_at exists
+  await db.query(`
+    ALTER TABLE shifts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+  `).catch(e => console.warn('Migration 008 note:', e.message));
+
   server.listen(PORT, () => {
     console.log(`✓ RestaurantOS API running on http://localhost:${PORT}`);
     console.log(`✓ WebSocket ready`);
