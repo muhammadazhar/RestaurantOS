@@ -133,9 +133,9 @@ export default function Reservations() {
       {/* Filters */}
       <div style={{ display:'flex', gap:12, alignItems:'center', marginBottom:20, flexWrap:'wrap' }}>
         <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
-          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:'8px 14px', color:T.text, fontSize:13, fontFamily:"'Syne',sans-serif", outline:'none' }} />
+          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:'8px 14px', color:T.text, fontSize:13, fontFamily:"'Inter',sans-serif", outline:'none' }} />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:'8px 14px', color:T.text, fontSize:13, fontFamily:"'Syne',sans-serif", outline:'none' }}>
+          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:10, padding:'8px 14px', color:T.text, fontSize:13, fontFamily:"'Inter',sans-serif", outline:'none' }}>
           <option value="all">All Statuses</option>
           {['pending','confirmed','seated','cancelled','no_show'].map(s => <option key={s} value={s}>{s.replace('_',' ')}</option>)}
         </select>
@@ -145,7 +145,7 @@ export default function Reservations() {
           const d = new Date(); d.setDate(d.getDate()+i);
           const ds = d.toISOString().slice(0,10);
           return (
-            <button key={lbl} onClick={() => setDateFilter(ds)} style={{ background: dateFilter===ds ? T.accent : T.card, color: dateFilter===ds ? '#000' : T.textMid, border:`1px solid ${dateFilter===ds ? T.accent : T.border}`, borderRadius:8, padding:'8px 14px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>
+            <button key={lbl} onClick={() => setDateFilter(ds)} style={{ background: dateFilter===ds ? T.accent : T.card, color: dateFilter===ds ? '#000' : T.textMid, border:`1px solid ${dateFilter===ds ? T.accent : T.border}`, borderRadius:8, padding:'8px 14px', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>
               {lbl}
             </button>
           );
@@ -215,16 +215,16 @@ export default function Reservations() {
                   {/* Quick actions */}
                   <div style={{ display:'flex', gap:6, flexDirection:'column' }} onClick={e => e.stopPropagation()}>
                     {!expired && res.status === 'confirmed' && (
-                      <button onClick={() => handleStatusChange(res.id,'seated')} style={{ background:T.greenDim, color:T.green, border:`1px solid ${T.green}44`, borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>Seat</button>
+                      <button onClick={() => handleStatusChange(res.id,'seated')} style={{ background:T.greenDim, color:T.green, border:`1px solid ${T.green}44`, borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>Seat</button>
                     )}
                     {!expired && ['confirmed','pending'].includes(res.status) && (
-                      <button onClick={() => handleStatusChange(res.id,'cancelled')} style={{ background:T.redDim, color:T.red, border:`1px solid ${T.red}44`, borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>Cancel</button>
+                      <button onClick={() => handleStatusChange(res.id,'cancelled')} style={{ background:T.redDim, color:T.red, border:`1px solid ${T.red}44`, borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>Cancel</button>
                     )}
                     {!expired && res.status === 'confirmed' && (
-                      <button onClick={() => handleStatusChange(res.id,'no_show')} style={{ background:T.surface, color:T.textMid, border:`1px solid ${T.border}`, borderRadius:7, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>No-show</button>
+                      <button onClick={() => handleStatusChange(res.id,'no_show')} style={{ background:T.surface, color:T.textMid, border:`1px solid ${T.border}`, borderRadius:7, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>No-show</button>
                     )}
                     {expired && (
-                      <button onClick={() => handleStatusChange(res.id,'no_show')} style={{ background:T.red, color:'#fff', border:'none', borderRadius:7, padding:'5px 12px', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'Syne',sans-serif", whiteSpace:'nowrap' }}>
+                      <button onClick={() => handleStatusChange(res.id,'no_show')} style={{ background:T.red, color:'#fff', border:'none', borderRadius:7, padding:'5px 12px', fontSize:11, fontWeight:800, cursor:'pointer', fontFamily:"'Inter',sans-serif", whiteSpace:'nowrap' }}>
                         Clear Reservation
                       </button>
                     )}

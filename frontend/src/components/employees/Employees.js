@@ -121,7 +121,7 @@ const EmpCard = ({ emp, onEdit, incentiveAmount }) => (
     <div style={{ textAlign: 'right', flexShrink: 0 }}>
       {emp.salary && <div style={{ fontSize: 12, fontWeight: 800, color: T.accent, fontFamily: 'monospace' }}>PKR {Number(emp.salary).toLocaleString()}</div>}
       <div style={{ fontSize: 11, color: T.textMid, marginTop: 2 }}>{emp.shift_status === 'active' ? '🟢 On Duty' : '⚫ Off Duty'}</div>
-      <button onClick={() => onEdit(emp)} style={{ marginTop: 6, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Edit</button>
+      <button onClick={() => onEdit(emp)} style={{ marginTop: 6, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Edit</button>
     </div>
   </Card>
 );
@@ -227,11 +227,11 @@ function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input ref={photoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoChange} />
-              <button onClick={() => photoRef.current.click()} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+              <button onClick={() => photoRef.current.click()} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                 {editEmp?.avatar_url ? '🔄 Change Photo' : '📷 Upload Photo'}
               </button>
               {photoFile && (
-                <button onClick={handlePhotoUpload} disabled={photoUploading} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 800, cursor: photoUploading ? 'not-allowed' : 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                <button onClick={handlePhotoUpload} disabled={photoUploading} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 800, cursor: photoUploading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
                   {photoUploading ? '⏳ Uploading…' : '⬆ Save Photo'}
                 </button>
               )}
@@ -286,7 +286,7 @@ function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
               <FieldLabel>Quick Presets</FieldLabel>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                 {SHIFT_PRESETS.map(p => (
-                  <button key={p.name} onClick={() => applyPreset(p)} style={{ background: form.shift_name === p.name ? T.accentGlow : T.surface, border: `1px solid ${form.shift_name === p.name ? T.accent + '66' : T.border}`, color: form.shift_name === p.name ? T.accent : T.textMid, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                  <button key={p.name} onClick={() => applyPreset(p)} style={{ background: form.shift_name === p.name ? T.accentGlow : T.surface, border: `1px solid ${form.shift_name === p.name ? T.accent + '66' : T.border}`, color: form.shift_name === p.name ? T.accent : T.textMid, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                     {p.name} <span style={{ fontSize: 10, opacity: 0.7 }}>{p.start}–{p.end}</span>
                   </button>
                 ))}
@@ -369,7 +369,7 @@ function BulkShiftModal({ open, onClose, onSaved, employees }) {
 
   const btnStyle = (active) => ({
     flex: 1, padding: '8px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
-    fontFamily: "'Syne', sans-serif", border: `1px solid ${active ? T.accent + '66' : T.border}`,
+    fontFamily: "'Inter', sans-serif", border: `1px solid ${active ? T.accent + '66' : T.border}`,
     background: active ? T.accentGlow : T.surface, color: active ? T.accent : T.textMid,
   });
 
@@ -389,7 +389,7 @@ function BulkShiftModal({ open, onClose, onSaved, employees }) {
       <FieldLabel>Quick Presets</FieldLabel>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {SHIFT_PRESETS.map(p => (
-          <button key={p.name} onClick={() => applyPreset(p)} style={{ background: form.shift_name === p.name ? T.accentGlow : T.surface, border: `1px solid ${form.shift_name === p.name ? T.accent + '66' : T.border}`, color: form.shift_name === p.name ? T.accent : T.textMid, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+          <button key={p.name} onClick={() => applyPreset(p)} style={{ background: form.shift_name === p.name ? T.accentGlow : T.surface, border: `1px solid ${form.shift_name === p.name ? T.accent + '66' : T.border}`, color: form.shift_name === p.name ? T.accent : T.textMid, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
             {p.name} <span style={{ fontSize: 10, opacity: 0.7 }}>{p.start}–{p.end}</span>
           </button>
         ))}
@@ -459,7 +459,7 @@ function EditShiftModal({ open, onClose, onSaved, shift }) {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
         {SHIFT_PRESETS.map(p => (
           <button key={p.name} onClick={() => setForm(f => ({ ...f, shift_name: p.name, start_time: p.start, end_time: p.end }))}
-            style={{ background: form.shift_name === p.name ? T.accentGlow : T.surface, border: `1px solid ${form.shift_name === p.name ? T.accent + '66' : T.border}`, color: form.shift_name === p.name ? T.accent : T.textMid, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+            style={{ background: form.shift_name === p.name ? T.accentGlow : T.surface, border: `1px solid ${form.shift_name === p.name ? T.accent + '66' : T.border}`, color: form.shift_name === p.name ? T.accent : T.textMid, borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
             {p.name} <span style={{ fontSize: 10, opacity: 0.7 }}>{p.start}–{p.end}</span>
           </button>
         ))}
@@ -494,19 +494,19 @@ function ShiftRow({ shift, onChangeStatus, onEdit, onRemove, onForceClose, isOpe
       <Badge color={color} small>{shift.status}</Badge>
       <div style={{ display: 'flex', gap: 6 }}>
         {isOpen ? (
-          <button onClick={() => onForceClose(shift.id)} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>⏹ Force Close</button>
+          <button onClick={() => onForceClose(shift.id)} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>⏹ Force Close</button>
         ) : (
           <>
             {shift.status === 'scheduled' && (
               <>
-                <button onClick={() => onChangeStatus(shift.id, 'active')} style={{ background: T.greenDim, color: T.green, border: `1px solid ${T.green}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Check In</button>
-                <button onClick={() => onChangeStatus(shift.id, 'absent')} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Absent</button>
+                <button onClick={() => onChangeStatus(shift.id, 'active')} style={{ background: T.greenDim, color: T.green, border: `1px solid ${T.green}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Check In</button>
+                <button onClick={() => onChangeStatus(shift.id, 'absent')} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Absent</button>
               </>
             )}
             {shift.status === 'active' && (
-              <button onClick={() => onChangeStatus(shift.id, 'completed')} style={{ background: T.blueDim, color: T.blue, border: `1px solid ${T.blue}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Check Out</button>
+              <button onClick={() => onChangeStatus(shift.id, 'completed')} style={{ background: T.blueDim, color: T.blue, border: `1px solid ${T.blue}44`, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Check Out</button>
             )}
-            <button onClick={() => onEdit(shift)} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>✏ Edit</button>
+            <button onClick={() => onEdit(shift)} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>✏ Edit</button>
             <button onClick={() => onRemove(shift.id)} style={{ background: 'none', border: 'none', color: T.textDim, cursor: 'pointer', fontSize: 18, padding: '0 4px', lineHeight: 1 }}>×</button>
           </>
         )}
@@ -581,7 +581,7 @@ function ShiftsTab({ employees }) {
               <div style={{ fontSize: 14, fontWeight: 800, color: T.red }}>🔓 {openShifts.length} Open Shift{openShifts.length !== 1 ? 's' : ''} — Not Closed</div>
               <div style={{ fontSize: 11, color: T.textMid, marginTop: 3 }}>These shifts have passed their end time. Close them individually or all at once.</div>
             </div>
-            <button onClick={handleAutoCloseAll} disabled={autoClosing} style={{ background: T.red, color: '#fff', border: 'none', borderRadius: 9, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: autoClosing ? 'not-allowed' : 'pointer', fontFamily: "'Syne', sans-serif", opacity: autoClosing ? 0.6 : 1 }}>
+            <button onClick={handleAutoCloseAll} disabled={autoClosing} style={{ background: T.red, color: '#fff', border: 'none', borderRadius: 9, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: autoClosing ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif", opacity: autoClosing ? 0.6 : 1 }}>
               {autoClosing ? '⏳ Closing…' : '⏹ Close All'}
             </button>
           </div>
@@ -593,7 +593,7 @@ function ShiftsTab({ employees }) {
 
       {/* ── Date filter + schedule button ── */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
-        <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 14px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+        <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
         <span style={{ fontSize: 13, color: T.textMid }}>{shifts.length} shift{shifts.length !== 1 ? 's' : ''} scheduled</span>
         <div style={{ marginLeft: 'auto' }}>
           <Btn onClick={() => setAddOpen(true)}>+ Schedule Shift</Btn>
@@ -663,7 +663,7 @@ export default function Employees() {
   const onDuty  = employees.filter(e => e.shift_status === 'active');
   const offDuty = employees.filter(e => e.shift_status !== 'active');
 
-  const tabStyle = t => ({ padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: tab === t ? 700 : 500, background: tab === t ? T.accent : 'transparent', color: tab === t ? '#000' : T.textMid, border: `1px solid ${tab === t ? T.accent : T.border}`, fontFamily: "'Syne', sans-serif" });
+  const tabStyle = t => ({ padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: tab === t ? 700 : 500, background: tab === t ? T.accent : 'transparent', color: tab === t ? '#000' : T.textMid, border: `1px solid ${tab === t ? T.accent : T.border}`, fontFamily: "'Inter', sans-serif" });
 
   if (loading) return <Spinner />;
 

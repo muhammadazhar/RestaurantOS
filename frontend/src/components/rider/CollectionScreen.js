@@ -158,7 +158,7 @@ function CollectModal({ rider, date, open, onClose, onDone }) {
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6, fontWeight: 600 }}>Notes</div>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
-          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", resize: 'none', minHeight: 60, outline: 'none' }}
+          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", resize: 'none', minHeight: 60, outline: 'none' }}
           placeholder="Any notes..." />
       </div>
 
@@ -213,7 +213,7 @@ function EditModal({ collection, open, onClose, onDone }) {
       <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6, fontWeight: 600 }}>Notes</div>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
-          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", resize: 'none', minHeight: 50, outline: 'none' }} />
+          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", resize: 'none', minHeight: 50, outline: 'none' }} />
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</Btn>

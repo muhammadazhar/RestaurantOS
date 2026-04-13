@@ -353,7 +353,7 @@ function BackupTab() {
                   border: `1px solid ${T.accent}44`,
                   borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700,
                   cursor: downloading === b.name ? 'not-allowed' : 'pointer',
-                  fontFamily: "'Syne', sans-serif", opacity: downloading === b.name ? 0.6 : 1,
+                  fontFamily: "'Inter', sans-serif", opacity: downloading === b.name ? 0.6 : 1,
                 }}
               >
                 {downloading === b.name ? '⏳' : '⬇ Download'}
@@ -366,7 +366,7 @@ function BackupTab() {
                   border: `1px solid ${T.red}44`,
                   borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 700,
                   cursor: deleting === b.name ? 'not-allowed' : 'pointer',
-                  fontFamily: "'Syne', sans-serif", opacity: deleting === b.name ? 0.6 : 1,
+                  fontFamily: "'Inter', sans-serif", opacity: deleting === b.name ? 0.6 : 1,
                 }}
               >
                 {deleting === b.name ? '…' : '🗑'}
@@ -405,7 +405,7 @@ export default function SystemPanel() {
             fontWeight: tab === t.id ? 800 : 500, fontSize: 13,
             padding: '10px 18px', cursor: 'pointer',
             borderBottom: tab === t.id ? `2px solid ${T.accent}` : '2px solid transparent',
-            marginBottom: -1, fontFamily: "'Syne', sans-serif",
+            marginBottom: -1, fontFamily: "'Inter', sans-serif",
             transition: 'all 0.15s',
           }}>
             {t.icon} {t.label}

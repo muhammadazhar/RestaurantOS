@@ -177,8 +177,8 @@ export default function Attendance() {
 
   // ── Styles ────────────────────────────────────────────────────────────────
   const card  = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 };
-  const inp   = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne',sans-serif", outline: 'none', width: '100%' };
-  const btn   = (bg = T.accent, col = '#000') => ({ background: bg, color: col, border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne',sans-serif" });
+  const inp   = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter',sans-serif", outline: 'none', width: '100%' };
+  const btn   = (bg = T.accent, col = '#000') => ({ background: bg, color: col, border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter',sans-serif" });
   const label = { fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 0.5, marginBottom: 4 };
 
   // ── TAB: Live ─────────────────────────────────────────────────────────────
@@ -921,7 +921,7 @@ export default function Attendance() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: 24, fontFamily: "'Syne',sans-serif", color: T.text, maxWidth: 1200 }}>
+    <div style={{ padding: 24, fontFamily: "'Inter',sans-serif", color: T.text, maxWidth: 1200 }}>
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: T.text }}>🕐 Attendance</h1>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: T.textMid }}>Time tracking, leaves, overtime & reports</p>
@@ -932,7 +932,7 @@ export default function Attendance() {
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: '10px 18px',
-            fontSize: 13, fontWeight: 700, fontFamily: "'Syne',sans-serif",
+            fontSize: 13, fontWeight: 700, fontFamily: "'Inter',sans-serif",
             color: tab === t ? T.accent : T.textMid,
             borderBottom: tab === t ? `2px solid ${T.accent}` : '2px solid transparent',
             marginBottom: -1, transition: 'color 0.2s',

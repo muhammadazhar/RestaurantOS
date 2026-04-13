@@ -30,7 +30,7 @@ function ItemNotesModal({ item, open, onClose, onSave }) {
     <Modal open={open} onClose={onClose} title={`Notes — ${item?.name}`} width={380}>
       <textarea value={notes} onChange={e => setNotes(e.target.value)}
         placeholder="e.g. No onions, extra spicy, medium-well…"
-        style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none', resize: 'vertical', minHeight: 80, marginBottom: 12 }} />
+        style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical', minHeight: 80, marginBottom: 12 }} />
       <Btn onClick={() => { onSave(notes); onClose(); }} style={{ width: '100%' }}>Save Notes</Btn>
     </Modal>
   );
@@ -332,7 +332,7 @@ export default function POS() {
                     loadShift();
                   } catch (e) { toast.error(e.response?.data?.error || 'Failed to continue shift'); }
                 }}
-                style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                 ⏩ Continue Working
               </button>
               <button
@@ -344,7 +344,7 @@ export default function POS() {
                     loadShift();
                   } catch (e) { toast.error(e.response?.data?.error || 'Failed to close shift'); }
                 }}
-                style={{ flex: 1, background: T.red, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                style={{ flex: 1, background: T.red, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                 ⏹ Close Shift
               </button>
             </div>
@@ -390,14 +390,14 @@ export default function POS() {
                 background: orderType === v ? T.accent : T.card, color: orderType === v ? '#000' : T.textMid,
                 border: `1px solid ${orderType === v ? T.accent : T.border}`,
                 borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                cursor: 'pointer', fontFamily: "'Inter', sans-serif",
               }}>{ico} {lbl}</button>
             ))}
           </div>
 
           {/* Table selector (dine-in only) */}
           {orderType === 'dine_in' && (
-            <select value={tableId} onChange={e => setTableId(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }}>
+            <select value={tableId} onChange={e => setTableId(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
               <option value="">Select Table</option>
               {tables.filter(t => t.status !== 'cleaning').map(t => (
                 <option key={t.id} value={t.id}>{t.label} — {t.section} ({t.status})</option>
@@ -407,7 +407,7 @@ export default function POS() {
 
           {/* Search */}
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu…"
-            style={{ marginLeft: 'auto', background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none', width: 160 }} />
+            style={{ marginLeft: 'auto', background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', width: 160 }} />
         </div>
 
         {/* Category pills */}
@@ -471,23 +471,23 @@ export default function POS() {
             <div style={{ marginBottom: 10, background: T.surface, borderRadius: 10, padding: '10px 12px' }}>
               {/* Name + Phone — always shown for takeaway & delivery */}
               <input value={custName} onChange={e => setCustName(e.target.value)}
-                placeholder="Customer name *" style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 6, marginBottom: 6 }} />
+                placeholder="Customer name *" style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', paddingBottom: 6, marginBottom: 6 }} />
               <input value={custPhone} onChange={e => setCustPhone(e.target.value)}
-                placeholder="Phone number" style={{ width: '100%', background: 'none', border: 'none', color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+                placeholder="Phone number" style={{ width: '100%', background: 'none', border: 'none', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
 
               {/* Extra fields — delivery only */}
               {orderType === 'delivery' && (
                 <>
                   <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 8 }}>
                     <input value={custAddr} onChange={e => setCustAddr(e.target.value)}
-                      placeholder="Delivery address" style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 6, marginBottom: 6 }} />
+                      placeholder="Delivery address" style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', paddingBottom: 6, marginBottom: 6 }} />
                     <div style={{ display: 'flex', gap: 6 }}>
                       <input value={custLat} onChange={e => setCustLat(e.target.value)}
                         placeholder="Lat" type="number" step="any"
-                        style={{ flex: 1, background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 4, minWidth: 0 }} />
+                        style={{ flex: 1, background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', paddingBottom: 4, minWidth: 0 }} />
                       <input value={custLng} onChange={e => setCustLng(e.target.value)}
                         placeholder="Lng" type="number" step="any"
-                        style={{ flex: 1, background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, fontFamily: "'Syne', sans-serif", outline: 'none', paddingBottom: 4, minWidth: 0 }} />
+                        style={{ flex: 1, background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', paddingBottom: 4, minWidth: 0 }} />
                     </div>
                     {custLat && custLng && (
                       <a href={`https://www.google.com/maps?q=${custLat},${custLng}`} target="_blank" rel="noopener noreferrer"
@@ -496,7 +496,7 @@ export default function POS() {
                   </div>
                   <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 8 }}>
                     <select value={delivRiderId} onChange={e => setDelivRiderId(e.target.value)}
-                      style={{ width: '100%', background: 'none', border: 'none', color: delivRiderId ? T.text : T.textDim, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }}>
+                      style={{ width: '100%', background: 'none', border: 'none', color: delivRiderId ? T.text : T.textDim, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
                       <option value="">🏍 Assign rider (optional)</option>
                       {riders.map(r => (
                         <option key={r.id} value={r.id}>{r.full_name} ({r.active_orders} active)</option>
@@ -543,8 +543,8 @@ export default function POS() {
                 </div>
                 {/* Per-item action row */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
-                  <button onClick={() => { setNotesItem(item); }} style={{ flex: 1, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 6, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>📝 Notes</button>
-                  <button onClick={() => removeItem(item.id)} style={{ background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Remove</button>
+                  <button onClick={() => { setNotesItem(item); }} style={{ flex: 1, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 6, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>📝 Notes</button>
+                  <button onClick={() => removeItem(item.id)} style={{ background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Remove</button>
                 </div>
               </div>
             ))}
@@ -554,7 +554,7 @@ export default function POS() {
           {cart.length > 0 && (
             <input value={orderNotes} onChange={e => setOrderNotes(e.target.value)}
               placeholder="Order notes (optional)…"
-              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 11, fontFamily: "'Syne', sans-serif", outline: 'none', width: '100%', marginTop: 8 }} />
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', width: '100%', marginTop: 8 }} />
           )}
 
           {/* Totals */}
@@ -622,7 +622,7 @@ export default function POS() {
 
       {/* ── Takeaway / Delivery payment modal ── */}
       {showPayModal && createdOrder && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Syne', sans-serif" }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', sans-serif" }}>
           <div onClick={!takePrintRdy ? undefined : closeTakeawayModal} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(6px)' }} />
           <div style={{ position: 'relative', zIndex: 1, background: T.card, border: `1px solid ${T.borderLight}`, borderRadius: 20, width: '100%', maxWidth: 480, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.6)' }}>
 
@@ -720,20 +720,20 @@ export default function POS() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={() => { printTakeawayReceipt(); closeTakeawayModal(); }} style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 800, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                  <button onClick={() => { printTakeawayReceipt(); closeTakeawayModal(); }} style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                     🖨 Yes, Print Receipt
                   </button>
-                  <button onClick={closeTakeawayModal} style={{ background: T.surface, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                  <button onClick={closeTakeawayModal} style={{ background: T.surface, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                     Skip
                   </button>
                 </div>
               </div>
             ) : (
               <div style={{ padding: '14px 24px 20px', borderTop: `1px solid ${T.border}`, display: 'flex', gap: 10, flexShrink: 0 }}>
-                <button onClick={closeTakeawayModal} style={{ background: T.surface, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: 10, padding: '11px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                <button onClick={closeTakeawayModal} style={{ background: T.surface, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: 10, padding: '11px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                   Cancel
                 </button>
-                <button onClick={handleTakeawayPay} disabled={takePaying} style={{ flex: 1, background: takePaying ? T.border : T.green, color: takePaying ? T.textMid : '#fff', border: 'none', borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 800, cursor: takePaying ? 'not-allowed' : 'pointer', fontFamily: "'Syne', sans-serif", transition: 'all 0.2s' }}>
+                <button onClick={handleTakeawayPay} disabled={takePaying} style={{ flex: 1, background: takePaying ? T.border : T.green, color: takePaying ? T.textMid : '#fff', border: 'none', borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 800, cursor: takePaying ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.2s' }}>
                   {takePaying ? '⏳ Processing…' : takePayMethod === 'cod' ? '🏍 Confirm Cash on Delivery' : `✓ Confirm ${takePayMethod.charAt(0).toUpperCase() + takePayMethod.slice(1)} Payment`}
                 </button>
               </div>
@@ -792,7 +792,7 @@ function POSGateModal({ currentShift, onUnlocked }) {
   const btnStyle = (bg, col = '#000') => ({
     background: bg, color: col, border: 'none', borderRadius: 8,
     padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-    fontFamily: "'Syne', sans-serif", whiteSpace: 'nowrap', opacity: acting ? 0.6 : 1,
+    fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap', opacity: acting ? 0.6 : 1,
   });
 
   return (

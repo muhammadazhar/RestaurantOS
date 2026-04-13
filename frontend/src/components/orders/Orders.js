@@ -255,12 +255,12 @@ function PhoneOrdersPanel() {
         <div>
           <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Date</div>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Syne', sans-serif" }} />
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }} />
         </div>
         <div>
           <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Status</div>
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Syne', sans-serif" }}>
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }}>
             <option value="all">All</option>
             {['pending','confirmed','preparing','ready','picked','delivered','cancelled'].map(s => (
               <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -443,18 +443,18 @@ export default function Orders() {
           <div>
             <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>From</div>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
           </div>
           <div>
             <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>To</div>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
           </div>
           {/* Status filter */}
           <div>
             <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Status</div>
             <select value={statusF} onChange={e => setStatusF(e.target.value)}
-              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }}>
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
               <option value="all">All Statuses</option>
               {['pending','confirmed','preparing','ready','served','paid','cancelled'].map(s => (
                 <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -465,7 +465,7 @@ export default function Orders() {
           <div>
             <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Type</div>
             <select value={typeF} onChange={e => setTypeF(e.target.value)}
-              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }}>
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
               <option value="all">All Types</option>
               {['dine_in','takeaway','online','delivery'].map(t => (
                 <option key={t} value={t}>{t.replace('_',' ')}</option>
@@ -477,13 +477,13 @@ export default function Orders() {
             <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Search</div>
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Order #, customer, table…"
-              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
           </div>
           {/* Quick date buttons */}
           <div style={{ display: 'flex', gap: 6 }}>
             {[['Today', today(), today()], ['Yesterday', (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); })(), (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); })()], ['Week', (() => { const d = new Date(); d.setDate(d.getDate()-6); return d.toISOString().slice(0,10); })(), today()]].map(([lbl, from, to]) => (
               <button key={lbl} onClick={() => { setDateFrom(from); setDateTo(to); }}
-                style={{ background: T.card, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+                style={{ background: T.card, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                 {lbl}
               </button>
             ))}

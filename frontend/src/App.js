@@ -41,7 +41,7 @@ function ThemedToaster() {
     <Toaster
       position="top-right"
       toastOptions={{
-        style: { background: T.card, color: T.text, border: `1px solid ${T.border}`, fontFamily: "'Syne', sans-serif" },
+        style: { background: T.card, color: T.text, border: `1px solid ${T.border}`, fontFamily: "'Inter', sans-serif" },
         success: { iconTheme: { primary: T.green,   secondary: '#fff' } },
         error:   { iconTheme: { primary: '#E74C3C', secondary: '#fff' } },
       }}

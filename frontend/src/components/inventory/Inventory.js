@@ -283,16 +283,16 @@ function ItemsTab({ items, onEdit, onDelete, onStockEntry, onRefresh }) {
               background: catFilter===c ? T.accent : 'transparent', color: catFilter===c ? '#000' : T.textMid,
               border: `1px solid ${catFilter===c ? T.accent : T.border}`,
               borderRadius:20, padding:'5px 14px', fontSize:12, fontWeight:600,
-              cursor:'pointer', fontFamily:"'Syne',sans-serif",
+              cursor:'pointer', fontFamily:"'Inter',sans-serif",
             }}>{c==='all'?'All':c}</button>
           ))}
         </div>
         {/* Search */}
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search items…"
-          style={{ marginLeft:'auto', background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'7px 12px', color:T.text, fontSize:12, fontFamily:"'Syne',sans-serif", outline:'none', width:180 }} />
+          style={{ marginLeft:'auto', background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'7px 12px', color:T.text, fontSize:12, fontFamily:"'Inter',sans-serif", outline:'none', width:180 }} />
         {/* Sort */}
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
-          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'7px 12px', color:T.text, fontSize:12, fontFamily:"'Syne',sans-serif", outline:'none' }}>
+          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'7px 12px', color:T.text, fontSize:12, fontFamily:"'Inter',sans-serif", outline:'none' }}>
           <option value="name">Sort: Name</option>
           <option value="stock">Sort: Stock Level</option>
           <option value="alert">Sort: Alert Status</option>
@@ -333,11 +333,11 @@ function ItemsTab({ items, onEdit, onDelete, onStockEntry, onRefresh }) {
                   <td style={{ padding:'11px 14px' }}><Badge color={AL_COLOR(level)} small>{level}</Badge></td>
                   <td style={{ padding:'11px 14px' }}>
                     <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={()=>onStockEntry(item)} style={{ background:T.accentGlow, border:`1px solid ${T.accent}44`, color:T.accent, borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Syne',sans-serif", whiteSpace:'nowrap' }}>
+                      <button onClick={()=>onStockEntry(item)} style={{ background:T.accentGlow, border:`1px solid ${T.accent}44`, color:T.accent, borderRadius:7, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif", whiteSpace:'nowrap' }}>
                         + Entry
                       </button>
-                      <button onClick={()=>onEdit(item)} style={{ background:T.surface, border:`1px solid ${T.border}`, color:T.textMid, borderRadius:7, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>Edit</button>
-                      <button onClick={()=>onDelete(item)} style={{ background:T.redDim, border:`1px solid ${T.red}44`, color:T.red, borderRadius:7, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>Del</button>
+                      <button onClick={()=>onEdit(item)} style={{ background:T.surface, border:`1px solid ${T.border}`, color:T.textMid, borderRadius:7, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>Edit</button>
+                      <button onClick={()=>onDelete(item)} style={{ background:T.redDim, border:`1px solid ${T.red}44`, color:T.red, borderRadius:7, padding:'4px 10px', fontSize:11, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>Del</button>
                     </div>
                   </td>
                 </tr>
@@ -396,20 +396,20 @@ function TransactionsTab({ items }) {
       {/* Filters */}
       <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap', alignItems:'flex-end' }}>
         <select value={typeF} onChange={e=>setTypeF(e.target.value)}
-          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Syne',sans-serif", outline:'none' }}>
+          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Inter',sans-serif", outline:'none' }}>
           <option value="all">All Types</option>
           {TXN_TYPES.map(t=><option key={t.value} value={t.value}>{t.icon} {t.label}</option>)}
         </select>
         <select value={itemF} onChange={e=>setItemF(e.target.value)}
-          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Syne',sans-serif", outline:'none' }}>
+          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Inter',sans-serif", outline:'none' }}>
           <option value="all">All Items</option>
           {items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
         <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
-          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Syne',sans-serif", outline:'none' }} />
+          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Inter',sans-serif", outline:'none' }} />
         <span style={{ color:T.textDim, fontSize:12 }}>to</span>
         <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
-          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Syne',sans-serif", outline:'none' }} />
+          style={{ background:T.card, border:`1px solid ${T.border}`, borderRadius:8, padding:'8px 12px', color:T.text, fontSize:12, fontFamily:"'Inter',sans-serif", outline:'none' }} />
         {(typeF!=='all'||itemF!=='all'||dateFrom||dateTo) && (
           <button onClick={()=>{setTypeF('all');setItemF('all');setDateFrom('');setDateTo('');}}
             style={{ background:'none', border:'none', color:T.textMid, cursor:'pointer', fontSize:18 }}>×</button>
@@ -499,7 +499,7 @@ function AlertsTab({ items, onStockEntry }) {
         <div style={{ fontFamily:'monospace', fontWeight:800, fontSize:15, color:level==='critical'?T.red:T.accent }}>
           {fmt(Number(item.max_quantity)-Number(item.stock_quantity),0)} {item.unit}
         </div>
-        <button onClick={()=>onStockEntry(item)} style={{ marginTop:8, background:T.accent, color:'#000', border:'none', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>
+        <button onClick={()=>onStockEntry(item)} style={{ marginTop:8, background:T.accent, color:'#000', border:'none', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>
           + Receive Stock
         </button>
       </div>
@@ -655,7 +655,7 @@ export default function InventoryPage() {
   const tabStyle = (t) => ({
     padding:'8px 18px', borderRadius:8, cursor:'pointer', fontSize:13, fontWeight: tab===t ? 700 : 500,
     background: tab===t ? T.accent : 'transparent', color: tab===t ? '#000' : T.textMid,
-    border: `1px solid ${tab===t ? T.accent : T.border}`, fontFamily:"'Syne',sans-serif",
+    border: `1px solid ${tab===t ? T.accent : T.border}`, fontFamily:"'Inter',sans-serif",
     position:'relative',
   });
 

@@ -109,13 +109,13 @@ export default function Register() {
   const inp = {
     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
     padding: '11px 14px', color: T.text, fontSize: 14,
-    fontFamily: "'Syne', sans-serif", outline: 'none', width: '100%',
+    fontFamily: "'Inter', sans-serif", outline: 'none', width: '100%',
   };
 
   const selectedPlan = PLANS.find(p => p.id === form.plan);
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', fontFamily: "'Syne', sans-serif", transition: 'background 0.3s' }}>
+    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', fontFamily: "'Inter', sans-serif", transition: 'background 0.3s' }}>
       {/* Left panel */}
       <div style={{ width: 360, background: T.surface, borderRight: `1px solid ${T.border}`, padding: '40px 32px', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 48 }}>
@@ -420,20 +420,20 @@ export default function Register() {
               <button onClick={() => setStep(s => s - 1)} style={{
                 background: 'transparent', border: `1px solid ${T.border}`, color: T.textMid,
                 borderRadius: 12, padding: '14px 24px', fontSize: 14, fontWeight: 600,
-                cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                cursor: 'pointer', fontFamily: "'Inter', sans-serif",
               }}>← Back</button>
             )}
             {step < STEPS.length - 1 ? (
               <button onClick={next} style={{
                 flex: 1, background: T.accent, color: '#000', border: 'none',
                 borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800,
-                cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                cursor: 'pointer', fontFamily: "'Inter', sans-serif",
               }}>Continue →</button>
             ) : (
               <button onClick={handleSubmit} disabled={saving} style={{
                 flex: 1, background: saving ? T.border : T.green, color: saving ? T.textMid : '#fff',
                 border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800,
-                cursor: saving ? 'not-allowed' : 'pointer', fontFamily: "'Syne', sans-serif",
+                cursor: saving ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif",
               }}>
                 {saving ? '⏳ Creating your account…' : '🚀 Launch My Restaurant'}
               </button>

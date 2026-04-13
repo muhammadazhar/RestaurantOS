@@ -67,7 +67,7 @@ export default function Layout({ children }) {
   const isLight = mode === 'light';
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: "'Syne', sans-serif", transition: 'background 0.3s' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: "'Inter', sans-serif", transition: 'background 0.3s' }}>
 
       {/* ── Sidebar ── */}
       <aside style={{
@@ -187,7 +187,7 @@ export default function Layout({ children }) {
             {!collapsed && (
               <div style={{ flex: 1, overflow: 'hidden' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
-                <button onClick={handleLogout} style={{ background: 'none', color: T.textMid, fontSize: 11, padding: 0, cursor: 'pointer', border: 'none', fontFamily: "'Syne', sans-serif" }}>
+                <button onClick={handleLogout} style={{ background: 'none', color: T.textMid, fontSize: 11, padding: 0, cursor: 'pointer', border: 'none', fontFamily: "'Inter', sans-serif" }}>
                   Sign out →
                 </button>
               </div>

@@ -133,7 +133,7 @@ function CollectModal({ order, open, onClose, onCollected }) {
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6, fontWeight: 600 }}>Notes</div>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
-          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", resize: 'none', minHeight: 48, outline: 'none' }} />
+          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", resize: 'none', minHeight: 48, outline: 'none' }} />
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</Btn>

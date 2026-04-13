@@ -24,10 +24,10 @@ export default function SuperLogin() {
     } finally { setLoading(false); }
   };
 
-  const inp = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', color: T.text, fontSize: 14, fontFamily: "'Syne', sans-serif", outline: 'none', width: '100%', marginTop: 8 };
+  const inp = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', color: T.text, fontSize: 14, fontFamily: "'Inter', sans-serif", outline: 'none', width: '100%', marginTop: 8 };
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Syne', sans-serif", transition: 'background 0.3s' }}>
+    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', sans-serif", transition: 'background 0.3s' }}>
       <button onClick={toggle} style={{ position: 'fixed', top: 20, right: 20, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 16, color: T.text }}>
         {mode === 'dark' ? '☀️' : '🌙'}
       </button>
@@ -40,7 +40,7 @@ export default function SuperLogin() {
           <input name="email" type="email" value={form.email} onChange={handle} placeholder="superadmin@restaurantos.com" style={inp} required />
           <div style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginTop: 14 }}>Password</div>
           <input name="password" type="password" value={form.password} onChange={handle} placeholder="••••••••" style={inp} required />
-          <button type="submit" disabled={loading} style={{ marginTop: 20, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800, cursor: 'pointer', width: '100%', fontFamily: "'Syne', sans-serif" }}>
+          <button type="submit" disabled={loading} style={{ marginTop: 20, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800, cursor: 'pointer', width: '100%', fontFamily: "'Inter', sans-serif" }}>
             {loading ? 'Signing in…' : '🏢 Super Admin Login'}
           </button>
         </form>

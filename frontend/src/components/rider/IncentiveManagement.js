@@ -85,7 +85,7 @@ function RuleModal({ rule, open, onClose, onSaved }) {
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6, fontWeight: 600 }}>Description</div>
         <textarea value={form.description} onChange={e => f('description', e.target.value)}
-          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", resize: 'vertical', minHeight: 50, outline: 'none' }}
+          style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", resize: 'vertical', minHeight: 50, outline: 'none' }}
           placeholder="Optional description..." />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

@@ -76,7 +76,7 @@ export default function DailyAudit() {
         action={
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Syne', sans-serif" }} />
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }} />
             <button onClick={load} style={{ padding: '10px 16px', background: T.accentGlow, border: `1px solid ${T.accent}`, borderRadius: 10, color: T.accent, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Refresh</button>
           </div>
         }

@@ -117,7 +117,7 @@ export default function Recipes() {
           <div style={{ fontSize: 12, color: T.textMid, fontWeight: 600, marginBottom: 6 }}>Instructions</div>
           <textarea value={form.instructions} onChange={e => setForm(f => ({ ...f, instructions: e.target.value }))}
             placeholder="1. Step one&#10;2. Step two"
-            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, width: '100%', minHeight: 120, resize: 'vertical', fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, width: '100%', minHeight: 120, resize: 'vertical', fontFamily: "'Inter', sans-serif", outline: 'none' }} />
         </div>
         <Input label="Notes (optional)" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Tips, variations..." />
         <Btn onClick={handleCreate} style={{ width: '100%', marginTop: 8 }}>Save Recipe</Btn>

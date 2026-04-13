@@ -13,7 +13,7 @@ document.body.style.margin     = '0';
 const style = document.createElement('style');
 style.innerHTML = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Syne', sans-serif; transition: background 0.3s, color 0.3s; }
+  body { font-family: 'Inter', sans-serif; transition: background 0.3s, color 0.3s; }
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -23,7 +23,7 @@ document.head.appendChild(style);
 
 // Google Fonts
 const link    = document.createElement('link');
-link.href     = 'https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&display=swap';
+link.href     = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap';
 link.rel      = 'stylesheet';
 document.head.appendChild(link);
 

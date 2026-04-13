@@ -152,7 +152,7 @@ export default function TableBill({ table, onClose, onPaid }) {
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: "'Syne', sans-serif",
+      fontFamily: "'Inter', sans-serif",
     }}>
       {/* Backdrop */}
       <div onClick={onClose} style={{
@@ -351,7 +351,7 @@ export default function TableBill({ table, onClose, onPaid }) {
                 style={{
                   flex: 1, background: T.accent, color: '#000', border: 'none',
                   borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 800,
-                  cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                  cursor: 'pointer', fontFamily: "'Inter', sans-serif",
                 }}
               >
                 🖨 Yes, Print Receipt
@@ -362,7 +362,7 @@ export default function TableBill({ table, onClose, onPaid }) {
                   background: T.surface, color: T.textMid,
                   border: `1px solid ${T.border}`, borderRadius: 10,
                   padding: '12px 20px', fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                  cursor: 'pointer', fontFamily: "'Inter', sans-serif",
                 }}
               >
                 Skip
@@ -381,7 +381,7 @@ export default function TableBill({ table, onClose, onPaid }) {
               background: T.surface, color: T.text,
               border: `1px solid ${T.border}`, borderRadius: 10,
               padding: '11px 16px', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+              cursor: 'pointer', fontFamily: "'Inter', sans-serif",
               display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
             }}>
               🖨 Print
@@ -391,7 +391,7 @@ export default function TableBill({ table, onClose, onPaid }) {
               <button onClick={() => setShowPayPanel(true)} style={{
                 flex: 1, background: T.accent, color: '#000', border: 'none',
                 borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 800,
-                cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                cursor: 'pointer', fontFamily: "'Inter', sans-serif",
               }}>
                 💳 Process Payment — {fmt(order.total_amount)}
               </button>
@@ -400,7 +400,7 @@ export default function TableBill({ table, onClose, onPaid }) {
                 <button onClick={() => setShowPayPanel(false)} style={{
                   background: T.surface, color: T.textMid, border: `1px solid ${T.border}`,
                   borderRadius: 10, padding: '11px 14px', fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                  cursor: 'pointer', fontFamily: "'Inter', sans-serif",
                 }}>
                   Back
                 </button>
@@ -409,7 +409,7 @@ export default function TableBill({ table, onClose, onPaid }) {
                   color: paying ? T.textMid : '#fff', border: 'none',
                   borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 800,
                   cursor: paying ? 'not-allowed' : 'pointer',
-                  fontFamily: "'Syne', sans-serif", transition: 'all 0.2s',
+                  fontFamily: "'Inter', sans-serif", transition: 'all 0.2s',
                 }}>
                   {paying
                     ? '⏳ Processing…'

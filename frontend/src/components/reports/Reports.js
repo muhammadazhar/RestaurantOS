@@ -114,15 +114,15 @@ const DateRangePicker = ({ from, to, onChange }) => {
           color:      active === p.label ? '#000' : T.textMid,
           border: `1px solid ${active === p.label ? T.accent : T.border}`,
           borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
-          cursor: 'pointer', fontFamily: "'Syne',sans-serif",
+          cursor: 'pointer', fontFamily: "'Inter',sans-serif",
         }}>{p.label}</button>
       ))}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 4 }}>
         <input type="date" value={from} onChange={e => { setActive('Custom'); onChange(e.target.value, to); }}
-          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily:"'Syne',sans-serif", outline: 'none' }} />
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily:"'Inter',sans-serif", outline: 'none' }} />
         <span style={{ color: T.textDim, fontSize: 12 }}>→</span>
         <input type="date" value={to} onChange={e => { setActive('Custom'); onChange(from, e.target.value); }}
-          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily:"'Syne',sans-serif", outline: 'none' }} />
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily:"'Inter',sans-serif", outline: 'none' }} />
       </div>
     </div>
   );
@@ -220,8 +220,8 @@ function SalesReport() {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
-          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 
@@ -410,8 +410,8 @@ function MenuReport() {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
-          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 
@@ -487,7 +487,7 @@ function MenuReport() {
                 color: sortBy === k ? '#000' : T.textMid,
                 border: `1px solid ${sortBy === k ? T.accent : T.border}`,
                 borderRadius: 7, padding: '4px 12px', fontSize: 11, fontWeight: 600,
-                cursor: 'pointer', fontFamily: "'Syne',sans-serif",
+                cursor: 'pointer', fontFamily: "'Inter',sans-serif",
               }}>{l}</button>
             ))}
           </div>
@@ -624,8 +624,8 @@ function EmployeeReport() {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
-          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 
@@ -677,7 +677,7 @@ function EmployeeReport() {
             background: sortBy === k ? T.accent : T.card, color: sortBy === k ? '#000' : T.textMid,
             border: `1px solid ${sortBy === k ? T.accent : T.border}`,
             borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', fontFamily: "'Syne',sans-serif",
+            cursor: 'pointer', fontFamily: "'Inter',sans-serif",
           }}>{l}</button>
         ))}
       </div>
@@ -823,8 +823,8 @@ function PerformanceMatrix() {
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 20 }}>
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
-          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 
@@ -928,7 +928,7 @@ export default function Reports() {
     background: tab === t ? T.accent : 'transparent',
     color:      tab === t ? '#000' : T.textMid,
     border: `1px solid ${tab === t ? T.accent : T.border}`,
-    fontFamily: "'Syne',sans-serif",
+    fontFamily: "'Inter',sans-serif",
   });
 
   return (

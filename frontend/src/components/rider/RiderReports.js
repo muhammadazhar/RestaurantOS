@@ -153,12 +153,12 @@ export default function RiderReports() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 12, color: T.textMid }}>From</span>
               <input type="date" value={from} onChange={e => { setFrom(e.target.value); setSelectedId(null); }}
-                style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '9px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Syne', sans-serif" }} />
+                style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '9px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 12, color: T.textMid }}>To</span>
               <input type="date" value={to} onChange={e => { setTo(e.target.value); setSelectedId(null); }}
-                style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '9px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Syne', sans-serif" }} />
+                style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '9px 12px', color: T.text, fontSize: 13, outline: 'none', fontFamily: "'Inter', sans-serif" }} />
             </div>
             {selectedId && (
               <button onClick={() => setSelectedId(null)} style={{

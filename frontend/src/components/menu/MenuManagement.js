@@ -130,7 +130,7 @@ const ImageUploadZone = ({ itemId, currentUrl, onUploaded }) => {
       </div>
       {preview && (
         <button onClick={(e) => { e.stopPropagation(); isLocalBlob.current = false; setPreview(null); onUploaded && onUploaded('', null); }}
-          style={{ marginTop: 6, background: 'none', border: 'none', color: T.red, fontSize: 12, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>
+          style={{ marginTop: 6, background: 'none', border: 'none', color: T.red, fontSize: 12, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
           × Remove image
         </button>
       )}
@@ -220,7 +220,7 @@ function ItemModal({ open, onClose, onSaved, editItem, categories }) {
             <div style={{ fontSize: 12, color: T.textMid, fontWeight: 600, marginBottom: 6 }}>Description</div>
             <textarea value={form.description} onChange={set('description')}
               placeholder="Short description shown on menu…"
-              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none', resize: 'vertical', minHeight: 72 }} />
+              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical', minHeight: 72 }} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px' }}>
             <Input label="Selling Price (PKR) *" type="number" value={form.price} onChange={set('price')} placeholder="1400" />
@@ -325,7 +325,7 @@ export default function MenuManagement() {
               color:      catFilter === cat.id ? '#000' : T.textMid,
               border:     `1px solid ${catFilter === cat.id ? T.accent : T.border}`,
               borderRadius: 24, padding: '6px 16px', fontSize: 13, fontWeight: 600,
-              cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+              cursor: 'pointer', fontFamily: "'Inter', sans-serif",
             }}>{cat.name}</button>
           ))}
         </div>
@@ -336,7 +336,7 @@ export default function MenuManagement() {
           style={{
             marginLeft: 'auto', background: T.card, border: `1px solid ${T.border}`,
             borderRadius: 10, padding: '8px 14px', color: T.text, fontSize: 13,
-            fontFamily: "'Syne', sans-serif", outline: 'none', width: 200,
+            fontFamily: "'Inter', sans-serif", outline: 'none', width: 200,
           }}
         />
       </div>
@@ -375,7 +375,7 @@ export default function MenuManagement() {
                   position: 'absolute', top: 8, right: 8,
                   background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none',
                   borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 600,
-                  cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                  cursor: 'pointer', fontFamily: "'Inter', sans-serif",
                 }}>✏ Edit</button>
               </div>
 

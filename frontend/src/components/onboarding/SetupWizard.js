@@ -170,7 +170,7 @@ export default function SetupWizard() {
   const progress = Math.round((step / (WIZARD_STEPS.length - 1)) * 100);
 
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, fontFamily: "'Syne', sans-serif", display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: T.bg, fontFamily: "'Inter', sans-serif", display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: '0 32px', height: 64, display: 'flex', alignItems: 'center', gap: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 16 }}>
@@ -246,7 +246,7 @@ export default function SetupWizard() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Quick Presets</div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {TABLE_PRESETS.map(p => (
-                    <button key={p.label} onClick={() => applyTablePreset(p)} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 10, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily:"'Syne',sans-serif", fontWeight: 600 }}>
+                    <button key={p.label} onClick={() => applyTablePreset(p)} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 10, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily:"'Inter',sans-serif", fontWeight: 600 }}>
                       {p.label}
                     </button>
                   ))}
@@ -261,21 +261,21 @@ export default function SetupWizard() {
                     <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Label</label>
                     <input value={customTable.label} onChange={e => setCustomTable(c => ({ ...c, label: e.target.value }))}
                       placeholder="T-01"
-                      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }} />
+                      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Section</label>
                     <select value={customTable.section} onChange={e => setCustomTable(c => ({ ...c, section: e.target.value }))}
-                      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }}>
+                      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }}>
                       {['Main Hall','Terrace','VIP','Bar','Private','Outdoor'].map(s => <option key={s}>{s}</option>)}
                     </select>
                   </div>
                   <div style={{ width: 80 }}>
                     <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Seats</label>
                     <input type="number" min={1} max={50} value={customTable.capacity} onChange={e => setCustomTable(c => ({ ...c, capacity: parseInt(e.target.value) || 4 }))}
-                      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }} />
+                      style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }} />
                   </div>
-                  <button onClick={addCustomTable} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Syne',sans-serif", whiteSpace: 'nowrap' }}>+ Add</button>
+                  <button onClick={addCustomTable} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>+ Add</button>
                 </div>
               </div>
 
@@ -312,7 +312,7 @@ export default function SetupWizard() {
                 <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Restaurant Type Presets</div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {Object.keys(CAT_PRESETS).map(name => (
-                    <button key={name} onClick={() => applyCatPreset(name)} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 10, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily:"'Syne',sans-serif", fontWeight: 600 }}>
+                    <button key={name} onClick={() => applyCatPreset(name)} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 10, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily:"'Inter',sans-serif", fontWeight: 600 }}>
                       {name}
                     </button>
                   ))}
@@ -337,8 +337,8 @@ export default function SetupWizard() {
                   <input value={customCat} onChange={e => setCustomCat(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && addCustomCat()}
                     placeholder="Add custom category and press Enter…"
-                    style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Syne',sans-serif", outline: 'none' }} />
-                  <button onClick={addCustomCat} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Syne',sans-serif" }}>+ Add</button>
+                    style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Inter',sans-serif", outline: 'none' }} />
+                  <button onClick={addCustomCat} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Inter',sans-serif" }}>+ Add</button>
                 </div>
               </div>
             </div>
@@ -362,7 +362,7 @@ export default function SetupWizard() {
                     <div>
                       <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Item Name</label>
                       <input value={item.name} onChange={e => setMenuItem(i, 'name', e.target.value)} placeholder="e.g. Chicken Burger"
-                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }} />
+                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Price (PKR)</label>
@@ -372,7 +372,7 @@ export default function SetupWizard() {
                     <div>
                       <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Category</label>
                       <select value={item.category} onChange={e => setMenuItem(i, 'category', e.target.value)}
-                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }}>
+                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }}>
                         <option value="">None</option>
                         {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                       </select>
@@ -385,7 +385,7 @@ export default function SetupWizard() {
                   </div>
                 </div>
               ))}
-              <button onClick={addMenuItem} style={{ width:'100%', background:'transparent', border:`1px dashed ${T.border}`, color:T.textMid, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>
+              <button onClick={addMenuItem} style={{ width:'100%', background:'transparent', border:`1px dashed ${T.border}`, color:T.textMid, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>
                 + Add Another Item
               </button>
             </div>
@@ -409,17 +409,17 @@ export default function SetupWizard() {
                     <div>
                       <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Full Name</label>
                       <input value={s.full_name} onChange={e => setStaff(i,'full_name',e.target.value)} placeholder="Ahmed Khan"
-                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }} />
+                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Email</label>
                       <input type="email" value={s.email} onChange={e => setStaff(i,'email',e.target.value)} placeholder="ahmed@restaurant.com"
-                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }} />
+                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }} />
                     </div>
                     <div>
                       <label style={{ fontSize: 11, color: T.textMid, display: 'block', marginBottom: 4 }}>Role</label>
                       <select value={s.role_id} onChange={e => setStaff(i,'role_id',e.target.value)}
-                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Syne',sans-serif", outline: 'none', width: '100%' }}>
+                        style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', color: T.text, fontSize: 12, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }}>
                         <option value="">— Select —</option>
                         {roles.filter(r => r.name !== 'Manager').map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                       </select>
@@ -427,7 +427,7 @@ export default function SetupWizard() {
                   </div>
                 </div>
               ))}
-              <button onClick={addStaff} style={{ width:'100%', background:'transparent', border:`1px dashed ${T.border}`, color:T.textMid, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>
+              <button onClick={addStaff} style={{ width:'100%', background:'transparent', border:`1px dashed ${T.border}`, color:T.textMid, borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>
                 + Add Another Staff Member
               </button>
             </div>
@@ -478,10 +478,10 @@ export default function SetupWizard() {
           {/* Nav buttons */}
           <div style={{ display: 'flex', gap: 12, marginTop: 32, justifyContent: 'flex-end' }}>
             {step > 0 && step < WIZARD_STEPS.length - 1 && (
-              <button onClick={() => setStep(s => s - 1)} style={{ background:'transparent', border:`1px solid ${T.border}`, color:T.textMid, borderRadius:12, padding:'12px 20px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>← Back</button>
+              <button onClick={() => setStep(s => s - 1)} style={{ background:'transparent', border:`1px solid ${T.border}`, color:T.textMid, borderRadius:12, padding:'12px 20px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>← Back</button>
             )}
             {!['welcome','done'].includes(cur.id) && (
-              <button onClick={skip} style={{ background:'transparent', border:`1px solid ${T.border}`, color:T.textMid, borderRadius:12, padding:'12px 20px', fontSize:13, cursor:'pointer', fontFamily:"'Syne',sans-serif" }}>
+              <button onClick={skip} style={{ background:'transparent', border:`1px solid ${T.border}`, color:T.textMid, borderRadius:12, padding:'12px 20px', fontSize:13, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>
                 Skip for now ⏭
               </button>
             )}
@@ -489,7 +489,7 @@ export default function SetupWizard() {
               background: saving ? T.border : cur.id === 'done' ? T.green : T.accent,
               color: saving ? T.textMid : cur.id === 'done' ? '#fff' : '#000',
               border:'none', borderRadius:12, padding:'12px 28px', fontSize:14, fontWeight:800,
-              cursor: saving ? 'not-allowed' : 'pointer', fontFamily:"'Syne',sans-serif", minWidth:140,
+              cursor: saving ? 'not-allowed' : 'pointer', fontFamily:"'Inter',sans-serif", minWidth:140,
             }}>
               {saving ? '⏳ Saving…' : cur.id === 'welcome' ? 'Let\'s start →' : cur.id === 'done' ? '🚀 Go to Dashboard' : 'Save & Continue →'}
             </button>

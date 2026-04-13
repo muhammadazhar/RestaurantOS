@@ -92,7 +92,7 @@ export const Pill = ({ active, onClick, children }) => {
       color: active ? '#000' : T.textMid,
       border: `1px solid ${active ? T.accent : T.border}`,
       borderRadius: 24, padding: '6px 16px', fontSize: 13, fontWeight: 600,
-      cursor: 'pointer', fontFamily: "'Syne', sans-serif", transition: 'all 0.2s',
+      cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.2s',
     }}>{children}</button>
   );
 };
@@ -105,7 +105,7 @@ export const Input = ({ label, ...props }) => {
       <input {...props} style={{
         background: T.surface, border: `1px solid ${T.border}`,
         borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13,
-        width: '100%', outline: 'none', fontFamily: "'Syne', sans-serif",
+        width: '100%', outline: 'none', fontFamily: "'Inter', sans-serif",
         transition: 'border-color 0.2s',
         ...props.style,
       }} />
@@ -121,7 +121,7 @@ export const Select = ({ label, children, ...props }) => {
       <select {...props} style={{
         background: T.surface, border: `1px solid ${T.border}`,
         borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13,
-        width: '100%', outline: 'none', fontFamily: "'Syne', sans-serif",
+        width: '100%', outline: 'none', fontFamily: "'Inter', sans-serif",
         ...props.style,
       }}>{children}</select>
     </div>
@@ -145,7 +145,7 @@ export const Btn = ({ children, variant = 'primary', size = 'md', style, ...prop
       borderRadius: 10, padding: pad,
       fontSize: size === 'sm' ? 12 : 13,
       fontWeight: 700, cursor: 'pointer',
-      fontFamily: "'Syne', sans-serif", transition: 'all 0.2s',
+      fontFamily: "'Inter', sans-serif", transition: 'all 0.2s',
       ...style,
     }}>{children}</button>
   );

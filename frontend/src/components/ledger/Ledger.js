@@ -208,7 +208,7 @@ function NewEntryModal({ open, onClose, onSaved, accounts }) {
       {step === 'form' && (
         <div>
           {/* Back */}
-          <button onClick={() => setStep('template')} style={{ background: 'none', border: 'none', color: T.accent, fontSize: 12, cursor: 'pointer', fontFamily: "'Syne', sans-serif", marginBottom: 16, padding: 0 }}>
+          <button onClick={() => setStep('template')} style={{ background: 'none', border: 'none', color: T.accent, fontSize: 12, cursor: 'pointer', fontFamily: "'Inter', sans-serif", marginBottom: 16, padding: 0 }}>
             ← Back to templates
           </button>
 
@@ -240,7 +240,7 @@ function NewEntryModal({ open, onClose, onSaved, accounts }) {
               <div key={line.id} style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 32px', gap: 8, padding: '8px 0', borderBottom: `1px solid ${T.border}`, alignItems: 'center' }}>
                 {/* Account selector */}
                 <select value={line.account_id} onChange={e => selectAccount(line.id, e.target.value)}
-                  style={{ background: T.surface, border: `1px solid ${line.account_id ? T.border : T.accent + '88'}`, borderRadius: 8, padding: '8px 10px', color: line.account_id ? T.text : T.textDim, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none', width: '100%' }}>
+                  style={{ background: T.surface, border: `1px solid ${line.account_id ? T.border : T.accent + '88'}`, borderRadius: 8, padding: '8px 10px', color: line.account_id ? T.text : T.textDim, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', width: '100%' }}>
                   <option value="">— Select Account —</option>
                   {['revenue','cogs','expense','asset','liability','equity'].map(type => {
                     const group = accounts.filter(a => a.type === type);
@@ -294,7 +294,7 @@ function NewEntryModal({ open, onClose, onSaved, accounts }) {
           </div>
 
           {/* Add line */}
-          <button onClick={addLine} style={{ background: 'transparent', border: `1px dashed ${T.border}`, color: T.textMid, borderRadius: 8, padding: '7px 16px', fontSize: 12, cursor: 'pointer', fontFamily: "'Syne', sans-serif", marginBottom: 20 }}>
+          <button onClick={addLine} style={{ background: 'transparent', border: `1px dashed ${T.border}`, color: T.textMid, borderRadius: 8, padding: '7px 16px', fontSize: 12, cursor: 'pointer', fontFamily: "'Inter', sans-serif", marginBottom: 20 }}>
             + Add Line
           </button>
 
@@ -386,7 +386,7 @@ export default function Ledger() {
   const tabStyle = (t) => ({
     padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: tab === t ? 700 : 500,
     background: tab === t ? T.accent : 'transparent', color: tab === t ? '#000' : T.textMid,
-    border: `1px solid ${tab === t ? T.accent : T.border}`, fontFamily: "'Syne', sans-serif",
+    border: `1px solid ${tab === t ? T.accent : T.border}`, fontFamily: "'Inter', sans-serif",
   });
 
   if (loading) return <Spinner />;
@@ -430,10 +430,10 @@ export default function Ledger() {
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               placeholder="From"
-              style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+              style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
             <span style={{ color: T.textDim, fontSize: 12 }}>to</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+              style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
             {(dateFrom || dateTo) && (
               <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ background: 'none', border: 'none', color: T.textMid, cursor: 'pointer', fontSize: 18 }}>×</button>
             )}

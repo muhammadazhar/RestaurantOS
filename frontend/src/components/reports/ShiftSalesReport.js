@@ -94,7 +94,7 @@ function Sel({ value, onChange, children, style }) {
     <select value={value} onChange={e => onChange(e.target.value)} style={{
       background: T.card, border: `1px solid ${T.border}`, borderRadius: 8,
       padding: '6px 10px', color: T.text, fontSize: 12,
-      fontFamily: "'Syne',sans-serif", outline: 'none', cursor: 'pointer', ...style,
+      fontFamily: "'Inter',sans-serif", outline: 'none', cursor: 'pointer', ...style,
     }}>
       {children}
     </select>
@@ -114,15 +114,15 @@ function DateRangePicker({ from, to, onChange }) {
           color:      active === p.label ? '#000' : T.textMid,
           border: `1px solid ${active === p.label ? T.accent : T.border}`,
           borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
-          cursor: 'pointer', fontFamily: "'Syne',sans-serif",
+          cursor: 'pointer', fontFamily: "'Inter',sans-serif",
         }}>{p.label}</button>
       ))}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 4 }}>
         <input type="date" value={from} onChange={e => { setActive('Custom'); onChange(e.target.value, to); }}
-          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: "'Syne',sans-serif", outline: 'none' }} />
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: "'Inter',sans-serif", outline: 'none' }} />
         <span style={{ color: T.textDim, fontSize: 12 }}>→</span>
         <input type="date" value={to} onChange={e => { setActive('Custom'); onChange(from, e.target.value); }}
-          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: "'Syne',sans-serif", outline: 'none' }} />
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: "'Inter',sans-serif", outline: 'none' }} />
       </div>
     </div>
   );
@@ -269,7 +269,7 @@ export default function ShiftSalesReport() {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
-  const selStyle = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: "'Syne',sans-serif", outline: 'none', cursor: 'pointer' };
+  const selStyle = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 12, fontFamily: "'Inter',sans-serif", outline: 'none', cursor: 'pointer' };
 
   const shifts = sortShifts(data?.shifts || [], sortBy);
   const s = data?.summary || {};
@@ -311,7 +311,7 @@ export default function ShiftSalesReport() {
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             {data && <>
               <button onClick={handlePrint} style={{ ...selStyle, whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-              <button onClick={handleExcel} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Syne',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+              <button onClick={handleExcel} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
             </>}
           </div>
         </div>

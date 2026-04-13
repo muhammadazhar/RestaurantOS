@@ -354,7 +354,7 @@ export default function MyShift() {
               padding: '7px 16px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
               background: view === v ? T.accent : 'transparent',
               color: view === v ? '#000' : T.textMid,
-              fontFamily: "'Syne', sans-serif",
+              fontFamily: "'Inter', sans-serif",
             }}>{lbl}</button>
           ))}
         </div>
@@ -367,7 +367,7 @@ export default function MyShift() {
       {isManager && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={filterEmp} onChange={e => setFilterEmp(e.target.value)}
-            style={{ background: T.card, border: `1px solid ${T.border}`, color: filterEmp ? T.text : T.textDim, borderRadius: 8, padding: '7px 12px', fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none' }}>
+            style={{ background: T.card, border: `1px solid ${T.border}`, color: filterEmp ? T.text : T.textDim, borderRadius: 8, padding: '7px 12px', fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
             <option value="">All Employees</option>
             {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
           </select>
@@ -385,13 +385,13 @@ export default function MyShift() {
 
       {/* Month navigation */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <button onClick={prevMonth} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 14, fontFamily: "'Syne', sans-serif" }}>‹</button>
+        <button onClick={prevMonth} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 14, fontFamily: "'Inter', sans-serif" }}>‹</button>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.text, minWidth: 160, textAlign: 'center' }}>
           {MONTH_NAMES[month]} {year}
         </div>
-        <button onClick={nextMonth} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 14, fontFamily: "'Syne', sans-serif" }}>›</button>
+        <button onClick={nextMonth} style={{ background: T.card, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 14, fontFamily: "'Inter', sans-serif" }}>›</button>
         <button onClick={() => { setYear(now.getFullYear()); setMonth(now.getMonth()); }}
-          style={{ background: T.accentGlow, border: `1px solid ${T.accent}44`, color: T.accent, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Syne', sans-serif" }}>
+          style={{ background: T.accentGlow, border: `1px solid ${T.accent}44`, color: T.accent, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>
           Today
         </button>
 

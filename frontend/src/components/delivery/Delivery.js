@@ -106,7 +106,7 @@ export default function Delivery() {
     if (!socket) return;
     const handler = (data) => {
       toast.custom((t) => (
-        <div style={{ background: '#E3006D', color: '#fff', borderRadius: 12, padding: '12px 18px', fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 14, display: 'flex', gap: 10, alignItems: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
+        <div style={{ background: '#E3006D', color: '#fff', borderRadius: 12, padding: '12px 18px', fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 14, display: 'flex', gap: 10, alignItems: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}>
           <span style={{ fontSize: 22 }}>🐼</span>
           <div>
             <div>New Foodpanda Order!</div>
@@ -175,8 +175,8 @@ export default function Delivery() {
 
   // ── Styles ────────────────────────────────────────────────────────────────
   const card = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18 };
-  const inp  = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne',sans-serif", outline: 'none' };
-  const btn  = (bg = T.accent, col = '#000') => ({ background: bg, color: col, border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Syne',sans-serif" });
+  const inp  = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter',sans-serif", outline: 'none' };
+  const btn  = (bg = T.accent, col = '#000') => ({ background: bg, color: col, border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter',sans-serif" });
 
   const pendingOrders = orders.filter(o => o.status === 'pending');
   const activeOrders  = orders.filter(o => ['confirmed','preparing','ready'].includes(o.status));
@@ -444,7 +444,7 @@ export default function Delivery() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: 24, fontFamily: "'Syne',sans-serif", color: T.text, maxWidth: 1300 }}>
+    <div style={{ padding: 24, fontFamily: "'Inter',sans-serif", color: T.text, maxWidth: 1300 }}>
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
@@ -466,7 +466,7 @@ export default function Delivery() {
         {[['orders', '📋 Orders'], ['platforms', '🔗 Platforms'], ['stats', '📊 Analytics']].map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)} style={{
             background: 'none', border: 'none', cursor: 'pointer', padding: '10px 18px',
-            fontSize: 13, fontWeight: 700, fontFamily: "'Syne',sans-serif",
+            fontSize: 13, fontWeight: 700, fontFamily: "'Inter',sans-serif",
             color: tab === t ? T.accent : T.textMid,
             borderBottom: tab === t ? `2px solid ${T.accent}` : '2px solid transparent',
             marginBottom: -1,

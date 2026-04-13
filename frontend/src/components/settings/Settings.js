@@ -21,7 +21,7 @@ const TextInput = ({ value, onChange, placeholder, type = 'text', disabled }) =>
       width: '100%', background: disabled ? T.bg : T.surface,
       border: `1px solid ${T.border}`, borderRadius: 10,
       padding: '10px 14px', color: disabled ? T.textDim : T.text,
-      fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none',
+      fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none',
       cursor: disabled ? 'not-allowed' : 'text',
     }} />
 );
@@ -31,7 +31,7 @@ const SelectInput = ({ value, onChange, children }) => (
     style={{
       width: '100%', background: T.surface, border: `1px solid ${T.border}`,
       borderRadius: 10, padding: '10px 14px', color: T.text,
-      fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none',
+      fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none',
     }}>{children}</select>
 );
 
@@ -55,7 +55,7 @@ const SaveBtn = ({ onClick, saving }) => (
     background: saving ? T.border : T.accent, color: saving ? T.textMid : '#000',
     border: 'none', borderRadius: 10, padding: '11px 24px',
     fontSize: 13, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer',
-    fontFamily: "'Syne', sans-serif", transition: 'all 0.2s', marginTop: 8,
+    fontFamily: "'Inter', sans-serif", transition: 'all 0.2s', marginTop: 8,
   }}>
     {saving ? '⏳ Saving…' : '✓ Save Changes'}
   </button>
@@ -166,7 +166,7 @@ function GeneralInfo() {
             <button onClick={() => fileRef.current.click()} style={{
               background: T.surface, border: `1px solid ${T.border}`, color: T.text,
               borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 600,
-              cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+              cursor: 'pointer', fontFamily: "'Inter', sans-serif",
             }}>
               {logoUrl ? '🔄 Change Logo' : '📁 Choose Image'}
             </button>
@@ -174,7 +174,7 @@ function GeneralInfo() {
               <button onClick={handleLogoUpload} disabled={logoUploading} style={{
                 background: T.accent, color: '#000', border: 'none',
                 borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 800,
-                cursor: logoUploading ? 'not-allowed' : 'pointer', fontFamily: "'Syne', sans-serif",
+                cursor: logoUploading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif",
               }}>
                 {logoUploading ? '⏳ Uploading…' : '⬆ Upload Logo'}
               </button>
@@ -284,11 +284,11 @@ function TaxRates() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <input type="number" value={tax.rate} onChange={e => setRate(tax.id, e.target.value)}
-                style={{ width: 60, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.accent, fontSize: 13, fontWeight: 800, fontFamily: "'Syne', sans-serif", outline: 'none', textAlign: 'center' }} />
+                style={{ width: 60, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.accent, fontSize: 13, fontWeight: 800, fontFamily: "'Inter', sans-serif", outline: 'none', textAlign: 'center' }} />
               <span style={{ color: T.textMid, fontSize: 13 }}>%</span>
             </div>
             <Badge color={tax.enabled ? T.green : T.textDim} small>{tax.enabled ? 'Active' : 'Off'}</Badge>
-            <button onClick={() => toggle(tax.id)} style={{ background: tax.enabled ? T.redDim : T.greenDim, border: 'none', borderRadius: 8, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: tax.enabled ? T.red : T.green, fontFamily: "'Syne', sans-serif" }}>
+            <button onClick={() => toggle(tax.id)} style={{ background: tax.enabled ? T.redDim : T.greenDim, border: 'none', borderRadius: 8, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', color: tax.enabled ? T.red : T.green, fontFamily: "'Inter', sans-serif" }}>
               {tax.enabled ? 'Disable' : 'Enable'}
             </button>
             <button onClick={() => remove(tax.id)} style={{ background: 'none', border: 'none', color: T.textDim, cursor: 'pointer', fontSize: 16, padding: '0 4px' }}>×</button>
@@ -310,13 +310,13 @@ function TaxRates() {
               </SelectInput>
             </Field>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={addTax} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '10px 16px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Syne', sans-serif", whiteSpace: 'nowrap' }}>Add</button>
-              <button onClick={() => setAdding(false)} style={{ background: T.border, color: T.textMid, border: 'none', borderRadius: 8, padding: '10px 12px', cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Cancel</button>
+              <button onClick={addTax} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '10px 16px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap' }}>Add</button>
+              <button onClick={() => setAdding(false)} style={{ background: T.border, color: T.textMid, border: 'none', borderRadius: 8, padding: '10px 12px', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Cancel</button>
             </div>
           </div>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} style={{ background: 'transparent', border: `1px dashed ${T.border}`, color: T.textMid, borderRadius: 10, padding: '10px 18px', fontSize: 13, cursor: 'pointer', fontFamily: "'Syne', sans-serif", marginBottom: 16 }}>
+        <button onClick={() => setAdding(true)} style={{ background: 'transparent', border: `1px dashed ${T.border}`, color: T.textMid, borderRadius: 10, padding: '10px 18px', fontSize: 13, cursor: 'pointer', fontFamily: "'Inter', sans-serif", marginBottom: 16 }}>
           + Add Tax / Charge
         </button>
       )}
@@ -362,7 +362,7 @@ function PaymentMethods() {
                 {m.enabled && (
                   <input value={m.details} onChange={e => setDets(m.id, e.target.value)}
                     placeholder="Optional: account number, notes…"
-                    style={{ marginTop: 6, width: '100%', maxWidth: 360, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.textMid, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
+                    style={{ marginTop: 6, width: '100%', maxWidth: 360, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 10px', color: T.textMid, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
                 )}
               </div>
               <div onClick={() => toggle(m.id)} style={{
@@ -478,8 +478,8 @@ function RolesPermissions() {
           <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
             <input value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="New role name"
               onKeyDown={e => e.key === 'Enter' && addRole()}
-              style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }} />
-            <button onClick={addRole} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '7px 10px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>+</button>
+              style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
+            <button onClick={addRole} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '7px 10px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>+</button>
           </div>
         </div>
 
@@ -711,7 +711,7 @@ function Integrations() {
                     color: item.connected ? T.red : item.color,
                     border: `1px solid ${item.connected ? T.red + '44' : item.color + '44'}`,
                     borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: "'Syne', sans-serif", whiteSpace: 'nowrap',
+                    cursor: 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap',
                   }}>
                     {item.connected ? 'Disconnect' : 'Connect'}
                   </button>
@@ -776,7 +776,7 @@ export default function Settings() {
               color:      active === tab.id ? T.accent : T.textMid,
               border:     `1px solid ${active === tab.id ? T.accent + '44' : 'transparent'}`,
               fontSize: 13, fontWeight: active === tab.id ? 700 : 500,
-              cursor: 'pointer', fontFamily: "'Syne', sans-serif", transition: 'all 0.15s',
+              cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
             }}>
               <span style={{ fontSize: 16 }}>{tab.icon}</span>
               {tab.label}

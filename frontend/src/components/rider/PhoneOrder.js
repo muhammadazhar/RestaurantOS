@@ -45,7 +45,7 @@ function ItemNotesModal({ item, open, onClose, onSave }) {
     <Modal open={open} onClose={onClose} title={`Notes — ${item?.name}`} width={380}>
       <textarea value={notes} onChange={e => setNotes(e.target.value)}
         placeholder="e.g. No onions, extra spicy, medium-well…"
-        style={{ width: '100%', minHeight: 90, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', color: T.text, fontSize: 13, fontFamily: "'Syne', sans-serif", outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+        style={{ width: '100%', minHeight: 90, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
       />
       <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</Btn>
@@ -443,7 +443,7 @@ export default function PhoneOrder() {
               <div style={{ marginBottom: 10, background: T.surface, borderRadius: 10, padding: '8px 10px' }}>
                 <select
                   value={riderId} onChange={e => setRiderId(e.target.value)}
-                  style={{ width: '100%', background: 'none', border: 'none', color: riderId ? T.text : T.textDim, fontSize: 12, fontFamily: "'Syne', sans-serif", outline: 'none' }}
+                  style={{ width: '100%', background: 'none', border: 'none', color: riderId ? T.text : T.textDim, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}
                 >
                   <option value="">🏍 Assign rider (optional)</option>
                   {riders.map(r => (
@@ -477,8 +477,8 @@ export default function PhoneOrder() {
                     </div>
                     {/* Per-item action row */}
                     <div style={{ display: 'flex', gap: 8, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
-                      <button onClick={() => setNotesItem(item)} style={{ flex: 1, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 6, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>📝 Notes</button>
-                      <button onClick={() => removeItem(item.id)} style={{ background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontFamily: "'Syne', sans-serif" }}>Remove</button>
+                      <button onClick={() => setNotesItem(item)} style={{ flex: 1, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 6, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>📝 Notes</button>
+                      <button onClick={() => removeItem(item.id)} style={{ background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Remove</button>
                     </div>
                   </div>
                 ))}
@@ -488,7 +488,7 @@ export default function PhoneOrder() {
               {cart.length > 0 && (
                 <input value={orderNotes} onChange={e => setOrderNotes(e.target.value)}
                   placeholder="Order notes (optional)…"
-                  style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 11, fontFamily: "'Syne', sans-serif", outline: 'none', width: '100%', marginTop: 8, boxSizing: 'border-box' }} />
+                  style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', width: '100%', marginTop: 8, boxSizing: 'border-box' }} />
               )}
 
               {/* Totals */}
