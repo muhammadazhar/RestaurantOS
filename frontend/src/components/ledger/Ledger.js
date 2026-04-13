@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getGLAccounts, getJournalEntries, createJournalEntry } from '../../services/api';
+import { getGLAccounts, getJournalEntries, createJournalEntry, getTrialBalance, getBalanceSheet } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, Input, Select, StatCard, PageHeader, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
@@ -350,6 +350,221 @@ function NewAccountModal({ open, onClose, onSaved }) {
   );
 }
 
+// ─── Trial Balance Tab ────────────────────────────────────────────────────────
+function TrialBalanceTab() {
+  useT();
+  const today = () => new Date().toISOString().slice(0, 10);
+  const monthStart = () => { const d = new Date(); d.setDate(1); return d.toISOString().slice(0, 10); };
+  const [from, setFrom] = useState(monthStart());
+  const [to,   setTo]   = useState(today());
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getTrialBalance({ from, to });
+      setData(res.data);
+    } catch { toast.error('Failed to load trial balance'); }
+    finally { setLoading(false); }
+  }, [from, to]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const TYPE_LABEL = { revenue: 'Revenue', cogs: 'Cost of Goods Sold', expense: 'Expenses', asset: 'Assets', liability: 'Liabilities', equity: 'Equity' };
+  const TYPE_COLOR2 = { revenue: T.green, cogs: T.accent, expense: T.red, asset: T.blue, liability: T.textMid, equity: '#9b59b6' };
+
+  if (loading) return <Spinner />;
+  if (!data)   return null;
+
+  const groups = ['asset','liability','equity','revenue','cogs','expense'].reduce((acc, t) => {
+    acc[t] = data.rows.filter(r => r.type === t);
+    return acc;
+  }, {});
+
+  return (
+    <div>
+      {/* Date filter */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 20 }}>
+        <span style={{ fontSize: 12, color: T.textMid }}>Period:</span>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
+        <span style={{ color: T.textDim, fontSize: 12 }}>to</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)}
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <span style={{ fontSize: 12, color: data.balanced ? T.green : T.red, fontWeight: 700 }}>
+            {data.balanced ? '✓ Balanced' : '✗ Not Balanced'}
+          </span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: T.surface }}>
+              {['Code', 'Account Name', 'Type', 'Total Debit', 'Total Credit', 'Net Balance'].map(h => (
+                <th key={h} style={{ padding: '11px 16px', textAlign: h === 'Code' || h === 'Account Name' || h === 'Type' ? 'left' : 'right', fontSize: 11, color: T.textMid, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {['asset','liability','equity','revenue','cogs','expense'].map(type => {
+              const rows = groups[type];
+              if (!rows.length) return null;
+              return (
+                <React.Fragment key={type}>
+                  <tr>
+                    <td colSpan={6} style={{ padding: '8px 16px', background: T.surface, fontSize: 11, fontWeight: 700, color: TYPE_COLOR2[type], letterSpacing: 0.8, textTransform: 'uppercase', borderTop: `1px solid ${T.border}` }}>
+                      {TYPE_LABEL[type]}
+                    </td>
+                  </tr>
+                  {rows.map((r, i) => (
+                    <tr key={r.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                      <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: T.textMid, width: 60 }}>{r.code}</td>
+                      <td style={{ padding: '10px 16px', fontSize: 13, color: T.text, fontWeight: 500 }}>{r.name}</td>
+                      <td style={{ padding: '10px 16px' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: TYPE_COLOR2[r.type], background: `${TYPE_COLOR2[r.type]}22`, padding: '2px 7px', borderRadius: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{r.type}</span>
+                      </td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(r.total_debit) > 0 ? T.red : T.textDim }}>
+                        {Number(r.total_debit) > 0 ? Number(r.total_debit).toLocaleString() : '—'}
+                      </td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(r.total_credit) > 0 ? T.green : T.textDim }}>
+                        {Number(r.total_credit) > 0 ? Number(r.total_credit).toLocaleString() : '—'}
+                      </td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: Number(r.net_balance) >= 0 ? T.green : T.red }}>
+                        {Number(r.net_balance) >= 0 ? '+' : ''}PKR {Number(r.net_balance).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ borderTop: `2px solid ${T.borderLight}`, background: T.surface }}>
+              <td colSpan={3} style={{ padding: '12px 16px', fontSize: 13, fontWeight: 800, color: T.text }}>TOTALS</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 14, fontWeight: 800, color: T.red }}>
+                PKR {Number(data.totalDebit).toLocaleString()}
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 14, fontWeight: 800, color: T.green }}>
+                PKR {Number(data.totalCredit).toLocaleString()}
+              </td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 14, fontWeight: 800, color: data.balanced ? T.green : T.red }}>
+                {data.balanced ? '✓ Balanced' : `Diff: PKR ${Math.abs(data.totalDebit - data.totalCredit).toLocaleString()}`}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Balance Sheet Tab ────────────────────────────────────────────────────────
+function BalanceSheetTab() {
+  useT();
+  const today = () => new Date().toISOString().slice(0, 10);
+  const [asOf,    setAsOf]    = useState(today());
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getBalanceSheet({ as_of: asOf });
+      setData(res.data);
+    } catch { toast.error('Failed to load balance sheet'); }
+    finally { setLoading(false); }
+  }, [asOf]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const fmt = (n) => `PKR ${Number(n || 0).toLocaleString()}`;
+
+  if (loading) return <Spinner />;
+  if (!data)   return null;
+
+  const totalLiabEquity = Number(data.totalLiabilities) + Number(data.totalEquity) + Number(data.netIncome);
+  const balanced = Math.abs(Number(data.totalAssets) - totalLiabEquity) < 1;
+
+  const Section = ({ title, accounts, total, color }) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 16px', background: T.surface, borderRadius: '10px 10px 0 0', borderBottom: `2px solid ${color}44` }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color, letterSpacing: 1, textTransform: 'uppercase' }}>{title}</span>
+        <span style={{ fontFamily: 'monospace', fontWeight: 800, color }}>{fmt(total)}</span>
+      </div>
+      <Card style={{ padding: 0, borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            {accounts.map((a, i) => (
+              <tr key={a.id} style={{ borderTop: i > 0 ? `1px solid ${T.border}` : 'none' }}>
+                <td style={{ padding: '10px 16px', fontFamily: 'monospace', fontSize: 12, color: T.textMid, width: 60 }}>{a.code}</td>
+                <td style={{ padding: '10px 16px', fontSize: 13, color: T.text }}>{a.name}</td>
+                <td style={{ padding: '10px 16px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: Number(a.balance) >= 0 ? T.green : T.red }}>
+                  {fmt(a.balance)}
+                </td>
+              </tr>
+            ))}
+            {accounts.length === 0 && (
+              <tr><td colSpan={3} style={{ padding: '16px', textAlign: 'center', color: T.textDim, fontSize: 12 }}>No accounts</td></tr>
+            )}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Date filter */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 24 }}>
+        <span style={{ fontSize: 12, color: T.textMid }}>As of:</span>
+        <input type="date" value={asOf} onChange={e => setAsOf(e.target.value)}
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        {/* Left: Assets */}
+        <div>
+          <Section title="Assets" accounts={data.assets} total={data.totalAssets} color={T.blue} />
+          {/* Net Income (Retained Earnings) */}
+          <div style={{ background: Number(data.netIncome) >= 0 ? T.greenDim : T.redDim, border: `1px solid ${Number(data.netIncome) >= 0 ? T.green : T.red}44`, borderRadius: 10, padding: '12px 16px', marginTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, letterSpacing: 0.5, textTransform: 'uppercase' }}>Net Income</div>
+                <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>
+                  Revenue {fmt(data.revenue)} − COGS {fmt(data.cogs)} − Expenses {fmt(data.expenses)}
+                </div>
+              </div>
+              <span style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 800, color: Number(data.netIncome) >= 0 ? T.green : T.red }}>
+                {Number(data.netIncome) >= 0 ? '+' : ''}{fmt(data.netIncome)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Liabilities + Equity */}
+        <div>
+          <Section title="Liabilities" accounts={data.liabilities} total={data.totalLiabilities} color={T.red} />
+          <Section title="Equity" accounts={data.equity} total={data.totalEquity} color={'#9b59b6'} />
+        </div>
+      </div>
+
+      {/* Balance check */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', background: balanced ? T.greenDim : T.redDim, borderRadius: 12, border: `1px solid ${balanced ? T.green : T.red}44`, marginTop: 16 }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>
+          Assets = Liabilities + Equity + Net Income
+        </span>
+        <span style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, color: balanced ? T.green : T.red }}>
+          {fmt(data.totalAssets)} {balanced ? '=' : '≠'} {fmt(totalLiabEquity)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Ledger Page ─────────────────────────────────────────────────────────
 export default function Ledger() {
   useT();
@@ -421,9 +636,11 @@ export default function Ledger() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center' }}>
-        <button style={tabStyle('accounts')} onClick={() => setTab('accounts')}>Chart of Accounts</button>
-        <button style={tabStyle('entries')}  onClick={() => setTab('entries')}>Journal Entries ({entries.length})</button>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button style={tabStyle('accounts')}      onClick={() => setTab('accounts')}>Chart of Accounts</button>
+        <button style={tabStyle('entries')}       onClick={() => setTab('entries')}>Journal Entries ({entries.length})</button>
+        <button style={tabStyle('trial_balance')} onClick={() => setTab('trial_balance')}>Trial Balance</button>
+        <button style={tabStyle('balance_sheet')} onClick={() => setTab('balance_sheet')}>Balance Sheet</button>
 
         {/* Date filter for entries */}
         {tab === 'entries' && (
@@ -567,6 +784,12 @@ export default function Ledger() {
           )}
         </div>
       )}
+
+      {/* ── Trial Balance ── */}
+      {tab === 'trial_balance' && <TrialBalanceTab />}
+
+      {/* ── Balance Sheet ── */}
+      {tab === 'balance_sheet' && <BalanceSheetTab />}
 
       {/* Modals */}
       <NewEntryModal  open={newEntry} onClose={() => setNewEntry(false)} onSaved={load} accounts={accounts} />

@@ -121,9 +121,15 @@ export const forceCloseShift  = (id)      => API.patch(`/shifts/${id}/force-clos
 export const deleteShift      = (id)      => API.delete(`/shifts/${id}`);
 
 // ── GL ────────────────────────────────────────────────────────────────────────
-export const getGLAccounts      = ()       => API.get('/gl/accounts');
-export const getJournalEntries  = (params) => API.get('/gl/entries', { params });
-export const createJournalEntry = (data)   => API.post('/gl/entries', data);
+export const getGLAccounts          = ()       => API.get('/gl/accounts');
+export const getJournalEntries      = (params) => API.get('/gl/entries', { params });
+export const createJournalEntry     = (data)   => API.post('/gl/entries', data);
+export const getSalesMappings       = ()       => API.get('/gl/mappings/sales');
+export const saveSalesMappings      = (data)   => API.post('/gl/mappings/sales', data);
+export const getInventoryMappings   = ()       => API.get('/gl/mappings/inventory');
+export const saveInventoryMappings  = (data)   => API.post('/gl/mappings/inventory', data);
+export const getTrialBalance        = (p)      => API.get('/gl/reports/trial-balance', { params: p });
+export const getBalanceSheet        = (p)      => API.get('/gl/reports/balance-sheet', { params: p });
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 export const getNotifications = ()      => API.get('/notifications');

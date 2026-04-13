@@ -13,6 +13,8 @@ import POS        from './components/pos/POS';
 import Employees  from './components/employees/Employees';
 import Recipes    from './components/recipes/Recipes';
 import Ledger     from './components/ledger/Ledger';
+import GLSetup    from './components/ledger/GLSetup';
+import GLReports  from './components/reports/GLReports';
 import { Kitchen, Tables, Alerts, Admin } from './components/pages';
 import InventoryPage from './components/inventory/Inventory';
 
@@ -74,7 +76,9 @@ function AppRoutes() {
       <Route path="/attendance" element={<PrivateRoute><Layout><Attendance /></Layout></PrivateRoute>} />
       <Route path="/my-shift" element={<PrivateRoute><Layout><MyShift /></Layout></PrivateRoute>} />
       <Route path="/delivery"   element={<PrivateRoute><Layout><Delivery /></Layout></PrivateRoute>} />
-      <Route path="/ledger"    element={<PrivateRoute><Layout><Ledger /></Layout></PrivateRoute>} />
+      <Route path="/ledger"      element={<PrivateRoute><Layout><Ledger /></Layout></PrivateRoute>} />
+      <Route path="/gl-setup"    element={<PrivateRoute><Layout><GLSetup /></Layout></PrivateRoute>} />
+      <Route path="/gl-reports"  element={<PrivateRoute><Layout><GLReports /></Layout></PrivateRoute>} />
       <Route path="/alerts"    element={<PrivateRoute><Layout><Alerts /></Layout></PrivateRoute>} />
       <Route path="/admin"     element={<PrivateRoute><Layout><Admin /></Layout></PrivateRoute>} />
       <Route path="/menu-mgmt"    element={<PrivateRoute><Layout><MenuManagement /></Layout></PrivateRoute>} />

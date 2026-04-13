@@ -1,5 +1,90 @@
 const db = require('../config/db');
 
+// ─── Auto-journalize a paid order ─────────────────────────────────────────────
+async function autoJournalizeOrder(restaurantId, order) {
+  // Get order items with category info
+  const itemsRes = await db.query(
+    `SELECT oi.total_price, mi.category_id, c.name AS category_name
+     FROM order_items oi
+     LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
+     LEFT JOIN categories c ON c.id = mi.category_id
+     WHERE oi.order_id = $1`,
+    [order.id]
+  );
+
+  // Get GL sales mappings for this restaurant
+  const mappingRes = await db.query(
+    `SELECT category_id, revenue_account_id FROM gl_sales_mappings WHERE restaurant_id=$1`,
+    [restaurantId]
+  );
+  const mappingMap = {};
+  for (const m of mappingRes.rows) {
+    mappingMap[m.category_id] = m.revenue_account_id;
+  }
+
+  // Get payment method account
+  const payMethod = order.payment_method || 'cash';
+  const payMapRes = await db.query(
+    `SELECT account_id FROM gl_payment_mappings WHERE restaurant_id=$1 AND payment_method=$2`,
+    [restaurantId, payMethod]
+  );
+  // Fall back to default payment mapping if specific one not found
+  let payAccountId = payMapRes.rows[0]?.account_id;
+  if (!payAccountId) {
+    const defPay = await db.query(
+      `SELECT account_id FROM gl_payment_mappings WHERE restaurant_id=$1 AND payment_method='default'`,
+      [restaurantId]
+    );
+    payAccountId = defPay.rows[0]?.account_id;
+  }
+
+  // Group revenue by account
+  const revenueByAccount = {};
+  for (const item of itemsRes.rows) {
+    const accId = mappingMap[item.category_id];
+    if (!accId) continue; // no mapping, skip
+    revenueByAccount[accId] = (revenueByAccount[accId] || 0) + Number(item.total_price);
+  }
+
+  const creditLines = Object.entries(revenueByAccount).filter(([, amt]) => amt > 0);
+
+  // Need at least one credit line and a debit (payment) account
+  if (!creditLines.length || !payAccountId) return;
+
+  const totalRevenue = creditLines.reduce((s, [, amt]) => s + amt, 0);
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const entry = await client.query(
+      `INSERT INTO journal_entries(restaurant_id, description, entry_date, reference, created_by)
+       VALUES($1, $2, $3, $4, NULL) RETURNING id`,
+      [restaurantId, `Sales — Order #${order.order_number}`, order.created_at, `ORD-${order.order_number}`]
+    );
+    const entryId = entry.rows[0].id;
+    // Debit: payment account
+    await client.query(
+      `INSERT INTO journal_lines(entry_id, account_id, debit, credit) VALUES($1,$2,$3,0)`,
+      [entryId, payAccountId, totalRevenue]
+    );
+    // Credit: revenue accounts
+    for (const [accId, amt] of creditLines) {
+      await client.query(
+        `INSERT INTO journal_lines(entry_id, account_id, debit, credit) VALUES($1,$2,0,$3)`,
+        [entryId, accId, amt]
+      );
+    }
+    // Tag order with GL entry
+    await client.query(
+      `UPDATE orders SET gl_entry_id=$1 WHERE id=$2`, [entryId, order.id]
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally { client.release(); }
+}
+
 // GET /api/orders?status=pending  OR  ?status=pending,preparing,ready
 exports.getOrders = async (req, res) => {
   try {
@@ -221,6 +306,15 @@ exports.updateOrderStatus = async (req, res) => {
                 'Order ' || $2 || ' is ready for service.','info',$3,'order')`,
         [restaurantId, result.rows[0].order_number, id]
       );
+    }
+
+    // Auto-journalize when order is paid
+    if (status === 'paid' && !result.rows[0].gl_entry_id) {
+      try {
+        await autoJournalizeOrder(restaurantId, result.rows[0]);
+      } catch (glErr) {
+        console.warn('GL auto-journal skipped:', glErr.message);
+      }
     }
 
     const io = req.app.get('io');

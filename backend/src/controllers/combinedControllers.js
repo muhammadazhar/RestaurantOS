@@ -391,6 +391,180 @@ exports.createJournalEntry = async (req, res) => {
   finally { client.release(); }
 };
 
+// ── gl_mappings.js ────────────────────────────────────────────────────────────
+
+// GET all sales mappings (category → revenue account)
+exports.getSalesMappings = async (req, res) => {
+  try {
+    const rid = req.user.restaurantId;
+    const [mappings, categories, accounts, paymentMappings] = await Promise.all([
+      db.query(
+        `SELECT sm.*, c.name AS category_name, a.code AS account_code, a.name AS account_name
+         FROM gl_sales_mappings sm
+         LEFT JOIN categories c ON c.id = sm.category_id
+         LEFT JOIN gl_accounts a ON a.id = sm.revenue_account_id
+         WHERE sm.restaurant_id = $1`,
+        [rid]
+      ),
+      db.query(`SELECT id, name FROM categories WHERE restaurant_id=$1 ORDER BY name`, [rid]),
+      db.query(`SELECT id, code, name, type FROM gl_accounts WHERE restaurant_id=$1 ORDER BY code`, [rid]),
+      db.query(
+        `SELECT pm.*, a.code AS account_code, a.name AS account_name
+         FROM gl_payment_mappings pm
+         LEFT JOIN gl_accounts a ON a.id = pm.account_id
+         WHERE pm.restaurant_id = $1`,
+        [rid]
+      ),
+    ]);
+    res.json({ mappings: mappings.rows, categories: categories.rows, accounts: accounts.rows, paymentMappings: paymentMappings.rows });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// SAVE sales mappings (upsert)
+exports.saveSalesMappings = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const rid = req.user.restaurantId;
+    const { categoryMappings, paymentMappings } = req.body;
+    // categoryMappings: [{category_id, revenue_account_id}]
+    for (const m of (categoryMappings || [])) {
+      if (!m.category_id) continue;
+      await client.query(
+        `INSERT INTO gl_sales_mappings(restaurant_id, category_id, revenue_account_id)
+         VALUES($1,$2,$3)
+         ON CONFLICT(restaurant_id, category_id)
+         DO UPDATE SET revenue_account_id = EXCLUDED.revenue_account_id`,
+        [rid, m.category_id, m.revenue_account_id || null]
+      );
+    }
+    // paymentMappings: [{payment_method, account_id}]
+    for (const m of (paymentMappings || [])) {
+      if (!m.payment_method) continue;
+      await client.query(
+        `INSERT INTO gl_payment_mappings(restaurant_id, payment_method, account_id)
+         VALUES($1,$2,$3)
+         ON CONFLICT(restaurant_id, payment_method)
+         DO UPDATE SET account_id = EXCLUDED.account_id`,
+        [rid, m.payment_method, m.account_id || null]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ error: 'Server error' }); }
+  finally { client.release(); }
+};
+
+// GET all inventory mappings (item → asset + expense accounts)
+exports.getInventoryMappings = async (req, res) => {
+  try {
+    const rid = req.user.restaurantId;
+    const [mappings, items, accounts] = await Promise.all([
+      db.query(
+        `SELECT im.*, ii.name AS item_name, ii.unit,
+                aa.code AS asset_code, aa.name AS asset_name,
+                ea.code AS expense_code, ea.name AS expense_name
+         FROM gl_inventory_mappings im
+         LEFT JOIN inventory_items ii ON ii.id = im.inventory_item_id
+         LEFT JOIN gl_accounts aa ON aa.id = im.asset_account_id
+         LEFT JOIN gl_accounts ea ON ea.id = im.expense_account_id
+         WHERE im.restaurant_id = $1`,
+        [rid]
+      ),
+      db.query(`SELECT id, name, unit, category FROM inventory_items WHERE restaurant_id=$1 ORDER BY name`, [rid]),
+      db.query(`SELECT id, code, name, type FROM gl_accounts WHERE restaurant_id=$1 ORDER BY code`, [rid]),
+    ]);
+    res.json({ mappings: mappings.rows, items: items.rows, accounts: accounts.rows });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// SAVE inventory mappings (upsert)
+exports.saveInventoryMappings = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const rid = req.user.restaurantId;
+    const { mappings } = req.body;
+    for (const m of (mappings || [])) {
+      if (!m.inventory_item_id) continue;
+      await client.query(
+        `INSERT INTO gl_inventory_mappings(restaurant_id, inventory_item_id, asset_account_id, expense_account_id)
+         VALUES($1,$2,$3,$4)
+         ON CONFLICT(restaurant_id, inventory_item_id)
+         DO UPDATE SET asset_account_id = EXCLUDED.asset_account_id,
+                       expense_account_id = EXCLUDED.expense_account_id`,
+        [rid, m.inventory_item_id, m.asset_account_id || null, m.expense_account_id || null]
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ error: 'Server error' }); }
+  finally { client.release(); }
+};
+
+// GET Trial Balance
+exports.getTrialBalance = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const { from, to } = req.query;
+    const result = await db.query(
+      `SELECT
+         a.id, a.code, a.name, a.type,
+         COALESCE(SUM(jl.debit),  0) AS total_debit,
+         COALESCE(SUM(jl.credit), 0) AS total_credit,
+         COALESCE(SUM(jl.credit - jl.debit), 0) AS net_balance
+       FROM gl_accounts a
+       LEFT JOIN journal_lines jl ON jl.account_id = a.id
+       LEFT JOIN journal_entries je ON je.id = jl.entry_id
+         AND ($1::date IS NULL OR je.entry_date >= $1::date)
+         AND ($2::date IS NULL OR je.entry_date <= $2::date)
+       WHERE a.restaurant_id = $3
+       GROUP BY a.id, a.code, a.name, a.type
+       ORDER BY a.code`,
+      [from || null, to || null, restaurantId]
+    );
+    const rows = result.rows;
+    const totalDebit  = rows.reduce((s, r) => s + Number(r.total_debit),  0);
+    const totalCredit = rows.reduce((s, r) => s + Number(r.total_credit), 0);
+    res.json({ rows, totalDebit, totalCredit, balanced: Math.abs(totalDebit - totalCredit) < 0.01 });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// GET Balance Sheet
+exports.getBalanceSheet = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const { as_of } = req.query;
+    // Get all account balances up to as_of date
+    const result = await db.query(
+      `SELECT
+         a.id, a.code, a.name, a.type,
+         COALESCE(SUM(jl.credit - jl.debit), 0) AS balance
+       FROM gl_accounts a
+       LEFT JOIN journal_lines jl ON jl.account_id = a.id
+       LEFT JOIN journal_entries je ON je.id = jl.entry_id
+         AND ($1::date IS NULL OR je.entry_date <= $1::date)
+       WHERE a.restaurant_id = $2
+       GROUP BY a.id, a.code, a.name, a.type
+       ORDER BY a.code`,
+      [as_of || null, restaurantId]
+    );
+    const rows = result.rows;
+    const assets      = rows.filter(r => r.type === 'asset');
+    const liabilities = rows.filter(r => r.type === 'liability');
+    const equity      = rows.filter(r => r.type === 'equity');
+    // Revenue - COGS - Expenses = Retained Earnings (net income)
+    const revenue   = rows.filter(r => r.type === 'revenue').reduce((s, r) => s + Number(r.balance), 0);
+    const cogs      = rows.filter(r => r.type === 'cogs').reduce((s, r) => s + Number(r.balance), 0);
+    const expenses  = rows.filter(r => r.type === 'expense').reduce((s, r) => s + Number(r.balance), 0);
+    const netIncome = revenue - (-cogs) - (-expenses); // credit balances for revenue, debit balances (negative) for cogs/expenses
+    const totalAssets      = assets.reduce((s, r) => s + Number(r.balance), 0);
+    const totalLiabilities = liabilities.reduce((s, r) => s + Number(r.balance), 0);
+    const totalEquity      = equity.reduce((s, r) => s + Number(r.balance), 0);
+    res.json({ assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity, netIncome, revenue, cogs: Math.abs(cogs), expenses: Math.abs(expenses) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
 // ── notifications.js ──────────────────────────────────────────────────────────
 exports.getNotifications = async (req, res) => {
   try {

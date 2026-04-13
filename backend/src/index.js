@@ -139,6 +139,34 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE shifts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `).catch(e => console.warn('Migration 008 note:', e.message));
 
+  // Migration 009: GL account mappings for auto-journalizing
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS gl_sales_mappings (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id    UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      category_id      UUID REFERENCES categories(id) ON DELETE CASCADE,
+      revenue_account_id UUID REFERENCES gl_accounts(id) ON DELETE SET NULL,
+      UNIQUE(restaurant_id, category_id)
+    );
+    CREATE TABLE IF NOT EXISTS gl_payment_mappings (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id    UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      payment_method   TEXT NOT NULL,
+      account_id       UUID REFERENCES gl_accounts(id) ON DELETE SET NULL,
+      UNIQUE(restaurant_id, payment_method)
+    );
+    CREATE TABLE IF NOT EXISTS gl_inventory_mappings (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id    UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      inventory_item_id UUID REFERENCES inventory_items(id) ON DELETE CASCADE,
+      asset_account_id  UUID REFERENCES gl_accounts(id) ON DELETE SET NULL,
+      expense_account_id UUID REFERENCES gl_accounts(id) ON DELETE SET NULL,
+      UNIQUE(restaurant_id, inventory_item_id)
+    );
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS gl_entry_id UUID REFERENCES journal_entries(id) ON DELETE SET NULL;
+    ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS gl_entry_id UUID REFERENCES journal_entries(id) ON DELETE SET NULL;
+  `).catch(e => console.warn('Migration 009 note:', e.message));
+
   server.listen(PORT, () => {
     console.log(`✓ RestaurantOS API running on http://localhost:${PORT}`);
     console.log(`✓ WebSocket ready`);

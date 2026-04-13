@@ -32,6 +32,8 @@ const NAV = [
   { to: '/reports',             icon: '📈', label: 'Reports',              perm: 'pos' },
   { to: '/shift-sales-report',  icon: '🕐', label: 'Shift Sales Report',   perm: 'pos' },
   { to: '/ledger',      icon: '📊', label: 'General Ledger',   perm: 'gl' },
+  { to: '/gl-setup',   icon: '🔗', label: 'GL Setup',          perm: 'gl' },
+  { to: '/gl-reports', icon: '📋', label: 'GL Reports',         perm: 'gl' },
   { to: '/alerts',      icon: '🔔', label: 'Alerts',           perm: null },
   { to: '/admin',       icon: '🏢', label: 'Admin Panel',      superAdmin: true },
   { to: '/system',      icon: '🖥',  label: 'System',           perm: 'settings' },

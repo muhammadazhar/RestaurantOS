@@ -1,5 +1,72 @@
 const db = require('../config/db');
 
+// ─── Auto-journalize an inventory transaction ──────────────────────────────────
+async function autoJournalizeInventory(restaurantId, txn, item) {
+  if (!txn.total_cost || Number(txn.total_cost) <= 0) return;
+
+  // Look up GL mapping for this item
+  const mapRes = await db.query(
+    `SELECT asset_account_id, expense_account_id
+     FROM gl_inventory_mappings WHERE restaurant_id=$1 AND inventory_item_id=$2`,
+    [restaurantId, item.id]
+  );
+  if (!mapRes.rows.length) return; // no mapping configured, skip
+  const { asset_account_id, expense_account_id } = mapRes.rows[0];
+
+  // Get a default cash account for purchasing
+  const cashRes = await db.query(
+    `SELECT account_id FROM gl_payment_mappings WHERE restaurant_id=$1 AND payment_method='cash'`,
+    [restaurantId]
+  );
+  const cashAccountId = cashRes.rows[0]?.account_id;
+
+  const amount = Number(txn.total_cost);
+  const type   = txn.type;
+  let debitAccId, creditAccId, desc;
+
+  if (type === 'purchase' || type === 'adjustment_in') {
+    // Dr: Inventory Asset  |  Cr: Cash/AP
+    if (!asset_account_id || !cashAccountId) return;
+    debitAccId  = asset_account_id;
+    creditAccId = cashAccountId;
+    desc = `Inventory Purchase — ${item.name}`;
+  } else if (type === 'usage' || type === 'waste') {
+    // Dr: COGS/Expense  |  Cr: Inventory Asset
+    if (!expense_account_id || !asset_account_id) return;
+    debitAccId  = expense_account_id;
+    creditAccId = asset_account_id;
+    desc = `Inventory ${type === 'waste' ? 'Waste' : 'Usage'} — ${item.name}`;
+  } else {
+    return; // adjustment_out / adjustment — no auto-journal
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const entry = await client.query(
+      `INSERT INTO journal_entries(restaurant_id, description, entry_date, reference, created_by)
+       VALUES($1,$2,NOW(),$3,NULL) RETURNING id`,
+      [restaurantId, desc, txn.reference || null]
+    );
+    const entryId = entry.rows[0].id;
+    await client.query(
+      `INSERT INTO journal_lines(entry_id, account_id, debit, credit) VALUES($1,$2,$3,0)`,
+      [entryId, debitAccId, amount]
+    );
+    await client.query(
+      `INSERT INTO journal_lines(entry_id, account_id, debit, credit) VALUES($1,$2,0,$3)`,
+      [entryId, creditAccId, amount]
+    );
+    await client.query(
+      `UPDATE inventory_transactions SET gl_entry_id=$1 WHERE id=$2`, [entryId, txn.id]
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally { client.release(); }
+}
+
 // ─── GET all items ─────────────────────────────────────────────────────────────
 exports.getInventory = async (req, res) => {
   try {
@@ -118,14 +185,22 @@ exports.updateStock = async (req, res) => {
 
     const totalCost = cost_per_unit ? parseFloat(cost_per_unit) * qty : null;
 
-    await client.query(
+    const txnRes = await client.query(
       `INSERT INTO inventory_transactions(restaurant_id,inventory_item_id,employee_id,type,quantity,cost_per_unit,total_cost,notes,reference)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [restaurantId, id, employeeId||null, type, qty,
        cost_per_unit||null, totalCost, notes||null, reference||null]
     );
 
     await client.query('COMMIT');
+
+    // Auto-journalize after commit (non-blocking)
+    try {
+      await autoJournalizeInventory(restaurantId, txnRes.rows[0], item.rows[0]);
+    } catch (glErr) {
+      console.warn('GL inventory auto-journal skipped:', glErr.message);
+    }
+
     res.json(updated.rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');

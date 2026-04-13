@@ -88,10 +88,16 @@ router.patch('/shifts/:id/force-close',  requirePermission('employees'), ctrl.fo
 router.delete('/shifts/:id',             requirePermission('employees'), ctrl.deleteShift);
 
 // ── General Ledger ────────────────────────────────────────────────────────────
-router.get('/gl/accounts',         requirePermission('gl'), ctrl.getAccounts);
-router.post('/gl/accounts',        requirePermission('gl'), ctrl.createGLAccount);
-router.get('/gl/entries',          requirePermission('gl'), ctrl.getJournalEntries);
-router.post('/gl/entries',         requirePermission('gl'), ctrl.createJournalEntry);
+router.get('/gl/accounts',                requirePermission('gl'), ctrl.getAccounts);
+router.post('/gl/accounts',               requirePermission('gl'), ctrl.createGLAccount);
+router.get('/gl/entries',                 requirePermission('gl'), ctrl.getJournalEntries);
+router.post('/gl/entries',                requirePermission('gl'), ctrl.createJournalEntry);
+router.get('/gl/mappings/sales',          requirePermission('gl'), ctrl.getSalesMappings);
+router.post('/gl/mappings/sales',         requirePermission('gl'), ctrl.saveSalesMappings);
+router.get('/gl/mappings/inventory',      requirePermission('gl'), ctrl.getInventoryMappings);
+router.post('/gl/mappings/inventory',     requirePermission('gl'), ctrl.saveInventoryMappings);
+router.get('/gl/reports/trial-balance',   requirePermission('gl'), ctrl.getTrialBalance);
+router.get('/gl/reports/balance-sheet',   requirePermission('gl'), ctrl.getBalanceSheet);
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 router.get('/notifications',         ctrl.getNotifications);
