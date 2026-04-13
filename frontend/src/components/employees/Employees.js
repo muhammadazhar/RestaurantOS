@@ -554,7 +554,7 @@ function ShiftsTab({ employees }) {
 
   const handleForceClose = async (id) => {
     try { await forceCloseShift(id); toast.success('Shift closed & employee clocked out'); load(); }
-    catch { toast.error('Force close failed'); }
+    catch (e) { toast.error(e.response?.data?.error || 'Force close failed'); }
   };
 
   const handleAutoCloseAll = async () => {

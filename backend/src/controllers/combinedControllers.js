@@ -975,16 +975,25 @@ exports.createOvertimeAlert = async (req, res) => {
 
 /** Shared helper: close one shift and auto clock-out if the employee is still clocked in */
 async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = null) {
+  // Normalise shift.date — pg returns DATE as string 'YYYY-MM-DD'; fall back to today
+  const today = new Date().toISOString().slice(0, 10);
+  const shiftDateStr = shift.date
+    ? (shift.date instanceof Date ? shift.date.toISOString().slice(0, 10) : String(shift.date).slice(0, 10))
+    : today;
+
   // end_time is stored as HH:MM:SS by PostgreSQL — use first 8 chars to avoid double-seconds
   const timeStr = (shift.end_time || '23:59:59').slice(0, 8);
-  const shiftEndTs = new Date(`${shift.date}T${timeStr}Z`);
-  const clockOutTs = clockOutAt || shiftEndTs;
+  const shiftEndTs = new Date(`${shiftDateStr}T${timeStr}`); // local time
+  const clockOutTs = clockOutAt || (isNaN(shiftEndTs.getTime()) ? new Date() : shiftEndTs);
 
   // Update shift status → completed
   await client.query(
-    `UPDATE shifts SET status='completed' WHERE id=$1 AND restaurant_id=$2`,
+    `UPDATE shifts SET status='completed', updated_at=NOW() WHERE id=$1 AND restaurant_id=$2`,
     [shift.id, restaurantId]
   );
+
+  // Skip attendance auto-close if no employee is linked to this shift
+  if (!shift.employee_id) return;
 
   // Check for an open clock-in (no matching clock-out) within last 36h
   const openLog = await client.query(
@@ -1001,11 +1010,13 @@ async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = n
   );
 
   if (openLog.rows.length) {
+    // Use the date from the open clock-in record as attendance_date (most reliable)
+    const clockInDate = new Date(openLog.rows[0].punched_at).toISOString().slice(0, 10);
     await client.query(
       `INSERT INTO attendance_logs(restaurant_id, employee_id, shift_id, log_type,
          punched_at, attendance_date, source, notes, created_by)
        VALUES($1,$2,$3,'clock_out',$4,$5,'manual','Auto clock-out at shift end',$6)`,
-      [restaurantId, shift.employee_id, shift.id, clockOutTs, shift.date, closedBy]
+      [restaurantId, shift.employee_id, shift.id, clockOutTs, clockInDate, closedBy || null]
     );
   }
 }
@@ -1061,8 +1072,8 @@ exports.forceCloseShift = async (req, res) => {
     res.json({ success: true, shift_id: id });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[forceCloseShift]', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Server error' });
   } finally { client.release(); }
 };
 
