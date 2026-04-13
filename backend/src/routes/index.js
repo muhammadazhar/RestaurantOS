@@ -107,6 +107,7 @@ router.get('/reports/sales',        requirePermission('pos'), orders.getSalesRep
 router.get('/reports/employees',    requirePermission('pos'), orders.getEmployeeReport);
 router.get('/reports/menu',         requirePermission('pos'), orders.getMenuReport);
 router.get('/reports/performance',  requirePermission('pos'), orders.getPerformanceMatrix);
+router.get('/reports/shift-sales',  requirePermission('pos'), orders.getShiftSalesReport);
 
 // ── Setup Wizard ─────────────────────────────────────────────────────────────
 router.get('/setup/status',    authenticate, ctrl.getSetupStatus);

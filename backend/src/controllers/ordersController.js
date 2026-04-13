@@ -645,3 +645,127 @@ exports.getMenuReport = async (req, res) => {
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
+
+// ── GET /api/reports/shift-sales ───────────────────────────────────────────────
+exports.getShiftSalesReport = async (req, res) => {
+  try {
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
+    const { from, to, employee_id, shift_name, order_type } = req.query;
+
+    const now = new Date();
+    const dateFrom = from || new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const dateTo   = to   || now.toISOString().slice(0, 10);
+    const resolvedEmpId = isManager ? (employee_id || null) : userId;
+
+    // Build parameterised conditions
+    const params = [restaurantId, dateFrom, dateTo];
+    let idx = 4;
+    const shiftConds = [`s.restaurant_id = $1`, `s.date >= $2::date`, `s.date <= $3::date`];
+    const orderJoinConds = [
+      `o.employee_id = s.employee_id`,
+      `o.restaurant_id = s.restaurant_id`,
+      `DATE(o.created_at) = s.date`
+    ];
+
+    if (resolvedEmpId) {
+      shiftConds.push(`s.employee_id = $${idx++}::uuid`);
+      params.push(resolvedEmpId);
+    }
+    if (shift_name) {
+      shiftConds.push(`s.shift_name = $${idx++}`);
+      params.push(shift_name);
+    }
+    if (order_type) {
+      orderJoinConds.push(`o.order_type = $${idx++}`);
+      params.push(order_type);
+    }
+
+    const [shiftsRes, employeesRes, shiftNamesRes] = await Promise.all([
+      db.query(`
+        SELECT
+          s.id                                    AS shift_id,
+          s.shift_name,
+          s.date                                  AS shift_date,
+          TO_CHAR(s.start_time, 'HH24:MI')        AS start_time,
+          TO_CHAR(s.end_time,   'HH24:MI')        AS end_time,
+          s.status                                AS shift_status,
+          e.id                                    AS employee_id,
+          e.full_name                             AS employee_name,
+          r.name                                  AS role_name,
+
+          COUNT(o.id)       FILTER (WHERE o.status NOT IN ('cancelled'))                         AS order_count,
+          COALESCE(SUM(o.total_amount)    FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS revenue,
+          COALESCE(SUM(o.subtotal)        FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS subtotal,
+          COALESCE(SUM(o.tax_amount)      FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS tax,
+          COALESCE(SUM(o.discount_amount) FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS discount,
+          COALESCE(AVG(o.total_amount)    FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS avg_order_value,
+          COALESCE(SUM(o.guest_count)     FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS guest_count,
+          COUNT(o.id)       FILTER (WHERE o.status = 'cancelled')                                AS cancelled_count,
+
+          COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'dine_in')   AS dine_in_orders,
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'dine_in'),  0) AS dine_in_revenue,
+          COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'takeaway')  AS takeaway_orders,
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'takeaway'), 0) AS takeaway_revenue,
+          COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'delivery')  AS delivery_orders,
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'delivery'), 0) AS delivery_revenue,
+          COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'online')    AS online_orders,
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'online'),   0) AS online_revenue,
+
+          COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method = 'cash')  AS cash_orders,
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method = 'cash'),  0) AS cash_revenue,
+          COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method = 'card')  AS card_orders,
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method = 'card'),  0) AS card_revenue,
+          COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method NOT IN ('cash','card') AND o.payment_method IS NOT NULL) AS other_pay_orders,
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method NOT IN ('cash','card') AND o.payment_method IS NOT NULL), 0) AS other_pay_revenue
+        FROM shifts s
+        LEFT JOIN employees e ON e.id = s.employee_id AND e.restaurant_id = s.restaurant_id
+        LEFT JOIN roles r ON r.id = e.role_id
+        LEFT JOIN orders o ON ${orderJoinConds.join(' AND ')}
+        WHERE ${shiftConds.join(' AND ')}
+        GROUP BY s.id, s.shift_name, s.date, s.start_time, s.end_time, s.status,
+                 e.id, e.full_name, r.name
+        ORDER BY s.date DESC, s.start_time, e.full_name
+      `, params),
+
+      db.query(`
+        SELECT DISTINCT e.id, e.full_name, r.name AS role_name
+        FROM shifts s
+        JOIN employees e ON e.id = s.employee_id AND e.restaurant_id = $1
+        LEFT JOIN roles r ON r.id = e.role_id
+        WHERE s.restaurant_id = $1 AND s.date >= $2::date AND s.date <= $3::date
+        ORDER BY e.full_name
+      `, [restaurantId, dateFrom, dateTo]),
+
+      db.query(`
+        SELECT DISTINCT shift_name FROM shifts
+        WHERE restaurant_id = $1 AND shift_name IS NOT NULL
+          AND date >= $2::date AND date <= $3::date
+        ORDER BY shift_name
+      `, [restaurantId, dateFrom, dateTo]),
+    ]);
+
+    const shifts = shiftsRes.rows;
+    const summary = shifts.reduce(
+      (acc, s) => {
+        acc.total_shifts++;
+        acc.total_orders  += Number(s.order_count || 0);
+        acc.total_revenue += Number(s.revenue     || 0);
+        acc.total_guests  += Number(s.guest_count || 0);
+        acc.cancelled     += Number(s.cancelled_count || 0);
+        return acc;
+      },
+      { total_shifts: 0, total_orders: 0, total_revenue: 0, total_guests: 0, cancelled: 0 }
+    );
+    summary.avg_orders_per_shift  = summary.total_shifts > 0 ? summary.total_orders  / summary.total_shifts : 0;
+    summary.avg_revenue_per_shift = summary.total_shifts > 0 ? summary.total_revenue / summary.total_shifts : 0;
+
+    res.json({
+      dateFrom, dateTo,
+      summary,
+      shifts,
+      employees:  employeesRes.rows,
+      shiftNames: shiftNamesRes.rows.map(r => r.shift_name).filter(Boolean),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: err.message || 'Server error' }); }
+};

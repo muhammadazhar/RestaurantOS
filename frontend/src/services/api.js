@@ -134,6 +134,7 @@ export const getSalesReport       = (p) => API.get('/reports/sales',       { par
 export const getEmployeeReport    = (p) => API.get('/reports/employees',   { params: p });
 export const getMenuReport        = (p) => API.get('/reports/menu',        { params: p });
 export const getPerformanceReport = (p) => API.get('/reports/performance', { params: p });
+export const getShiftSalesReport  = (p) => API.get('/reports/shift-sales', { params: p });
 
 // ── Setup Wizard ─────────────────────────────────────────────────────────────
 export const getSetupStatus  = ()     => API.get('/setup/status');

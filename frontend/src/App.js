@@ -21,6 +21,7 @@ import MenuManagement  from './components/menu/MenuManagement';
 import Orders          from './components/orders/Orders';
 import Reservations    from './components/reservations/Reservations';
 import Reports         from './components/reports/Reports';
+import ShiftSalesReport from './components/reports/ShiftSalesReport';
 import Register        from './components/onboarding/Register';
 import SetupWizard     from './components/onboarding/SetupWizard';
 import SystemPanel     from './components/system/SystemPanel';
@@ -79,7 +80,8 @@ function AppRoutes() {
       <Route path="/menu-mgmt"    element={<PrivateRoute><Layout><MenuManagement /></Layout></PrivateRoute>} />
       <Route path="/orders"       element={<PrivateRoute><Layout><Orders /></Layout></PrivateRoute>} />
       <Route path="/reservations" element={<PrivateRoute><Layout><Reservations /></Layout></PrivateRoute>} />
-      <Route path="/reports"   element={<PrivateRoute><Layout><Reports /></Layout></PrivateRoute>} />
+      <Route path="/reports"         element={<PrivateRoute><Layout><Reports /></Layout></PrivateRoute>} />
+      <Route path="/shift-sales-report" element={<PrivateRoute><Layout><ShiftSalesReport /></Layout></PrivateRoute>} />
       <Route path="/settings"  element={<PrivateRoute><Layout><Settings /></Layout></PrivateRoute>} />
       <Route path="/system"    element={<PrivateRoute><Layout><SystemPanel /></Layout></PrivateRoute>} />
 
