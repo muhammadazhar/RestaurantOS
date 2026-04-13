@@ -9,35 +9,79 @@ import toast from 'react-hot-toast';
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
   || (window.location.protocol + '//' + window.location.hostname + ':5000');
 
-const NAV = [
-  { to: '/dashboard',   icon: '⬛', label: 'Dashboard',        perm: 'dashboard' },
-  { to: '/pos',         icon: '📲', label: 'POS / Orders',     perm: 'pos' },
-  { to: '/kitchen',     icon: '👨‍🍳', label: 'Kitchen Display',  perm: 'kitchen' },
-  { to: '/orders',      icon: '📋', label: 'Order History',    perm: 'pos' },
-  { to: '/tables',      icon: '🪑', label: 'Tables',           perm: 'tables' },
-  { to: '/reservations',icon: '📅', label: 'Reservations',     perm: 'tables' },
-  { to: '/inventory',   icon: '📦', label: 'Inventory',        perm: 'inventory' },
-  { to: '/recipes',     icon: '📋', label: 'Recipes',          perm: 'recipes' },
-  { to: '/menu-mgmt',   icon: '🍽', label: 'Menu Management',  perm: 'settings' },
-  { to: '/employees',   icon: '👥', label: 'Employees',        perm: 'employees' },
-  { to: '/attendance',  icon: '🕐', label: 'Attendance',        perm: 'attendance' },
-  { to: '/my-shift', icon: '⏱', label: 'My Shift', perm: 'pos' },
-  { to: '/delivery',    icon: '🛵', label: 'Online Delivery',   perm: 'pos' },
-  // { to: '/phone-orders',icon: '📞', label: 'Phone Orders',      perm: 'pos' },  // hidden — integrated into POS Delivery
-  { to: '/rider',       icon: '🏍', label: 'My Deliveries',     perm: 'rider' },
-  { to: '/collections', icon: '💵', label: 'Collections',       perm: 'pos' },
-  { to: '/daily-audit', icon: '🗒', label: 'Daily Audit',       perm: 'pos' },
-  { to: '/incentives',    icon: '🏆', label: 'Rider Incentives',  perm: 'employees' },
-  { to: '/rider-reports',       icon: '📊', label: 'Rider Reports',        perm: 'pos' },
-  { to: '/reports',             icon: '📈', label: 'Reports',              perm: 'pos' },
-  { to: '/shift-sales-report',  icon: '🕐', label: 'Shift Sales Report',   perm: 'pos' },
-  { to: '/ledger',      icon: '📊', label: 'General Ledger',   perm: 'gl' },
-  { to: '/gl-setup',   icon: '🔗', label: 'GL Setup',          perm: 'gl' },
-  { to: '/gl-reports', icon: '📋', label: 'GL Reports',         perm: 'gl' },
-  { to: '/alerts',      icon: '🔔', label: 'Alerts',           perm: null },
-  { to: '/admin',       icon: '🏢', label: 'Admin Panel',      superAdmin: true },
-  { to: '/system',      icon: '🖥',  label: 'System',           perm: 'settings' },
-  { to: '/settings',    icon: '⚙️', label: 'Settings',         perm: 'settings' },
+const NAV_GROUPS = [
+  {
+    label: null, // no header for top-level
+    items: [
+      { to: '/dashboard', icon: '⬛', label: 'Dashboard', perm: 'dashboard' },
+    ],
+  },
+  {
+    label: 'POS / Orders',
+    items: [
+      { to: '/pos',      icon: '📲', label: 'POS / Orders',    perm: 'pos' },
+      { to: '/kitchen',  icon: '👨‍🍳', label: 'Kitchen Display', perm: 'kitchen' },
+      { to: '/orders',   icon: '🧾', label: 'Order History',   perm: 'pos' },
+      { to: '/my-shift', icon: '⏱',  label: 'My Shift',        perm: 'pos' },
+    ],
+  },
+  {
+    label: 'Tables',
+    items: [
+      { to: '/tables',        icon: '🪑', label: 'Tables',       perm: 'tables' },
+      { to: '/reservations',  icon: '📅', label: 'Reservations', perm: 'tables' },
+    ],
+  },
+  {
+    label: 'Inventory',
+    items: [
+      { to: '/inventory', icon: '📦', label: 'Inventory',       perm: 'inventory' },
+      { to: '/recipes',   icon: '📋', label: 'Recipes',         perm: 'recipes' },
+      { to: '/menu-mgmt', icon: '🍽',  label: 'Menu Management', perm: 'settings' },
+    ],
+  },
+  {
+    label: 'Staff',
+    items: [
+      { to: '/employees',  icon: '👥', label: 'Employees',  perm: 'employees' },
+      { to: '/attendance', icon: '🕐', label: 'Attendance', perm: 'attendance' },
+    ],
+  },
+  {
+    label: 'Rider Delivery',
+    items: [
+      { to: '/delivery',      icon: '🛵', label: 'Online Delivery',  perm: 'pos' },
+      { to: '/rider',         icon: '🏍', label: 'My Deliveries',    perm: 'rider' },
+      { to: '/collections',   icon: '💵', label: 'Collections',      perm: 'pos' },
+      { to: '/daily-audit',   icon: '🗒',  label: 'Daily Audit',      perm: 'pos' },
+      { to: '/incentives',    icon: '🏆', label: 'Rider Incentives', perm: 'employees' },
+      { to: '/rider-reports', icon: '📈', label: 'Rider Reports',    perm: 'pos' },
+    ],
+  },
+  {
+    label: 'Reports',
+    items: [
+      { to: '/reports',            icon: '📊', label: 'Reports',            perm: 'pos' },
+      { to: '/shift-sales-report', icon: '🕑', label: 'Shift Sales Report', perm: 'pos' },
+    ],
+  },
+  {
+    label: 'General Ledger',
+    items: [
+      { to: '/ledger',     icon: '📒', label: 'General Ledger', perm: 'gl' },
+      { to: '/gl-setup',   icon: '🔗', label: 'GL Setup',       perm: 'gl' },
+      { to: '/gl-reports', icon: '📋', label: 'GL Reports',     perm: 'gl' },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { to: '/alerts',   icon: '🔔', label: 'Alerts',      perm: null },
+      { to: '/admin',    icon: '🏢', label: 'Admin Panel', superAdmin: true },
+      { to: '/system',   icon: '🖥',  label: 'System',      perm: 'settings' },
+      { to: '/settings', icon: '⚙️', label: 'Settings',    perm: 'settings' },
+    ],
+  },
 ];
 
 export default function Layout({ children }) {
@@ -58,12 +102,16 @@ export default function Layout({ children }) {
 
   const handleLogout = async () => { await logout(); navigate('/login'); };
 
-  const visibleNav = NAV.filter(item => {
+  const canSee = (item) => {
     if (item.superAdmin) return user?.isSuperAdmin;
     if (!item.perm) return true;
     if (hasPermission('settings')) return true;
     return hasPermission(item.perm);
-  });
+  };
+
+  const visibleGroups = NAV_GROUPS
+    .map(g => ({ ...g, items: g.items.filter(canSee) }))
+    .filter(g => g.items.length > 0);
 
   const W = collapsed ? 64 : 220;
   const isLight = mode === 'light';
@@ -123,21 +171,41 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '8px 10px', overflowY: 'auto' }}>
-          {visibleNav.map(item => (
-            <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: collapsed ? '10px 12px' : '9px 12px',
-              borderRadius: 10, marginBottom: 2,
-              background: isActive ? T.accentGlow : 'transparent',
-              color: isActive ? T.accent : T.textMid,
-              fontSize: 13, fontWeight: isActive ? 700 : 500,
-              border: `1px solid ${isActive ? T.accent + '55' : 'transparent'}`,
-              textDecoration: 'none', whiteSpace: 'nowrap',
-              transition: 'all 0.15s',
-            })}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-              {!collapsed && item.label}
-            </NavLink>
+          {visibleGroups.map((group, gi) => (
+            <div key={gi} style={{ marginBottom: 4 }}>
+              {/* Group label — only when expanded and label exists */}
+              {!collapsed && group.label && (
+                <div style={{
+                  fontSize: 9, fontWeight: 700, color: T.textDim,
+                  letterSpacing: 1.2, textTransform: 'uppercase',
+                  padding: gi === 0 ? '4px 8px 4px' : '10px 8px 4px',
+                  userSelect: 'none',
+                }}>
+                  {group.label}
+                </div>
+              )}
+              {/* Collapsed divider between groups */}
+              {collapsed && gi > 0 && (
+                <div style={{ height: 1, background: T.border, margin: '4px 6px 4px' }} />
+              )}
+              {group.items.map(item => (
+                <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: collapsed ? '10px 12px' : '8px 12px',
+                  borderRadius: 10, marginBottom: 2,
+                  background: isActive ? T.accentGlow : 'transparent',
+                  color: isActive ? T.accent : T.textMid,
+                  fontSize: 13, fontWeight: isActive ? 700 : 500,
+                  border: `1px solid ${isActive ? T.accent + '55' : 'transparent'}`,
+                  textDecoration: 'none', whiteSpace: 'nowrap',
+                  transition: 'all 0.15s',
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                })}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
+                  {!collapsed && item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
