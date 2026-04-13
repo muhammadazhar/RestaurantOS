@@ -139,6 +139,68 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE shifts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `).catch(e => console.warn('Migration 008 note:', e.message));
 
+  // Migration 010: Module-based licensing system
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS modules (
+      key         TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      description TEXT
+    );
+    INSERT INTO modules(key, name, description) VALUES
+      ('base',      'RestaurantOS Base',   'Core POS, orders, kitchen display'),
+      ('tables',    'Table Management',    'Tables and reservations'),
+      ('inventory', 'Inventory & Recipes', 'Stock management, recipes, menu management'),
+      ('staff',     'Staff Management',    'Employees, attendance, shifts'),
+      ('rider',     'Rider Delivery',      'Rider management, delivery tracking, incentives'),
+      ('gl',        'General Ledger',      'Double-entry accounting, GL reports'),
+      ('reports',   'Advanced Reports',    'Sales reports, shift reports, analytics')
+    ON CONFLICT (key) DO NOTHING;
+
+    CREATE TABLE IF NOT EXISTS module_pricing (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      module_key   TEXT NOT NULL REFERENCES modules(key),
+      plan_type    TEXT NOT NULL CHECK (plan_type IN ('trial','monthly','quarterly','half_yearly','yearly')),
+      price        NUMERIC(10,2) NOT NULL DEFAULT 0,
+      duration_days INTEGER NOT NULL,
+      is_active    BOOLEAN DEFAULT TRUE,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(module_key, plan_type)
+    );
+    INSERT INTO module_pricing(module_key, plan_type, price, duration_days) VALUES
+      ('base','trial',0,14),      ('base','monthly',2999,30),   ('base','quarterly',7999,90),
+      ('base','half_yearly',14999,180),('base','yearly',25999,365),
+      ('tables','trial',0,14),    ('tables','monthly',999,30),  ('tables','quarterly',2499,90),
+      ('tables','half_yearly',4499,180),('tables','yearly',7999,365),
+      ('inventory','trial',0,14), ('inventory','monthly',1499,30),('inventory','quarterly',3999,90),
+      ('inventory','half_yearly',7499,180),('inventory','yearly',12999,365),
+      ('staff','trial',0,14),     ('staff','monthly',999,30),   ('staff','quarterly',2499,90),
+      ('staff','half_yearly',4499,180),('staff','yearly',7999,365),
+      ('rider','trial',0,14),     ('rider','monthly',1999,30),  ('rider','quarterly',5499,90),
+      ('rider','half_yearly',9999,180),('rider','yearly',17999,365),
+      ('gl','trial',0,14),        ('gl','monthly',1499,30),     ('gl','quarterly',3999,90),
+      ('gl','half_yearly',7499,180),('gl','yearly',12999,365),
+      ('reports','trial',0,14),   ('reports','monthly',999,30), ('reports','quarterly',2499,90),
+      ('reports','half_yearly',4499,180),('reports','yearly',7999,365)
+    ON CONFLICT (module_key, plan_type) DO NOTHING;
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      module_key    TEXT NOT NULL REFERENCES modules(key),
+      plan_type     TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'pending_payment'
+                    CHECK (status IN ('trial','active','pending_payment','expired','cancelled','rejected')),
+      starts_at     TIMESTAMPTZ,
+      expires_at    TIMESTAMPTZ,
+      price         NUMERIC(10,2),
+      payment_notes TEXT,
+      requested_at  TIMESTAMPTZ DEFAULT NOW(),
+      approved_at   TIMESTAMPTZ,
+      approved_by   UUID,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.warn('Migration 010 note:', e.message));
+
   // Migration 009: GL account mappings for auto-journalizing
   await db.query(`
     CREATE TABLE IF NOT EXISTS gl_sales_mappings (

@@ -52,8 +52,26 @@ export const AuthProvider = ({ children }) => {
     return (user.permissions || []).includes(permission);
   };
 
+  const hasModule = (moduleKey) => {
+    if (!user) return false;
+    if (user.isSuperAdmin) return true;
+    return (user.modules || []).includes(moduleKey);
+  };
+
+  // Refresh active modules from server (call after subscription change)
+  const refreshModules = async () => {
+    if (!user || user.isSuperAdmin) return;
+    try {
+      const { default: API } = await import('../services/api');
+      const { data } = await API.get('/subscriptions/modules');
+      const updated = { ...user, modules: data.modules };
+      localStorage.setItem('user', JSON.stringify(updated));
+      setUser(updated);
+    } catch {}
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, superLogin, logout, loginFromToken, hasPermission }}>
+    <AuthContext.Provider value={{ user, loading, login, superLogin, logout, loginFromToken, hasPermission, hasModule, refreshModules }}>
       {children}
     </AuthContext.Provider>
   );

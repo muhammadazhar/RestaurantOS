@@ -36,6 +36,9 @@ import CollectionScreen  from './components/rider/CollectionScreen';
 import DailyAudit        from './components/rider/DailyAudit';
 import IncentiveManagement from './components/rider/IncentiveManagement';
 import RiderReports        from './components/rider/RiderReports';
+import MySubscriptions      from './components/subscriptions/MySubscriptions';
+import ModulePricing        from './components/admin/ModulePricing';
+import SubscriptionManagement from './components/admin/SubscriptionManagement';
 
 function ThemedToaster() {
   const { theme: T } = useTheme();
@@ -96,6 +99,11 @@ function AppRoutes() {
       <Route path="/daily-audit"   element={<PrivateRoute><Layout><DailyAudit /></Layout></PrivateRoute>} />
       <Route path="/incentives"    element={<PrivateRoute><Layout><IncentiveManagement /></Layout></PrivateRoute>} />
       <Route path="/rider-reports" element={<PrivateRoute><Layout><RiderReports /></Layout></PrivateRoute>} />
+
+      {/* Subscriptions & Licensing */}
+      <Route path="/subscriptions"     element={<PrivateRoute><Layout><MySubscriptions /></Layout></PrivateRoute>} />
+      <Route path="/module-pricing"    element={<PrivateRoute><Layout><ModulePricing /></Layout></PrivateRoute>} />
+      <Route path="/subscription-mgmt" element={<PrivateRoute><Layout><SubscriptionManagement /></Layout></PrivateRoute>} />
 
       <Route path="*"          element={<Navigate to="/dashboard" replace />} />
     </Routes>

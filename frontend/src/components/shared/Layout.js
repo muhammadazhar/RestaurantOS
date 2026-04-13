@@ -5,6 +5,7 @@ import { useSocket } from '../../context/SocketContext';
 import { useTheme } from '../../context/ThemeContext';
 import { getRestaurantSettings } from '../../services/api';
 import toast from 'react-hot-toast';
+import LicenseGate from './LicenseGate';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
   || (window.location.protocol + '//' + window.location.hostname + ':5000');
@@ -12,12 +13,14 @@ const IMG_BASE = process.env.REACT_APP_SOCKET_URL
 const NAV_GROUPS = [
   {
     label: null, // no header for top-level
+    module: null,
     items: [
       { to: '/dashboard', icon: '⬛', label: 'Dashboard', perm: 'dashboard' },
     ],
   },
   {
     label: 'POS / Orders',
+    module: 'base',
     items: [
       { to: '/pos',      icon: '📲', label: 'POS / Orders',    perm: 'pos' },
       { to: '/kitchen',  icon: '👨‍🍳', label: 'Kitchen Display', perm: 'kitchen' },
@@ -27,6 +30,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'Tables',
+    module: 'tables',
     items: [
       { to: '/tables',        icon: '🪑', label: 'Tables',       perm: 'tables' },
       { to: '/reservations',  icon: '📅', label: 'Reservations', perm: 'tables' },
@@ -34,6 +38,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'Inventory',
+    module: 'inventory',
     items: [
       { to: '/inventory', icon: '📦', label: 'Inventory',       perm: 'inventory' },
       { to: '/recipes',   icon: '📋', label: 'Recipes',         perm: 'recipes' },
@@ -42,6 +47,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'Staff',
+    module: 'staff',
     items: [
       { to: '/employees',  icon: '👥', label: 'Employees',  perm: 'employees' },
       { to: '/attendance', icon: '🕐', label: 'Attendance', perm: 'attendance' },
@@ -49,6 +55,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'Rider Delivery',
+    module: 'rider',
     items: [
       { to: '/delivery',      icon: '🛵', label: 'Online Delivery',  perm: 'pos' },
       { to: '/rider',         icon: '🏍', label: 'My Deliveries',    perm: 'rider' },
@@ -60,6 +67,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'Reports',
+    module: 'reports',
     items: [
       { to: '/reports',            icon: '📊', label: 'Reports',            perm: 'pos' },
       { to: '/shift-sales-report', icon: '🕑', label: 'Shift Sales Report', perm: 'pos' },
@@ -67,6 +75,7 @@ const NAV_GROUPS = [
   },
   {
     label: 'General Ledger',
+    module: 'gl',
     items: [
       { to: '/ledger',     icon: '📒', label: 'General Ledger', perm: 'gl' },
       { to: '/gl-setup',   icon: '🔗', label: 'GL Setup',       perm: 'gl' },
@@ -75,22 +84,27 @@ const NAV_GROUPS = [
   },
   {
     label: 'System',
+    module: null,
     items: [
-      { to: '/alerts',   icon: '🔔', label: 'Alerts',      perm: null },
-      { to: '/admin',    icon: '🏢', label: 'Admin Panel', superAdmin: true },
-      { to: '/system',   icon: '🖥',  label: 'System',      perm: 'settings' },
-      { to: '/settings', icon: '⚙️', label: 'Settings',    perm: 'settings' },
+      { to: '/subscriptions', icon: '🏷️', label: 'My Subscriptions', perm: null },
+      { to: '/alerts',        icon: '🔔', label: 'Alerts',            perm: null },
+      { to: '/admin',         icon: '🏢', label: 'Admin Panel',       superAdmin: true },
+      { to: '/module-pricing',      icon: '💰', label: 'Module Pricing',   superAdmin: true },
+      { to: '/subscription-mgmt',   icon: '📋', label: 'Subscriptions',    superAdmin: true },
+      { to: '/system',        icon: '🖥',  label: 'System',            perm: 'settings' },
+      { to: '/settings',      icon: '⚙️', label: 'Settings',          perm: 'settings' },
     ],
   },
 ];
 
 export default function Layout({ children }) {
-  const { user, logout, hasPermission } = useAuth();
+  const { user, logout, hasPermission, hasModule } = useAuth();
   const { connected }                   = useSocket();
   const { mode, theme: T, toggle }      = useTheme();
   const navigate                        = useNavigate();
   const [collapsed, setCollapsed]       = useState(false);
   const [logoUrl,   setLogoUrl]         = useState(null);
+  const [basePricing, setBasePricing]   = useState([]);
 
   useEffect(() => {
     if (!user?.isSuperAdmin && hasPermission('settings')) {
@@ -99,6 +113,16 @@ export default function Layout({ children }) {
       }).catch(() => {});
     }
   }, [user]);
+
+  // Load pricing for LicenseGate if base is expired
+  const baseExpired = !user?.isSuperAdmin && user && !hasModule('base');
+  useEffect(() => {
+    if (baseExpired) {
+      import('../../services/api').then(({ getMySubscriptions }) =>
+        getMySubscriptions().then(r => setBasePricing(r.data.pricing || [])).catch(() => {})
+      );
+    }
+  }, [baseExpired]);
 
   const handleLogout = async () => { await logout(); navigate('/login'); };
 
@@ -109,7 +133,14 @@ export default function Layout({ children }) {
     return hasPermission(item.perm);
   };
 
+  const canSeeGroup = (group) => {
+    if (!group.module) return true;           // no module restriction
+    if (user?.isSuperAdmin) return true;
+    return hasModule(group.module);
+  };
+
   const visibleGroups = NAV_GROUPS
+    .filter(canSeeGroup)
     .map(g => ({ ...g, items: g.items.filter(canSee) }))
     .filter(g => g.items.length > 0);
 
@@ -121,6 +152,10 @@ export default function Layout({ children }) {
 
   const W = collapsed ? 64 : 220;
   const isLight = mode === 'light';
+
+  if (baseExpired) {
+    return <LicenseGate moduleKey="base" moduleName="RestaurantOS Base" pricing={basePricing} />;
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: T.bg, fontFamily: "'Inter', sans-serif", transition: 'background 0.3s' }}>

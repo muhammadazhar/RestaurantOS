@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { getActiveModuleKeys } = require('./subscriptionController');
 
 const signToken = (payload, secret, expiresIn) =>
   jwt.sign(payload, secret, { expiresIn });
@@ -34,6 +35,8 @@ exports.login = async (req, res) => {
     if (emp.restaurant_status === 'suspended')
       return res.status(403).json({ error: 'Restaurant account suspended' });
 
+    const modules = await getActiveModuleKeys(emp.restaurant_id).catch(() => []);
+
     const payload = {
       id: emp.id,
       restaurantId: emp.restaurant_id,
@@ -41,6 +44,7 @@ exports.login = async (req, res) => {
       restaurantSlug: emp.slug,
       role: emp.role_name,
       permissions: emp.permissions,
+      modules,
       isSuperAdmin: false,
     };
 
@@ -59,6 +63,7 @@ exports.login = async (req, res) => {
       user: {
         id: emp.id, name: emp.full_name, email: emp.email,
         role: emp.role_name, permissions: emp.permissions,
+        modules,
         restaurantId: emp.restaurant_id, restaurantName: emp.restaurant_name,
       }
     });
@@ -111,7 +116,8 @@ exports.refresh = async (req, res) => {
     if (!emp.rows.length) return res.status(401).json({ error: 'User not found' });
 
     const e = emp.rows[0];
-    const payload = { id: e.id, restaurantId: e.restaurant_id, role: e.role_name, permissions: e.permissions };
+    const modules = await getActiveModuleKeys(e.restaurant_id).catch(() => []);
+    const payload = { id: e.id, restaurantId: e.restaurant_id, role: e.role_name, permissions: e.permissions, modules };
     const accessToken = signToken(payload, process.env.JWT_SECRET, process.env.JWT_EXPIRES_IN);
     res.json({ accessToken });
   } catch {
@@ -224,6 +230,14 @@ exports.register = async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Auto-activate base trial on registration
+    await client.query(
+      `INSERT INTO subscriptions(restaurant_id, module_key, plan_type, status, starts_at, expires_at, price)
+       SELECT $1, 'base', 'trial', 'trial', NOW(), NOW() + INTERVAL '14 days', 0
+       WHERE EXISTS (SELECT 1 FROM modules WHERE key='base')`,
+      [restaurant.id]
+    ).catch(() => {});
+
     // Auto-login: issue tokens
     const payload = {
       id: empRes.rows[0].id,
@@ -232,6 +246,7 @@ exports.register = async (req, res) => {
       restaurantSlug: restaurant.slug,
       role: 'Manager',
       permissions: JSON.parse(roleNames[0][1]),
+      modules: ['base'],
       isSuperAdmin: false,
     };
     const accessToken = signToken(payload, process.env.JWT_SECRET, process.env.JWT_EXPIRES_IN);
@@ -250,6 +265,7 @@ exports.register = async (req, res) => {
         email,
         role: 'Manager',
         permissions: JSON.parse(roleNames[0][1]),
+        modules: ['base'],
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         restaurantSlug: restaurant.slug,

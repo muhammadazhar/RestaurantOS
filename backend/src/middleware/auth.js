@@ -9,11 +9,21 @@ const authenticate = async (req, res, next) => {
 
     const token = header.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;          // { id, restaurantId, role, permissions }
+    req.user = decoded;          // { id, restaurantId, role, permissions, modules }
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+};
+
+// requireModule: checks that the restaurant has an active subscription for the given module key
+const requireModule = (moduleKey) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'Unauthenticated' });
+  if (req.user.isSuperAdmin) return next();
+  const modules = req.user.modules || [];
+  if (!modules.includes(moduleKey))
+    return res.status(403).json({ error: `Module '${moduleKey}' not subscribed` });
+  next();
 };
 
 // requirePermission accepts a single string or array of strings (OR logic)
@@ -33,4 +43,4 @@ const requireSuperAdmin = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, requirePermission, requireSuperAdmin };
+module.exports = { authenticate, requirePermission, requireSuperAdmin, requireModule };

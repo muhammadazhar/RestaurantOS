@@ -228,4 +228,14 @@ export const createBackup     = ()         => API.post('/system/backup');
 export const downloadBackup   = (filename) => API.get(`/system/backups/${encodeURIComponent(filename)}`, { responseType: 'blob' });
 export const deleteBackup     = (filename) => API.delete(`/system/backups/${encodeURIComponent(filename)}`);
 
+// ── Subscriptions / Licensing ─────────────────────────────────────────────────
+export const getModules              = ()     => API.get('/modules');
+export const getMySubscriptions      = ()     => API.get('/subscriptions/my');
+export const requestSubscription     = (data) => API.post('/subscriptions/request', data);
+export const getModulePricing        = ()     => API.get('/admin/module-pricing');
+export const saveModulePricing       = (data) => API.post('/admin/module-pricing', data);
+export const getAdminSubscriptions   = (p)    => API.get('/admin/subscriptions', { params: p });
+export const approveSubscription     = (id, data) => API.patch(`/admin/subscriptions/${id}/approve`, data);
+export const rejectSubscription      = (id, data) => API.patch(`/admin/subscriptions/${id}/reject`, data);
+
 export default API;

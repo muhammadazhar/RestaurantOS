@@ -3,14 +3,15 @@ const router  = express.Router();
 
 const { authenticate, requirePermission, requireSuperAdmin } = require('../middleware/auth');
 const upload = require('../middleware/upload');  // multer: saves to /uploads/
-const auth       = require('../controllers/authController');
-const orders     = require('../controllers/ordersController');
-const inventory  = require('../controllers/inventoryController');
-const ctrl       = require('../controllers/combinedControllers');
-const system     = require('../controllers/systemController');
-const attendance = require('../controllers/attendanceController');
-const delivery   = require('../controllers/deliveryController');
-const rider      = require('../controllers/riderController');
+const auth         = require('../controllers/authController');
+const orders       = require('../controllers/ordersController');
+const inventory    = require('../controllers/inventoryController');
+const ctrl         = require('../controllers/combinedControllers');
+const system       = require('../controllers/systemController');
+const attendance   = require('../controllers/attendanceController');
+const delivery     = require('../controllers/deliveryController');
+const rider        = require('../controllers/riderController');
+const subscription = require('../controllers/subscriptionController');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.post('/auth/register',     auth.register);   // public self-registration
@@ -203,5 +204,16 @@ router.get('/rider/reports',                        requirePermission('pos'),   
 router.get('/admin/restaurants',     requireSuperAdmin, ctrl.getAllRestaurants);
 router.post('/admin/restaurants',    requireSuperAdmin, ctrl.registerRestaurant);
 router.get('/admin/stats',           requireSuperAdmin, ctrl.getPlatformStats);
+
+// ── Modules & Subscriptions ───────────────────────────────────────────────────
+router.get('/modules',                               subscription.getModules);         // public
+router.get('/subscriptions/my',                      subscription.getMySubscriptions); // restaurant
+router.post('/subscriptions/request',                subscription.requestSubscription);// restaurant
+router.get('/subscriptions/modules',                 subscription.checkModuleAccess);  // restaurant
+router.get('/admin/module-pricing',    requireSuperAdmin, subscription.getModulePricing);
+router.post('/admin/module-pricing',   requireSuperAdmin, subscription.saveModulePricing);
+router.get('/admin/subscriptions',     requireSuperAdmin, subscription.getAllSubscriptions);
+router.patch('/admin/subscriptions/:id/approve', requireSuperAdmin, subscription.approveSubscription);
+router.patch('/admin/subscriptions/:id/reject',  requireSuperAdmin, subscription.rejectSubscription);
 
 module.exports = router;
