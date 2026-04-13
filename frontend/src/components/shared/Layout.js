@@ -113,6 +113,12 @@ export default function Layout({ children }) {
     .map(g => ({ ...g, items: g.items.filter(canSee) }))
     .filter(g => g.items.length > 0);
 
+  // Track which groups are open; default all open
+  const [openGroups, setOpenGroups] = useState(() =>
+    Object.fromEntries(NAV_GROUPS.filter(g => g.label).map(g => [g.label, true]))
+  );
+  const toggleGroup = (label) => setOpenGroups(p => ({ ...p, [label]: !p[label] }));
+
   const W = collapsed ? 64 : 220;
   const isLight = mode === 'light';
 
@@ -171,42 +177,70 @@ export default function Layout({ children }) {
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '8px 10px', overflowY: 'auto' }}>
-          {visibleGroups.map((group, gi) => (
-            <div key={gi} style={{ marginBottom: 4 }}>
-              {/* Group label — only when expanded and label exists */}
-              {!collapsed && group.label && (
-                <div style={{
-                  fontSize: 9, fontWeight: 700, color: T.textDim,
-                  letterSpacing: 1.2, textTransform: 'uppercase',
-                  padding: gi === 0 ? '4px 8px 4px' : '10px 8px 4px',
-                  userSelect: 'none',
-                }}>
-                  {group.label}
-                </div>
-              )}
-              {/* Collapsed divider between groups */}
-              {collapsed && gi > 0 && (
-                <div style={{ height: 1, background: T.border, margin: '4px 6px 4px' }} />
-              )}
-              {group.items.map(item => (
-                <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: collapsed ? '10px 12px' : '8px 12px',
-                  borderRadius: 10, marginBottom: 2,
-                  background: isActive ? T.accentGlow : 'transparent',
-                  color: isActive ? T.accent : T.textMid,
-                  fontSize: 13, fontWeight: isActive ? 700 : 500,
-                  border: `1px solid ${isActive ? T.accent + '55' : 'transparent'}`,
-                  textDecoration: 'none', whiteSpace: 'nowrap',
-                  transition: 'all 0.15s',
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                })}>
-                  <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-                  {!collapsed && item.label}
-                </NavLink>
-              ))}
-            </div>
-          ))}
+          {visibleGroups.map((group, gi) => {
+            const isOpen = !group.label || collapsed || openGroups[group.label] !== false;
+            return (
+              <div key={gi} style={{ marginBottom: 2 }}>
+
+                {/* ── Group header (expanded sidebar only) ── */}
+                {!collapsed && group.label && (
+                  <div
+                    onClick={() => toggleGroup(group.label)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '8px 10px 5px',
+                      marginTop: gi === 0 ? 0 : 6,
+                      cursor: 'pointer',
+                      borderRadius: 8,
+                      userSelect: 'none',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.card}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{
+                      fontSize: 11, fontWeight: 700,
+                      color: T.textMid,
+                      letterSpacing: 0.6,
+                      textTransform: 'uppercase',
+                    }}>
+                      {group.label}
+                    </span>
+                    <span style={{
+                      fontSize: 10, color: T.textDim,
+                      transition: 'transform 0.2s',
+                      display: 'inline-block',
+                      transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                    }}>›</span>
+                  </div>
+                )}
+
+                {/* ── Collapsed sidebar: thin divider between groups ── */}
+                {collapsed && gi > 0 && (
+                  <div style={{ height: 1, background: T.border, margin: '4px 6px' }} />
+                )}
+
+                {/* ── Nav items (hidden when group collapsed) ── */}
+                {isOpen && group.items.map(item => (
+                  <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: collapsed ? '10px 14px' : '7px 10px',
+                    borderRadius: 8, marginBottom: 1,
+                    background: isActive ? T.accentGlow : 'transparent',
+                    color: isActive ? T.accent : T.textMid,
+                    fontSize: 13, fontWeight: isActive ? 700 : 500,
+                    border: `1px solid ${isActive ? T.accent + '55' : 'transparent'}`,
+                    textDecoration: 'none', whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                    justifyContent: collapsed ? 'center' : 'flex-start',
+                  })}>
+                    <span style={{ fontSize: 15, flexShrink: 0 }}>{item.icon}</span>
+                    {!collapsed && item.label}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Dark/Light toggle + user */}
