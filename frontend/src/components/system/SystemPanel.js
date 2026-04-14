@@ -422,7 +422,7 @@ function EmailConfigTab() {
       setTestResult({ ok: true, ...r.data });
     } catch (e) {
       const err = e.response?.data || {};
-      setTestResult({ ok: false, error: err.error || e.message, code: err.code });
+      setTestResult({ ok: false, error: err.error || e.message, code: err.code, hint: err.hint, resolvedIP: err.resolvedIP });
     }
     finally { setTesting(false); }
   };
@@ -559,18 +559,25 @@ function EmailConfigTab() {
               </div>
             ) : (
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: T.red, marginBottom: 6 }}>
-                  ❌ Failed to send email
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.red, marginBottom: 8 }}>
+                  ❌ {testResult.code === 'ETCP' ? 'Network unreachable' : testResult.code === 'EDNS' ? 'DNS lookup failed' : 'Failed to send email'}
                 </div>
-                <div style={{ fontSize: 12, color: T.text, fontFamily: 'monospace', wordBreak: 'break-word' }}>
+                <div style={{ fontSize: 12, color: T.text, fontFamily: 'monospace', wordBreak: 'break-word', marginBottom: 6 }}>
                   {testResult.error}
                 </div>
-                {testResult.code && (
-                  <div style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>Error code: {testResult.code}</div>
+                {testResult.resolvedIP && (
+                  <div style={{ fontSize: 11, color: T.textDim, marginBottom: 4 }}>
+                    Host resolved to: <span style={{ fontFamily: 'monospace' }}>{testResult.resolvedIP}</span>
+                  </div>
                 )}
-                <div style={{ fontSize: 11, color: T.textMid, marginTop: 8 }}>
-                  Common fixes: check host/port, ensure password is correct (re-enter and Save), verify firewall allows outbound SMTP.
-                </div>
+                {testResult.code && (
+                  <div style={{ fontSize: 11, color: T.textDim, marginBottom: 6 }}>Error code: {testResult.code}</div>
+                )}
+                {testResult.hint && (
+                  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 12px', fontSize: 12, color: T.textMid, lineHeight: 1.5 }}>
+                    💡 {testResult.hint}
+                  </div>
+                )}
               </div>
             )}
           </div>

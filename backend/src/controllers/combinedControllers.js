@@ -1289,9 +1289,22 @@ exports.saveSystemConfig = async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
 
+// TCP pre-flight: try to open a socket to host:port with a 6s timeout
+const tcpCheck = (host, port) => new Promise((resolve) => {
+  const net = require('net');
+  const sock = new net.Socket();
+  const done = (ok, msg) => { sock.destroy(); resolve({ ok, msg }); };
+  sock.setTimeout(6000);
+  sock.on('connect', () => done(true, 'reachable'));
+  sock.on('timeout', () => done(false, `TCP timeout — port ${port} unreachable from this server. Check firewall / hosting provider outbound rules.`));
+  sock.on('error',   (e) => done(false, `TCP error: ${e.message} (code: ${e.code})`));
+  sock.connect(port, host);
+});
+
 exports.testSmtp = async (req, res) => {
   try {
     const nodemailer = require('nodemailer');
+    const dns = require('dns').promises;
     const { getConfig } = require('../utils/config');
     const { to } = req.body;
     const [host, port, secure, user, pass, from] = await Promise.all([
@@ -1308,15 +1321,42 @@ exports.testSmtp = async (req, res) => {
     if (!pass) missing.push('SMTP Password');
     if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
 
+    const portNum = parseInt(port) || 587;
+
+    // Step 1: DNS resolution check
+    let resolvedIP = null;
+    try {
+      const addrs = await dns.resolve4(host);
+      resolvedIP = addrs[0];
+    } catch (dnsErr) {
+      return res.status(400).json({
+        error: `DNS lookup failed for "${host}": ${dnsErr.message}`,
+        code: 'EDNS',
+        hint: 'Check the SMTP Host spelling.',
+      });
+    }
+
+    // Step 2: TCP connectivity check
+    const tcp = await tcpCheck(host, portNum);
+    if (!tcp.ok) {
+      return res.status(400).json({
+        error: tcp.msg,
+        code: 'ETCP',
+        resolvedIP,
+        hint: `Host resolved to ${resolvedIP} but TCP connection to port ${portNum} failed. Your hosting provider likely blocks outbound SMTP. Try port 25, or switch to an API-based email service (Mailgun, SendGrid).`,
+      });
+    }
+
     const rejectUnauth = await getConfig('smtp.reject_unauthorized', 'SMTP_REJECT_UNAUTHORIZED');
     const isSSL = secure === 'true';
     const transport = nodemailer.createTransport({
       host,
-      port: parseInt(port) || 587,
-      secure: isSSL,                          // true = implicit SSL (465), false = STARTTLS (587)
-      requireTLS: !isSSL,                     // force STARTTLS when not implicit SSL
+      port: portNum,
+      secure: isSSL,
+      requireTLS: !isSSL,
       connectionTimeout: 15000,
       greetingTimeout: 15000,
+      family: 4,                              // force IPv4
       auth: { user, pass },
       tls: { rejectUnauthorized: rejectUnauth === 'true' },
     });
