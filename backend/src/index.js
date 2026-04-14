@@ -242,6 +242,29 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS city TEXT;
   `).catch(e => console.warn('Migration 013 note:', e.message));
 
+  // Migration 014: auto-assign standalone restaurants (no company group) to their own group
+  // Each becomes the "main" / owner of its auto-created group
+  await db.query(`
+    INSERT INTO company_groups (name, slug, email, phone, address, status, owner_restaurant_id)
+    SELECT
+      r.name,
+      r.slug || '-grp-' || substring(r.id::text FROM 1 FOR 8),
+      r.email,
+      r.phone,
+      r.address,
+      'active',
+      r.id
+    FROM restaurants r
+    WHERE r.company_group_id IS NULL
+    ON CONFLICT (slug) DO NOTHING;
+
+    UPDATE restaurants r
+    SET company_group_id = cg.id, is_branch = TRUE
+    FROM company_groups cg
+    WHERE cg.owner_restaurant_id = r.id
+      AND r.company_group_id IS NULL;
+  `).catch(e => console.warn('Migration 014 note:', e.message));
+
   // Migration 009: GL account mappings for auto-journalizing
   await db.query(`
     CREATE TABLE IF NOT EXISTS gl_sales_mappings (

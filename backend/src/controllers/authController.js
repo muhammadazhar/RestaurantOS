@@ -327,6 +327,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       accessToken, refreshToken,
+      companyGroupId: resolvedGroupId,
       user: {
         id: empRes.rows[0].id,
         name: admin_name,
@@ -337,6 +338,7 @@ exports.register = async (req, res) => {
         restaurantId: restaurant.id,
         restaurantName: restaurant.name,
         restaurantSlug: restaurant.slug,
+        companyGroupId: resolvedGroupId,
       },
       restaurant: { id: restaurant.id, name: restaurant.name, slug: restaurant.slug },
       isNewSetup: true,
