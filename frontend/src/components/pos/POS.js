@@ -620,7 +620,7 @@ export default function POS() {
                 <select value={waiterId} onChange={e => setWaiterId(e.target.value)}
                   style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: waiterId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
                   <option value="">— Assign waiter —</option>
-                  {employees.map(e => (
+                  {employees.filter(e => ['server','waiter'].includes((e.role_name||'').toLowerCase())).map(e => (
                     <option key={e.id} value={e.id}>{e.full_name}</option>
                   ))}
                 </select>
