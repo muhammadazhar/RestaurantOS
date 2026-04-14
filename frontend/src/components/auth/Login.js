@@ -5,7 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 import API from '../../services/api';
 import toast from 'react-hot-toast';
 
-// Login phases: 'company' → 'branch' → 'credentials'
+// Login phases: 'company' → 'branch' → 'credentials'  |  or 'direct' for slug login
 export default function Login() {
   const { login }         = useAuth();
   const { mode, theme: T, toggle } = useTheme();
@@ -28,6 +28,9 @@ export default function Login() {
   // Credentials phase
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
+
+  // Direct slug login (fallback for restaurants not in a group)
+  const [directSlug, setDirectSlug] = useState('');
 
   useEffect(() => {
     API.get('/auth/groups')
@@ -57,10 +60,11 @@ export default function Login() {
 
   const submit = async e => {
     e.preventDefault();
-    if (!selectedBranch) return;
+    const slug = phase === 'direct' ? directSlug.trim() : selectedBranch?.slug;
+    if (!slug) return toast.error('Restaurant slug required');
     setLoading(true);
     try {
-      const user = await login(email, password, selectedBranch.slug);
+      const user = await login(email, password, slug);
       toast.success(`Welcome, ${user.name}!`);
       const perms = user.permissions || [];
       const PERM_ROUTES = [
@@ -98,29 +102,37 @@ export default function Login() {
         <p style={{ color: T.textMid, textAlign: 'center', fontSize: 13, marginTop: 4, marginBottom: 20 }}>Sign in to your restaurant</p>
 
         {/* Breadcrumb */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
-          <button onClick={() => { setPhase('company'); setSelectedGroup(null); setSelectedBranch(null); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif",
-              fontSize: 12, fontWeight: 700, color: phase === 'company' ? T.accent : T.textMid,
-              padding: '4px 8px', borderRadius: 6, background: phase === 'company' ? T.accent + '22' : 'transparent' }}>
-            🏢 Company
-          </button>
-          {selectedGroup && <>
-            <span style={{ color: T.textDim, fontSize: 12 }}>›</span>
-            <button onClick={() => { setPhase('branch'); setSelectedBranch(null); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif",
-                fontSize: 12, fontWeight: 700, color: phase === 'branch' ? T.accent : T.textMid,
-                padding: '4px 8px', borderRadius: 6, background: phase === 'branch' ? T.accent + '22' : 'transparent' }}>
-              🏪 Branch
+        {phase !== 'direct' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+            <button onClick={() => { setPhase('company'); setSelectedGroup(null); setSelectedBranch(null); }}
+              style={{ background: phase === 'company' ? T.accent + '22' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+                fontSize: 12, fontWeight: 700, color: phase === 'company' ? T.accent : T.textMid, padding: '4px 8px', borderRadius: 6 }}>
+              🏢 Company
             </button>
-          </>}
-          {selectedBranch && <>
-            <span style={{ color: T.textDim, fontSize: 12 }}>›</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, padding: '4px 8px', borderRadius: 6, background: T.accent + '22' }}>
-              🔑 Sign In
-            </span>
-          </>}
-        </div>
+            {selectedGroup && <>
+              <span style={{ color: T.textDim, fontSize: 12 }}>›</span>
+              <button onClick={() => { setPhase('branch'); setSelectedBranch(null); }}
+                style={{ background: phase === 'branch' ? T.accent + '22' : 'transparent', border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+                  fontSize: 12, fontWeight: 700, color: phase === 'branch' ? T.accent : T.textMid, padding: '4px 8px', borderRadius: 6 }}>
+                🏪 Branch
+              </button>
+            </>}
+            {selectedBranch && <>
+              <span style={{ color: T.textDim, fontSize: 12 }}>›</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.accent, padding: '4px 8px', borderRadius: 6, background: T.accent + '22' }}>
+                🔑 Sign In
+              </span>
+            </>}
+          </div>
+        ) : (
+          <div style={{ marginBottom: 20 }}>
+            <button onClick={() => { setPhase('company'); setDirectSlug(''); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+                fontSize: 12, color: T.textMid, padding: 0 }}>
+              ← Back to company list
+            </button>
+          </div>
+        )}
 
         {/* ── Phase: Company ── */}
         {phase === 'company' && (
@@ -140,12 +152,11 @@ export default function Login() {
                 {groups.length === 0 ? 'No companies registered yet.' : 'No match found.'}
               </div>
             ) : (
-              <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {filteredGroups.map(g => (
                   <div key={g.id} onClick={() => selectGroup(g)}
                     style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer',
-                      background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12,
-                      transition: 'all 0.15s' }}
+                      background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, transition: 'all 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.borderColor = T.accent}
                     onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
                     <div style={{ width: 34, height: 34, borderRadius: 8, background: T.accent + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>🏢</div>
@@ -155,6 +166,16 @@ export default function Login() {
                 ))}
               </div>
             )}
+
+            {/* Fallback for restaurants not in any group */}
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}`, textAlign: 'center' }}>
+              <div style={{ fontSize: 12, color: T.textDim, marginBottom: 8 }}>Restaurant not in the list?</div>
+              <button onClick={() => { setPhase('direct'); setEmail(''); setPassword(''); }}
+                style={{ background: 'none', border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 16px',
+                  cursor: 'pointer', fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 600, color: T.textMid }}>
+                Sign in with restaurant slug →
+              </button>
+            </div>
           </div>
         )}
 
@@ -193,7 +214,7 @@ export default function Login() {
           </div>
         )}
 
-        {/* ── Phase: Credentials ── */}
+        {/* ── Phase: Credentials (after branch selection) ── */}
         {phase === 'credentials' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, marginBottom: 18 }}>
@@ -206,6 +227,33 @@ export default function Login() {
             <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 4, letterSpacing: 0.5 }}>Email</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@restaurant.com" style={inp} required autoFocus />
+              <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 10, letterSpacing: 0.5 }}>Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={inp} required />
+              <button type="submit" disabled={loading} style={{ marginTop: 18, background: T.accent, color: '#000', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
+                {loading ? 'Signing in…' : 'Sign In →'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ── Phase: Direct slug login (fallback) ── */}
+        {phase === 'direct' && (
+          <div>
+            <div style={{ fontSize: 13, color: T.textMid, marginBottom: 16 }}>
+              Enter your restaurant slug and credentials directly.
+            </div>
+            <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>Restaurant Slug</label>
+              <div style={{ display: 'flex', alignItems: 'center', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden', marginBottom: 10 }}>
+                <span style={{ padding: '12px 10px', color: T.textDim, fontSize: 12, background: T.card, borderRight: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>restaurantos.com/</span>
+                <input
+                  value={directSlug} onChange={e => setDirectSlug(e.target.value)}
+                  placeholder="golden-fork" style={{ ...inp, border: 'none', borderRadius: 0, flex: 1 }}
+                  required autoFocus
+                />
+              </div>
+              <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 4, letterSpacing: 0.5 }}>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@restaurant.com" style={inp} required />
               <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 10, letterSpacing: 0.5 }}>Password</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={inp} required />
               <button type="submit" disabled={loading} style={{ marginTop: 18, background: T.accent, color: '#000', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
