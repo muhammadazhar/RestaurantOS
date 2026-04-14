@@ -483,12 +483,26 @@ function EmailConfigTab() {
         </div>
 
         <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Use TLS (Secure)</label>
-          <select value={form['smtp.secure']} onChange={e => f('smtp.secure', e.target.value)}
-            style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
-            <option value="false">No (STARTTLS on port 587)</option>
-            <option value="true">Yes (SSL on port 465)</option>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Connection Security</label>
+          <select
+            value={form['smtp.secure']}
+            onChange={e => {
+              const val = e.target.value;
+              f('smtp.secure', val);
+              // Auto-suggest port when switching mode
+              if (val === 'true'  && form['smtp.port'] === '587') f('smtp.port', '465');
+              if (val === 'false' && form['smtp.port'] === '465') f('smtp.port', '587');
+            }}
+            style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
+          >
+            <option value="false">STARTTLS — upgrades connection to TLS (port 587, recommended)</option>
+            <option value="true">SSL / Implicit TLS — encrypted from the start (port 465)</option>
           </select>
+          <div style={{ fontSize: 11, color: T.textDim, marginTop: 5 }}>
+            {form['smtp.secure'] === 'true'
+              ? 'SSL: connection is encrypted immediately. Use port 465. Common with older providers.'
+              : 'STARTTLS: starts plain then upgrades to TLS. Use port 587. Default for Gmail, Outlook, etc.'}
+          </div>
         </div>
 
         <Btn onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
