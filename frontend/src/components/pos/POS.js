@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
 import { Card, Pill, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -55,7 +55,9 @@ export default function POS() {
   const [custLat,      setCustLat]      = useState('');
   const [custLng,      setCustLng]      = useState('');
   const [delivRiderId, setDelivRiderId] = useState('');
+  const [waiterId,     setWaiterId]     = useState('');
   const [riders,       setRiders]       = useState([]);
+  const [employees,    setEmployees]    = useState([]);
   const [orderNotes,   setOrderNotes]   = useState('');
   const [loading,      setLoading]      = useState(true);
   const [sending,      setSending]      = useState(false);
@@ -94,6 +96,7 @@ export default function POS() {
     load();
     loadShift();
     getRiders().then(r => setRiders(r.data)).catch(() => {});
+    getEmployees().then(r => setEmployees(r.data)).catch(() => {});
     getDiscountPresets().then(r => setDiscountPresets(r.data.filter(p => p.is_active))).catch(() => {});
     on('new_order', load);
     return () => off('new_order', load);
@@ -167,6 +170,7 @@ export default function POS() {
         customer_lat:      orderType === 'delivery' ? custLat  || undefined : undefined,
         customer_lng:      orderType === 'delivery' ? custLng  || undefined : undefined,
         rider_id:          orderType === 'delivery' ? delivRiderId || undefined : undefined,
+        waiter_id:         orderType === 'dine_in'  ? waiterId    || undefined : undefined,
         notes:             orderNotes || undefined,
         discount_amount:   discountAmt || undefined,
         items: cart.map(c => ({
@@ -195,7 +199,7 @@ export default function POS() {
         setShowPayModal(true);
       } else {
         toast.success('Order sent to kitchen! 🍳');
-        setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setOrderNotes(''); setGuestCount(1);
+        setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); setGuestCount(1);
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to send order');
@@ -257,6 +261,7 @@ export default function POS() {
         <div class="row"><span class="bold">Type:</span><span>${typeLabel}</span></div>
         ${tbl ? `<div class="row"><span class="bold">Table:</span><span>${tbl.section ? tbl.section + ' · ' : ''}${tbl.label}</span></div>` : ''}
         ${(custName || order.customer_name) ? `<div class="row"><span class="bold">Customer:</span><span>${custName || order.customer_name}</span></div>` : ''}
+        ${waiterId ? `<div class="row"><span class="bold">Waiter:</span><span>${employees.find(e => e.id === waiterId)?.full_name || ''}</span></div>` : (order.waiter_name ? `<div class="row"><span class="bold">Waiter:</span><span>${order.waiter_name}</span></div>` : '')}
         <div class="row"><span class="bold">Time:</span><span>${timeStr}</span></div>
         <div class="line"></div>
         ${items.map(i => `
@@ -315,6 +320,7 @@ export default function POS() {
         ${isCOD && (o.delivery_address?.address || custAddr) ? `<div class="row"><span>Address:</span><span>${o.delivery_address?.address || custAddr}</span></div>` : ''}
         <div class="row"><span>Date:</span><span>${fmtD(o.created_at || new Date())}</span></div>
         <div class="row"><span>Cashier:</span><span class="bold">${user?.full_name || user?.name || '—'}</span></div>
+        ${waiterId ? `<div class="row"><span>Waiter:</span><span class="bold">${employees.find(e => e.id === waiterId)?.full_name || '—'}</span></div>` : (o.waiter_name ? `<div class="row"><span>Waiter:</span><span class="bold">${o.waiter_name}</span></div>` : '')}
         ${currentShift?.shift ? `<div class="row"><span>Shift:</span><span class="bold">#${currentShift.shift.shift_number || '—'} ${currentShift.shift.shift_name} (${currentShift.shift.start_time?.slice(0,5)}–${currentShift.shift.end_time?.slice(0,5)})</span></div>` : ''}
         <div class="line"></div>
         <div class="grid4">
@@ -362,7 +368,7 @@ export default function POS() {
     setCreatedOrder(null);
     setTakePrintRdy(false);
     setTenderedAmount('');
-    setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setOrderNotes(''); setGuestCount(1);
+    setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); setGuestCount(1);
   };
 
   if (loading) return <Spinner />;
@@ -600,14 +606,26 @@ export default function POS() {
             </div>
           )}
 
-          {/* Guest count (dine-in) */}
+          {/* Guest count + Waiter (dine-in) */}
           {orderType === 'dine_in' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Guests</span>
-              <button onClick={() => setGuestCount(g => Math.max(1, g-1))} style={{ width: 24, height: 24, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>−</button>
-              <span style={{ fontWeight: 800, fontFamily: 'monospace', minWidth: 20, textAlign: 'center', color: T.text }}>{guestCount}</span>
-              <button onClick={() => setGuestCount(g => g+1)} style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>+</button>
-            </div>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Guests</span>
+                <button onClick={() => setGuestCount(g => Math.max(1, g-1))} style={{ width: 24, height: 24, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>−</button>
+                <span style={{ fontWeight: 800, fontFamily: 'monospace', minWidth: 20, textAlign: 'center', color: T.text }}>{guestCount}</span>
+                <button onClick={() => setGuestCount(g => g+1)} style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>+</button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Waiter</span>
+                <select value={waiterId} onChange={e => setWaiterId(e.target.value)}
+                  style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: waiterId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
+                  <option value="">— Assign waiter —</option>
+                  {employees.map(e => (
+                    <option key={e.id} value={e.id}>{e.full_name}</option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
 
           {/* Cart items */}
@@ -691,7 +709,7 @@ export default function POS() {
               <Btn onClick={sendToKitchen} disabled={sending} style={{ width: '100%', padding: '13px' }}>
                 {sending ? '⏳ Sending…' : orderType === 'delivery' ? '🏍 Place Delivery Order' : '🍳 Send to Kitchen'}
               </Btn>
-              <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setOrderNotes(''); }} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
+              <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); }} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
             </div>
           )}
         </Card>

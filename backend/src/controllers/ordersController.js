@@ -120,6 +120,7 @@ exports.getOrders = async (req, res) => {
       `SELECT o.*,
               dt.label as table_label,
               e.full_name as server_name,
+              w.full_name as waiter_name,
               s.shift_number, s.shift_name,
               s.start_time as shift_start, s.end_time as shift_end,
               json_agg(json_build_object(
@@ -130,10 +131,11 @@ exports.getOrders = async (req, res) => {
        FROM orders o
        LEFT JOIN dining_tables dt ON o.table_id = dt.id
        LEFT JOIN employees e ON o.employee_id = e.id
+       LEFT JOIN employees w ON o.waiter_id = w.id
        LEFT JOIN shifts s ON o.shift_id = s.id
        LEFT JOIN order_items oi ON o.id = oi.order_id
        WHERE ${where.join(' AND ')}
-       GROUP BY o.id, dt.label, e.full_name, s.shift_number, s.shift_name, s.start_time, s.end_time
+       GROUP BY o.id, dt.label, e.full_name, w.full_name, s.shift_number, s.shift_name, s.start_time, s.end_time
        ORDER BY o.created_at DESC`,
       params
     );
@@ -149,7 +151,7 @@ exports.createOrder = async (req, res) => {
     const { restaurantId, id: employeeId } = req.user;
     const { table_id, order_type = 'dine_in', items, guest_count = 1,
       customer_name, customer_phone, customer_address, customer_lat, customer_lng,
-      rider_id, notes, source = 'pos', discount_amount } = req.body;
+      rider_id, waiter_id, notes, source = 'pos', discount_amount } = req.body;
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' });
 
@@ -233,13 +235,13 @@ exports.createOrder = async (req, res) => {
       `INSERT INTO orders(restaurant_id, table_id, employee_id, shift_id, order_number, order_type,
                           status, source, guest_count, subtotal, discount_amount, tax_amount, total_amount,
                           customer_name, customer_phone, customer_lat, customer_lng,
-                          delivery_address, rider_id, notes)
-       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+                          delivery_address, rider_id, waiter_id, notes)
+       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
       [restaurantId, table_id || null, employeeId, shiftId, orderNumber, order_type, source,
         guest_count, subtotal, discAmt, taxAmount, totalAmount,
         customer_name || null, customer_phone || null,
         customer_lat || null, customer_lng || null,
-        deliveryAddress, rider_id || null, notes || null]
+        deliveryAddress, rider_id || null, waiter_id || null, notes || null]
     );
     const order = orderRes.rows[0];
 

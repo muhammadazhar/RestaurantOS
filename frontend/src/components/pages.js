@@ -372,8 +372,9 @@ export function Tables() {
                 {[
                   ['Section',  selected.section],
                   ['Capacity', `${selected.capacity} seats`],
-                  ['Order',    selected.order_number || '---'],
-                  ['Server',   selected.server_name  || '---'],
+                  ['Order',    selected.order_number  || '---'],
+                  ['Cashier',  selected.server_name   || '---'],
+                  ['Waiter',   selected.waiter_name   || '---'],
                   ['Seated',   selected.status === 'occupied' ? fmtElapsed(elapsed) : '---'],
                   ['Bill',     selected.total_amount > 0 ? `PKR ${Number(selected.total_amount).toLocaleString()}` : '---'],
                 ].map(([k, v]) => (

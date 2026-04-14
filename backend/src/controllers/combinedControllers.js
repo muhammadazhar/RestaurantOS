@@ -41,6 +41,7 @@ exports.getTables = async (req, res) => {
               o.subtotal,
               o.created_at  as order_started,
               e.full_name   as server_name,
+              w.full_name   as waiter_name,
               r.id          as reservation_id,
               r.guest_name  as reservation_guest,
               r.guest_phone as reservation_phone,
@@ -50,6 +51,7 @@ exports.getTables = async (req, res) => {
        FROM dining_tables dt
        LEFT JOIN orders o ON o.table_id = dt.id AND o.status NOT IN ('paid','cancelled')
        LEFT JOIN employees e ON o.employee_id = e.id
+       LEFT JOIN employees w ON o.waiter_id = w.id
        LEFT JOIN LATERAL (
          SELECT id, guest_name, guest_phone, reserved_at, duration_min, status
          FROM reservations

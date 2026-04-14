@@ -42,12 +42,13 @@ const StatusPill = ({ status }) => {
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function TableBill({ table, onClose, onPaid }) {
   useT();
-  const [order,         setOrder]         = useState(null);
-  const [loading,       setLoading]       = useState(true);
+  const [order,           setOrder]           = useState(null);
+  const [loading,         setLoading]         = useState(true);
   const [paying,          setPaying]          = useState(false);
-  const [showPayPanel,    setShowPayPanel]    = useState(false);
-  const [payMethod,       setPayMethod]       = useState('cash');
-  const [showPrintPrompt, setShowPrintPrompt] = useState(false);
+  const [showPayPanel,    setShowPayPanel]     = useState(false);
+  const [payMethod,       setPayMethod]        = useState('cash');
+  const [tenderedAmount,  setTenderedAmount]   = useState('');
+  const [showPrintPrompt, setShowPrintPrompt]  = useState(false);
   const printRef = useRef();
 
   useEffect(() => {
@@ -108,7 +109,8 @@ export default function TableBill({ table, onClose, onPaid }) {
         <div class="line"></div>
         <div class="row"><span>Table:</span><span class="bold">${table.label} (${table.section})</span></div>
         <div class="row"><span>Order:</span><span>${order.order_number}</span></div>
-        <div class="row"><span>Server:</span><span>${order.server_name || '—'}</span></div>
+        <div class="row"><span>Cashier:</span><span>${order.server_name || '—'}</span></div>
+        ${order.waiter_name ? `<div class="row"><span>Waiter:</span><span class="bold">${order.waiter_name}</span></div>` : ''}
         <div class="row"><span>Guests:</span><span>${order.guest_count}</span></div>
         <div class="row"><span>Date:</span><span>${fmtD(order.created_at)}</span></div>
         <div class="line"></div>
@@ -135,6 +137,10 @@ export default function TableBill({ table, onClose, onPaid }) {
         <div class="line"></div>
         ${isPaid ? `
         <div class="row"><span>Payment</span><span class="bold">${methodLabel}</span></div>
+        ${method === 'cash' && tenderedAmount ? `
+          <div class="row"><span>Tendered</span><span>PKR ${parseFloat(tenderedAmount).toLocaleString()}</span></div>
+          <div class="row bold"><span>Change</span><span>PKR ${Math.max(0, parseFloat(tenderedAmount) - Number(order.total_amount)).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})}</span></div>
+        ` : ''}
         <div class="center" style="margin-top:12px"><span class="paid-stamp">★ PAID ★</span></div>
         ` : ''}
         <div class="center small" style="margin-top:20px; line-height:1.8">
@@ -219,7 +225,8 @@ export default function TableBill({ table, onClose, onPaid }) {
               }}>
                 {[
                   ['Order #',  order.order_number],
-                  ['Server',   order.server_name || '—'],
+                  ['Cashier',  order.server_name || '—'],
+                  ['Waiter',   order.waiter_name || '—'],
                   ['Guests',   order.guest_count],
                   ['Type',     order.order_type?.replace('_', ' ')],
                   ['Date',     new Date(order.created_at).toLocaleDateString()],
@@ -287,7 +294,7 @@ export default function TableBill({ table, onClose, onPaid }) {
                 <TotalRow label="TOTAL DUE" value={fmt(order.total_amount)} bold large />
               </div>
 
-              {/* Payment method selector */}
+              {/* Payment method selector + tendered */}
               {showPayPanel && (
                 <div style={{
                   marginTop: 16, background: T.surface, borderRadius: 12,
@@ -324,6 +331,35 @@ export default function TableBill({ table, onClose, onPaid }) {
                       </div>
                     ))}
                   </div>
+
+                  {/* Tendered amount + change — cash only */}
+                  {payMethod === 'cash' && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px dashed ${T.border}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 13, color: T.textMid, flex: 1 }}>Tendered (PKR)</span>
+                        <input type="number" min="0" value={tenderedAmount}
+                          onChange={e => setTenderedAmount(e.target.value)}
+                          placeholder={Number(order.total_amount).toFixed(0)}
+                          style={{ width: 110, background: T.card, border: `1px solid ${T.accent}88`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 14, fontFamily: 'monospace', outline: 'none', textAlign: 'right', fontWeight: 700 }} />
+                      </div>
+                      {tenderedAmount !== '' && parseFloat(tenderedAmount) >= Number(order.total_amount) && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', background: T.greenDim, border: `1px solid ${T.green}44`, borderRadius: 8, padding: '6px 10px' }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: T.green }}>Change</span>
+                          <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.green }}>
+                            PKR {(parseFloat(tenderedAmount) - Number(order.total_amount)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+                      {tenderedAmount !== '' && parseFloat(tenderedAmount) < Number(order.total_amount) && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 8, padding: '6px 10px' }}>
+                          <span style={{ fontSize: 13, color: T.red }}>Shortfall</span>
+                          <span style={{ fontSize: 13, fontFamily: 'monospace', color: T.red }}>
+                            PKR {(Number(order.total_amount) - parseFloat(tenderedAmount)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </>

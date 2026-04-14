@@ -347,6 +347,11 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS gl_entry_id UUID REFERENCES journal_entries(id) ON DELETE SET NULL;
   `).catch(e => console.warn('Migration 009 note:', e.message));
 
+  // Migration 018: waiter_id on orders
+  await db.query(`
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS waiter_id UUID REFERENCES employees(id) ON DELETE SET NULL;
+  `).catch(e => console.warn('Migration 018 note:', e.message));
+
   // Migration 017: Opening balance for shifts + discount presets table
   await db.query(`
     ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(10,2) DEFAULT 0;
