@@ -204,7 +204,12 @@ router.get('/rider/incentives/payments/:id/deliveries',      requirePermission('
 router.get('/rider/reports',                        requirePermission('pos'),        rider.getRiderReport);
 
 // ── Company Groups & Branches ─────────────────────────────────────────────────
-router.get('/branches/my-group',                       branch.getMyGroup);   // restaurant user
+router.get('/branches/my-group',                       branch.getMyGroup);
+// Self-service group management (restaurant admin)
+router.post('/my-group/register',  requirePermission('settings'), branch.registerMyGroup);
+router.patch('/my-group',          requirePermission('settings'), branch.updateMyGroupInfo);
+router.get('/my-group/dashboard',  requirePermission('settings'), branch.getMyGroupDashboard);
+router.post('/my-group/branches',  requirePermission('settings'), branch.addBranchToMyGroup);
 router.get('/admin/groups',                requireSuperAdmin, branch.getGroups);
 router.post('/admin/groups',               requireSuperAdmin, branch.createGroup);
 router.put('/admin/groups/:id',            requireSuperAdmin, branch.updateGroup);

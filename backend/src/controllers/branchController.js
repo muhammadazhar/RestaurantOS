@@ -191,6 +191,7 @@ exports.getMyGroup = async (req, res) => {
     const { restaurantId } = req.user;
     const row = await db.query(`
       SELECT cg.*,
+        (cg.owner_restaurant_id = $1) AS is_admin,
         (SELECT json_agg(json_build_object(
           'id', r.id, 'name', r.name, 'branch_code', r.branch_code,
           'status', r.status, 'city', r.city
@@ -203,6 +204,139 @@ exports.getMyGroup = async (req, res) => {
     `, [restaurantId]);
     if (!row.rows.length) return res.json(null);
     res.json(row.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ── Self-service Group Management (restaurant admin) ──────────────────────────
+
+exports.registerMyGroup = async (req, res) => {
+  try {
+    const { name, email, phone, address } = req.body;
+    const { restaurantId } = req.user;
+    if (!name?.trim()) return res.status(400).json({ error: 'Company name required' });
+
+    const existing = await db.query(
+      'SELECT company_group_id FROM restaurants WHERE id = $1', [restaurantId]
+    );
+    if (existing.rows[0]?.company_group_id) {
+      return res.status(400).json({ error: 'Already part of a group' });
+    }
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now();
+
+    const group = await db.query(
+      `INSERT INTO company_groups (name, slug, email, phone, address, owner_restaurant_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [name.trim(), slug, email || null, phone || null, address || null, restaurantId]
+    );
+
+    await db.query(
+      'UPDATE restaurants SET company_group_id = $1, is_branch = true WHERE id = $2',
+      [group.rows[0].id, restaurantId]
+    );
+
+    res.status(201).json({ ...group.rows[0], is_admin: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.updateMyGroupInfo = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const { name, email, phone, address } = req.body;
+
+    const result = await db.query(
+      `UPDATE company_groups
+       SET name    = COALESCE($1, name),
+           email   = COALESCE($2, email),
+           phone   = COALESCE($3, phone),
+           address = COALESCE($4, address)
+       WHERE owner_restaurant_id = $5 RETURNING *`,
+      [name || null, email || null, phone || null, address || null, restaurantId]
+    );
+
+    if (!result.rows.length) return res.status(403).json({ error: 'Not authorized' });
+    res.json({ ...result.rows[0], is_admin: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.getMyGroupDashboard = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+
+    const groupRow = await db.query(
+      'SELECT * FROM company_groups WHERE owner_restaurant_id = $1', [restaurantId]
+    );
+    if (!groupRow.rows.length) return res.status(403).json({ error: 'Not a group admin' });
+    const group = groupRow.rows[0];
+
+    const branches = await db.query(`
+      SELECT
+        r.id, r.name, r.branch_code, r.status, r.city,
+        (r.id = $2) AS is_owner_branch,
+        COUNT(DISTINCT o.id)  FILTER (WHERE DATE(o.created_at) = CURRENT_DATE)                              AS orders_today,
+        COALESCE(SUM(o.total) FILTER (WHERE DATE(o.created_at) = CURRENT_DATE AND o.status = 'paid'), 0)    AS revenue_today,
+        COUNT(DISTINCT o.id)  FILTER (WHERE o.created_at >= NOW() - INTERVAL '30 days')                     AS orders_30d,
+        COALESCE(SUM(o.total) FILTER (WHERE o.created_at >= NOW() - INTERVAL '30 days' AND o.status = 'paid'), 0) AS revenue_30d,
+        COUNT(DISTINCT e.id)  FILTER (WHERE e.status = 'active')                                             AS employee_count,
+        COUNT(DISTINCT sh.id) FILTER (WHERE sh.status = 'open' AND sh.date = CURRENT_DATE)                  AS open_shifts
+      FROM restaurants r
+      LEFT JOIN orders    o  ON o.restaurant_id  = r.id
+      LEFT JOIN employees e  ON e.restaurant_id  = r.id
+      LEFT JOIN shifts    sh ON sh.restaurant_id = r.id
+      WHERE r.company_group_id = $1
+      GROUP BY r.id, r.name, r.branch_code, r.status, r.city
+      ORDER BY r.name
+    `, [group.id, restaurantId]);
+
+    const rows = branches.rows;
+    const totals = {
+      branch_count:   rows.length,
+      orders_today:   rows.reduce((s, b) => s + parseInt(b.orders_today   || 0), 0),
+      revenue_today:  rows.reduce((s, b) => s + parseFloat(b.revenue_today || 0), 0),
+      orders_30d:     rows.reduce((s, b) => s + parseInt(b.orders_30d     || 0), 0),
+      revenue_30d:    rows.reduce((s, b) => s + parseFloat(b.revenue_30d   || 0), 0),
+      employee_count: rows.reduce((s, b) => s + parseInt(b.employee_count  || 0), 0),
+    };
+
+    res.json({ group, branches: rows, totals });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.addBranchToMyGroup = async (req, res) => {
+  try {
+    const { restaurantId } = req.user;
+    const { name, branch_code, email, phone, address, city } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Branch name required' });
+
+    const groupRow = await db.query(
+      'SELECT id FROM company_groups WHERE owner_restaurant_id = $1', [restaurantId]
+    );
+    if (!groupRow.rows.length) return res.status(403).json({ error: 'Not a group admin' });
+    const groupId = groupRow.rows[0].id;
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now();
+
+    const branch = await db.query(
+      `INSERT INTO restaurants
+         (name, branch_code, email, phone, address, city, company_group_id, is_branch, status, slug)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, 'active', $8) RETURNING *`,
+      [name.trim(), branch_code || null, email || null, phone || null,
+       address || null, city || null, groupId, slug]
+    );
+
+    res.status(201).json(branch.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

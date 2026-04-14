@@ -41,6 +41,7 @@ import ModulePricing        from './components/admin/ModulePricing';
 import SubscriptionManagement from './components/admin/SubscriptionManagement';
 import CompanyGroups        from './components/admin/CompanyGroups';
 import BranchManagement     from './components/branches/BranchManagement';
+import GroupDashboard       from './components/branches/GroupDashboard';
 
 function ThemedToaster() {
   const { theme: T } = useTheme();
@@ -108,8 +109,9 @@ function AppRoutes() {
       <Route path="/subscription-mgmt" element={<PrivateRoute><Layout><SubscriptionManagement /></Layout></PrivateRoute>} />
 
       {/* Company Groups & Branches */}
-      <Route path="/company-groups" element={<PrivateRoute><Layout><CompanyGroups /></Layout></PrivateRoute>} />
-      <Route path="/branches"       element={<PrivateRoute><Layout><BranchManagement /></Layout></PrivateRoute>} />
+      <Route path="/company-groups"   element={<PrivateRoute><Layout><CompanyGroups /></Layout></PrivateRoute>} />
+      <Route path="/branches"         element={<PrivateRoute><Layout><BranchManagement /></Layout></PrivateRoute>} />
+      <Route path="/group-dashboard"  element={<PrivateRoute><Layout><GroupDashboard /></Layout></PrivateRoute>} />
 
       <Route path="*"          element={<Navigate to="/dashboard" replace />} />
     </Routes>

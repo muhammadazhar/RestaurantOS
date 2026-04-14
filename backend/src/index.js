@@ -204,15 +204,16 @@ db.query('SELECT NOW()').then(async () => {
   // Migration 012: Company groups, branch support, multi-level Chart of Accounts
   await db.query(`
     CREATE TABLE IF NOT EXISTS company_groups (
-      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      name        TEXT NOT NULL,
-      slug        TEXT UNIQUE NOT NULL,
-      email       TEXT,
-      phone       TEXT,
-      address     TEXT,
-      logo_url    TEXT,
-      status      TEXT DEFAULT 'active' CHECK (status IN ('active','suspended')),
-      created_at  TIMESTAMPTZ DEFAULT NOW()
+      id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name                 TEXT NOT NULL,
+      slug                 TEXT UNIQUE NOT NULL,
+      email                TEXT,
+      phone                TEXT,
+      address              TEXT,
+      logo_url             TEXT,
+      status               TEXT DEFAULT 'active' CHECK (status IN ('active','suspended')),
+      owner_restaurant_id  UUID,
+      created_at           TIMESTAMPTZ DEFAULT NOW()
     );
     ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS company_group_id UUID REFERENCES company_groups(id) ON DELETE SET NULL;
     ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS branch_code TEXT;
@@ -234,6 +235,12 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE gl_accounts ADD COLUMN IF NOT EXISTS description TEXT;
     ALTER TABLE gl_accounts ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT TRUE;
   `).catch(e => console.warn('Migration 012 note:', e.message));
+
+  // Migration 013: owner_restaurant_id on company_groups + branch city
+  await db.query(`
+    ALTER TABLE company_groups ADD COLUMN IF NOT EXISTS owner_restaurant_id UUID REFERENCES restaurants(id) ON DELETE SET NULL;
+    ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS city TEXT;
+  `).catch(e => console.warn('Migration 013 note:', e.message));
 
   // Migration 009: GL account mappings for auto-journalizing
   await db.query(`

@@ -86,8 +86,9 @@ const NAV_GROUPS = [
     label: 'System',
     module: null,
     items: [
-      { to: '/branches',      icon: '🏪', label: 'My Branch / Group',  perm: null },
-      { to: '/subscriptions', icon: '🏷️', label: 'My Subscriptions',   perm: null },
+      { to: '/branches',        icon: '🏪', label: 'My Branch / Group',  perm: null },
+      { to: '/group-dashboard', icon: '📊', label: 'Group Dashboard',    perm: 'settings' },
+      { to: '/subscriptions',   icon: '🏷️', label: 'My Subscriptions',   perm: null },
       { to: '/alerts',        icon: '🔔', label: 'Alerts',              perm: null },
       { to: '/admin',              icon: '🏢', label: 'Admin Panel',      superAdmin: true },
       { to: '/company-groups',     icon: '🏗',  label: 'Company Groups',   superAdmin: true },

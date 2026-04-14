@@ -221,6 +221,12 @@ export const getRiderReport         = (p)       => API.get('/rider/reports', { p
 
 // ── Company Groups & Branches ─────────────────────────────────────────────────
 export const getMyGroup                 = ()        => API.get('/branches/my-group');
+// Self-service group management (restaurant admin)
+export const registerMyGroup            = (data)    => API.post('/my-group/register', data);
+export const updateMyGroupInfo          = (data)    => API.patch('/my-group', data);
+export const getMyGroupDashboard        = ()        => API.get('/my-group/dashboard');
+export const addBranchToMyGroup         = (data)    => API.post('/my-group/branches', data);
+// Super admin group management
 export const getGroups                  = ()        => API.get('/admin/groups');
 export const createGroup                = (data)    => API.post('/admin/groups', data);
 export const updateGroup                = (id, d)   => API.put(`/admin/groups/${id}`, d);
