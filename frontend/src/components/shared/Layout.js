@@ -114,7 +114,7 @@ export default function Layout({ children }) {
   const { connected }                   = useSocket();
   const { mode, theme: T, toggle }      = useTheme();
   const navigate                        = useNavigate();
-  const [collapsed, setCollapsed]       = useState(true);
+  const [collapsed, setCollapsed]       = useState(false);
   const [logoUrl,   setLogoUrl]         = useState(null);
   const [basePricing, setBasePricing]   = useState([]);
 
@@ -158,7 +158,7 @@ export default function Layout({ children }) {
 
   // Track which groups are open; default all open
   const [openGroups, setOpenGroups] = useState(() =>
-    Object.fromEntries(NAV_GROUPS.filter(g => g.label).map(g => [g.label, true]))
+    Object.fromEntries(NAV_GROUPS.filter(g => g.label).map(g => [g.label, false]))
   );
   const toggleGroup = (label) => setOpenGroups(p => ({ ...p, [label]: !p[label] }));
 
