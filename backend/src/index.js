@@ -265,6 +265,45 @@ db.query('SELECT NOW()').then(async () => {
       AND r.company_group_id IS NULL;
   `).catch(e => console.warn('Migration 014 note:', e.message));
 
+  // Migration 015: Customer support ticketing system
+  await db.query(`
+    INSERT INTO modules(key, name, description) VALUES
+      ('support', 'Customer Support', 'Support ticketing system for restaurants')
+    ON CONFLICT (key) DO NOTHING;
+
+    INSERT INTO module_pricing(module_key, plan_type, price, duration_days) VALUES
+      ('support','trial',0,14),
+      ('support','monthly',499,30),
+      ('support','quarterly',1299,90),
+      ('support','half_yearly',2499,180),
+      ('support','yearly',3999,365)
+    ON CONFLICT (module_key, plan_type) DO NOTHING;
+
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id    UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      created_by       UUID REFERENCES employees(id) ON DELETE SET NULL,
+      title            TEXT NOT NULL,
+      description      TEXT,
+      screenshot_url   TEXT,
+      status           TEXT NOT NULL DEFAULT 'open'
+                       CHECK (status IN ('open','assigned','in_progress','resolved','closed')),
+      assigned_to_name TEXT,
+      resolved_at      TIMESTAMPTZ,
+      created_at       TIMESTAMPTZ DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS ticket_messages (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      ticket_id    UUID NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+      sender_type  TEXT NOT NULL CHECK (sender_type IN ('restaurant','admin')),
+      sender_name  TEXT,
+      message      TEXT NOT NULL,
+      created_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.warn('Migration 015 note:', e.message));
+
   // Migration 009: GL account mappings for auto-journalizing
   await db.query(`
     CREATE TABLE IF NOT EXISTS gl_sales_mappings (

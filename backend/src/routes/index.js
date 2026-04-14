@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 
-const { authenticate, requirePermission, requireSuperAdmin } = require('../middleware/auth');
+const { authenticate, requirePermission, requireSuperAdmin, requireModule } = require('../middleware/auth');
 const upload = require('../middleware/upload');  // multer: saves to /uploads/
 const auth         = require('../controllers/authController');
 const orders       = require('../controllers/ordersController');
@@ -13,6 +13,7 @@ const delivery     = require('../controllers/deliveryController');
 const rider        = require('../controllers/riderController');
 const subscription = require('../controllers/subscriptionController');
 const branch       = require('../controllers/branchController');
+const support      = require('../controllers/supportController');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.get('/auth/groups',                           auth.getPublicGroups);       // public
@@ -238,5 +239,19 @@ router.post('/admin/module-pricing',   requireSuperAdmin, subscription.saveModul
 router.get('/admin/subscriptions',     requireSuperAdmin, subscription.getAllSubscriptions);
 router.patch('/admin/subscriptions/:id/approve', requireSuperAdmin, subscription.approveSubscription);
 router.patch('/admin/subscriptions/:id/reject',  requireSuperAdmin, subscription.rejectSubscription);
+
+// ── Support Tickets (restaurant) ─────────────────────────────────────────────
+router.post('/support/tickets',                    requireModule('support'), upload.single('screenshot'), support.createTicket);
+router.get('/support/tickets',                     requireModule('support'), support.getMyTickets);
+router.get('/support/tickets/:id/messages',        requireModule('support'), support.getTicketMessages);
+router.post('/support/tickets/:id/messages',       requireModule('support'), support.addMessage);
+
+// ── Support Tickets (super admin) ────────────────────────────────────────────
+router.get('/admin/support/tickets',               requireSuperAdmin, support.getAllTickets);
+router.get('/admin/support/tickets/:id',           requireSuperAdmin, support.getTicketById);
+router.get('/admin/support/tickets/:id/messages',  requireSuperAdmin, support.getTicketMessages);
+router.post('/admin/support/tickets/:id/messages', requireSuperAdmin, support.adminAddMessage);
+router.patch('/admin/support/tickets/:id/assign',  requireSuperAdmin, support.assignTicket);
+router.patch('/admin/support/tickets/:id/resolve', requireSuperAdmin, support.resolveTicket);
 
 module.exports = router;

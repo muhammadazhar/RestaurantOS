@@ -83,6 +83,13 @@ const NAV_GROUPS = [
     ],
   },
   {
+    label: 'Support',
+    module: 'support',
+    items: [
+      { to: '/support', icon: '🎫', label: 'Support Tickets', perm: null },
+    ],
+  },
+  {
     label: 'System',
     module: null,
     items: [
@@ -94,6 +101,7 @@ const NAV_GROUPS = [
       { to: '/company-groups',     icon: '🏗',  label: 'Company Groups',   superAdmin: true },
       { to: '/module-pricing',     icon: '💰', label: 'Module Pricing',   superAdmin: true },
       { to: '/subscription-mgmt',  icon: '📋', label: 'Subscriptions',    superAdmin: true },
+      { to: '/admin-support',      icon: '🎫', label: 'Support Tickets',  superAdmin: true },
       { to: '/system',        icon: '🖥',  label: 'System',              perm: 'settings' },
       { to: '/settings',      icon: '⚙️', label: 'Settings',            perm: 'settings' },
     ],
@@ -105,7 +113,7 @@ export default function Layout({ children }) {
   const { connected }                   = useSocket();
   const { mode, theme: T, toggle }      = useTheme();
   const navigate                        = useNavigate();
-  const [collapsed, setCollapsed]       = useState(false);
+  const [collapsed, setCollapsed]       = useState(true);
   const [logoUrl,   setLogoUrl]         = useState(null);
   const [basePricing, setBasePricing]   = useState([]);
 

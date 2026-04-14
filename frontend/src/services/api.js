@@ -260,4 +260,23 @@ export const getAdminSubscriptions   = (p)    => API.get('/admin/subscriptions',
 export const approveSubscription     = (id, data) => API.patch(`/admin/subscriptions/${id}/approve`, data);
 export const rejectSubscription      = (id, data) => API.patch(`/admin/subscriptions/${id}/reject`, data);
 
+// ── Support Tickets ───────────────────────────────────────────────────────────
+export const createSupportTicket = (data) => {
+  const form = new FormData();
+  form.append('title', data.title);
+  if (data.description) form.append('description', data.description);
+  if (data.screenshot) form.append('screenshot', data.screenshot);
+  return API.post('/support/tickets', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const getMySupportTickets    = ()        => API.get('/support/tickets');
+export const getTicketMessages      = (id)      => API.get(`/support/tickets/${id}/messages`);
+export const addTicketMessage       = (id, msg) => API.post(`/support/tickets/${id}/messages`, { message: msg });
+
+export const adminGetAllTickets     = (p)        => API.get('/admin/support/tickets', { params: p });
+export const adminGetTicket         = (id)       => API.get(`/admin/support/tickets/${id}`);
+export const adminGetTicketMessages = (id)       => API.get(`/admin/support/tickets/${id}/messages`);
+export const adminAddTicketMessage  = (id, msg)  => API.post(`/admin/support/tickets/${id}/messages`, { message: msg });
+export const adminAssignTicket      = (id, name) => API.patch(`/admin/support/tickets/${id}/assign`, { assigned_to_name: name });
+export const adminResolveTicket     = (id)       => API.patch(`/admin/support/tickets/${id}/resolve`);
+
 export default API;
