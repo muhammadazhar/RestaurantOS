@@ -139,6 +139,13 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE shifts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
   `).catch(e => console.warn('Migration 008 note:', e.message));
 
+  // Migration 008b: expand shifts status CHECK to include in_process + closed
+  await db.query(`
+    ALTER TABLE shifts DROP CONSTRAINT IF EXISTS shifts_status_check;
+    ALTER TABLE shifts ADD CONSTRAINT shifts_status_check
+      CHECK (status IN ('scheduled','active','in_process','completed','closed','absent'));
+  `).catch(e => console.warn('Migration 008b note:', e.message));
+
   // Migration 010: Module-based licensing system
   await db.query(`
     CREATE TABLE IF NOT EXISTS modules (
