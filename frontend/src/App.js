@@ -39,6 +39,8 @@ import RiderReports        from './components/rider/RiderReports';
 import MySubscriptions      from './components/subscriptions/MySubscriptions';
 import ModulePricing        from './components/admin/ModulePricing';
 import SubscriptionManagement from './components/admin/SubscriptionManagement';
+import CompanyGroups        from './components/admin/CompanyGroups';
+import BranchManagement     from './components/branches/BranchManagement';
 
 function ThemedToaster() {
   const { theme: T } = useTheme();
@@ -104,6 +106,10 @@ function AppRoutes() {
       <Route path="/subscriptions"     element={<PrivateRoute><Layout><MySubscriptions /></Layout></PrivateRoute>} />
       <Route path="/module-pricing"    element={<PrivateRoute><Layout><ModulePricing /></Layout></PrivateRoute>} />
       <Route path="/subscription-mgmt" element={<PrivateRoute><Layout><SubscriptionManagement /></Layout></PrivateRoute>} />
+
+      {/* Company Groups & Branches */}
+      <Route path="/company-groups" element={<PrivateRoute><Layout><CompanyGroups /></Layout></PrivateRoute>} />
+      <Route path="/branches"       element={<PrivateRoute><Layout><BranchManagement /></Layout></PrivateRoute>} />
 
       <Route path="*"          element={<Navigate to="/dashboard" replace />} />
     </Routes>

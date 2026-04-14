@@ -122,6 +122,9 @@ export const deleteShift      = (id)      => API.delete(`/shifts/${id}`);
 
 // ── GL ────────────────────────────────────────────────────────────────────────
 export const getGLAccounts          = ()       => API.get('/gl/accounts');
+export const createGLAccount        = (data)   => API.post('/gl/accounts', data);
+export const updateGLAccount        = (id, d)  => API.put(`/gl/accounts/${id}`, d);
+export const deleteGLAccount        = (id)     => API.delete(`/gl/accounts/${id}`);
 export const getJournalEntries      = (params) => API.get('/gl/entries', { params });
 export const createJournalEntry     = (data)   => API.post('/gl/entries', data);
 export const getSalesMappings       = ()       => API.get('/gl/mappings/sales');
@@ -215,6 +218,19 @@ export const deleteIncentivePayment = (id)       => API.delete(`/rider/incentive
 export const getIncentivePaymentDeliveries = (id) => API.get(`/rider/incentives/payments/${id}/deliveries`);
 
 export const getRiderReport         = (p)       => API.get('/rider/reports', { params: p });
+
+// ── Company Groups & Branches ─────────────────────────────────────────────────
+export const getMyGroup                 = ()        => API.get('/branches/my-group');
+export const getGroups                  = ()        => API.get('/admin/groups');
+export const createGroup                = (data)    => API.post('/admin/groups', data);
+export const updateGroup                = (id, d)   => API.put(`/admin/groups/${id}`, d);
+export const getGroupBranches           = (id)      => API.get(`/admin/groups/${id}/branches`);
+export const assignBranch               = (gid, d)  => API.post(`/admin/groups/${gid}/assign`, d);
+export const removeBranch               = (gid, rid)=> API.delete(`/admin/groups/${gid}/branches/${rid}`);
+export const getUnassignedRestaurants   = ()        => API.get('/admin/unassigned-restaurants');
+export const getDiscountTiers           = ()        => API.get('/admin/branch-discounts');
+export const saveDiscountTiers          = (data)    => API.post('/admin/branch-discounts', data);
+export const getGroupConsolidatedTB     = (gid, p)  => API.get(`/admin/groups/${gid}/consolidated-tb`, { params: p });
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 export const getAllRestaurants    = ()     => API.get('/admin/restaurants');

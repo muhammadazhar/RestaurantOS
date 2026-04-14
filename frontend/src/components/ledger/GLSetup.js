@@ -10,13 +10,31 @@ const PAYMENT_METHODS = [
   { key: 'default', label: 'Default (all others)' },
 ];
 
-const TYPE_COLOR = {
-  revenue: '#2ecc71', cogs: '#f39c12', expense: '#e74c3c',
-  asset: '#3498db', liability: '#95a5a6', equity: '#9b59b6',
-};
+// ─── Tree helpers (same logic as Ledger.js) ───────────────────────────────────
+function buildTree(accounts) {
+  const byId = {};
+  accounts.forEach(a => { byId[a.id] = { ...a, children: [] }; });
+  const roots = [];
+  accounts.forEach(a => {
+    if (a.parent_id && byId[a.parent_id]) byId[a.parent_id].children.push(byId[a.id]);
+    else roots.push(byId[a.id]);
+  });
+  const sort = nodes => { nodes.sort((x, y) => (x.code||'').localeCompare(y.code||'')); nodes.forEach(n => sort(n.children)); return nodes; };
+  return sort(roots);
+}
+function flattenTree(nodes, depth = 0) {
+  const result = [];
+  nodes.forEach(node => { result.push({ ...node, depth }); if (node.children?.length) result.push(...flattenTree(node.children, depth + 1)); });
+  return result;
+}
 
 function AccountSelect({ value, onChange, accounts, types, placeholder = '— Not mapped —' }) {
   useT();
+  // Only show postable (non-header) accounts, ordered by tree
+  const postable = accounts.filter(a => !a.is_header);
+  const flatSorted = flattenTree(buildTree(postable));
+  const filtered = types ? flatSorted.filter(a => types.includes(a.type)) : flatSorted;
+
   return (
     <select
       value={value || ''}
@@ -29,12 +47,14 @@ function AccountSelect({ value, onChange, accounts, types, placeholder = '— No
     >
       <option value="">{placeholder}</option>
       {(types || ['revenue','cogs','expense','asset','liability','equity']).map(type => {
-        const group = accounts.filter(a => a.type === type);
+        const group = filtered.filter(a => a.type === type);
         if (!group.length) return null;
         return (
           <optgroup key={type} label={type.toUpperCase()}>
             {group.map(a => (
-              <option key={a.id} value={a.id}>[{a.code}] {a.name}</option>
+              <option key={a.id} value={a.id}>
+                {'\u00A0'.repeat(a.depth * 3)}[{a.code}] {a.name}
+              </option>
             ))}
           </optgroup>
         );

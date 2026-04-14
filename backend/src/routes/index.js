@@ -12,6 +12,7 @@ const attendance   = require('../controllers/attendanceController');
 const delivery     = require('../controllers/deliveryController');
 const rider        = require('../controllers/riderController');
 const subscription = require('../controllers/subscriptionController');
+const branch       = require('../controllers/branchController');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.post('/auth/register',     auth.register);   // public self-registration
@@ -91,6 +92,8 @@ router.delete('/shifts/:id',             requirePermission('employees'), ctrl.de
 // ── General Ledger ────────────────────────────────────────────────────────────
 router.get('/gl/accounts',                requirePermission('gl'), ctrl.getAccounts);
 router.post('/gl/accounts',               requirePermission('gl'), ctrl.createGLAccount);
+router.put('/gl/accounts/:id',            requirePermission('gl'), ctrl.updateGLAccount);
+router.delete('/gl/accounts/:id',         requirePermission('gl'), ctrl.deleteGLAccount);
 router.get('/gl/entries',                 requirePermission('gl'), ctrl.getJournalEntries);
 router.post('/gl/entries',                requirePermission('gl'), ctrl.createJournalEntry);
 router.get('/gl/mappings/sales',          requirePermission('gl'), ctrl.getSalesMappings);
@@ -199,6 +202,19 @@ router.get('/rider/incentives/payments/:id/deliveries',      requirePermission('
 
 // Rider reports
 router.get('/rider/reports',                        requirePermission('pos'),        rider.getRiderReport);
+
+// ── Company Groups & Branches ─────────────────────────────────────────────────
+router.get('/branches/my-group',                       branch.getMyGroup);   // restaurant user
+router.get('/admin/groups',                requireSuperAdmin, branch.getGroups);
+router.post('/admin/groups',               requireSuperAdmin, branch.createGroup);
+router.put('/admin/groups/:id',            requireSuperAdmin, branch.updateGroup);
+router.get('/admin/groups/:groupId/branches',          requireSuperAdmin, branch.getGroupBranches);
+router.post('/admin/groups/:groupId/assign',           requireSuperAdmin, branch.assignBranch);
+router.delete('/admin/groups/:groupId/branches/:restaurantId', requireSuperAdmin, branch.removeBranch);
+router.get('/admin/unassigned-restaurants',            requireSuperAdmin, branch.getUnassignedRestaurants);
+router.get('/admin/branch-discounts',      requireSuperAdmin, branch.getDiscountTiers);
+router.post('/admin/branch-discounts',     requireSuperAdmin, branch.saveDiscountTiers);
+router.get('/admin/groups/:groupId/consolidated-tb',   requireSuperAdmin, branch.getGroupConsolidatedTB);
 
 // ── Admin (super admin only) ──────────────────────────────────────────────────
 router.get('/admin/restaurants',     requireSuperAdmin, ctrl.getAllRestaurants);

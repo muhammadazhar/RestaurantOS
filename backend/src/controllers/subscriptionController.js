@@ -1,22 +1,34 @@
 const db = require('../config/db');
 const nodemailer = require('nodemailer');
 
-// ── Email helper ──────────────────────────────────────────────────────────────
-const getTransporter = () => nodemailer.createTransport({
-  host:   process.env.SMTP_HOST   || 'smtp.gmail.com',
-  port:   parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-const sendEmail = async (to, subject, html) => {
-  if (!process.env.SMTP_USER) return; // skip if not configured
+// Lazy-load config util (avoids circular dep during startup)
+const getConfig = async (key, envVar) => {
   try {
-    const t = getTransporter();
-    await t.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html });
+    const { getConfig: _gc } = require('../utils/config');
+    return await _gc(key, envVar);
+  } catch {
+    return process.env[envVar] || null;
+  }
+};
+
+// ── Email helper ──────────────────────────────────────────────────────────────
+const sendEmail = async (to, subject, html) => {
+  const [host, port, secure, user, pass, from] = await Promise.all([
+    getConfig('smtp.host',   'SMTP_HOST'),
+    getConfig('smtp.port',   'SMTP_PORT'),
+    getConfig('smtp.secure', 'SMTP_SECURE'),
+    getConfig('smtp.user',   'SMTP_USER'),
+    getConfig('smtp.pass',   'SMTP_PASS'),
+    getConfig('smtp.from',   'SMTP_FROM'),
+  ]);
+  if (!host || !user || !pass) return;
+  try {
+    const t = nodemailer.createTransport({
+      host, port: parseInt(port || '587'),
+      secure: secure === 'true',
+      auth: { user, pass },
+    });
+    await t.sendMail({ from: from || user, to, subject, html });
   } catch (e) {
     console.warn('Email send failed:', e.message);
   }
@@ -140,6 +152,31 @@ exports.requestSubscription = async (req, res) => {
       }
     }
 
+    // Apply group multi-branch discount if applicable
+    let finalPrice = Number(pricing.price);
+    let discountPct = 0;
+    if (plan_type !== 'trial') {
+      const restRow2 = await db.query(
+        `SELECT company_group_id FROM restaurants WHERE id=$1`, [restaurantId]
+      );
+      const groupId = restRow2.rows[0]?.company_group_id;
+      if (groupId) {
+        const branchCount = await db.query(
+          `SELECT COUNT(*) as cnt FROM restaurants WHERE company_group_id=$1`, [groupId]
+        );
+        const cnt = parseInt(branchCount.rows[0]?.cnt || 0);
+        const discount = await db.query(
+          `SELECT discount_pct FROM group_branch_discounts
+           WHERE min_branches <= $1 ORDER BY min_branches DESC LIMIT 1`,
+          [cnt]
+        );
+        if (discount.rows.length) {
+          discountPct = Number(discount.rows[0].discount_pct);
+          finalPrice = finalPrice * (1 - discountPct / 100);
+        }
+      }
+    }
+
     // Trial is auto-activated, paid requires super admin approval
     const isTrial = plan_type === 'trial';
     const now = new Date();
@@ -153,7 +190,7 @@ exports.requestSubscription = async (req, res) => {
         isTrial ? 'trial' : 'pending_payment',
         isTrial ? now : null,
         isTrial ? expiresAt : null,
-        pricing.price,
+        Math.round(finalPrice * 100) / 100,
       ]
     );
 
@@ -162,39 +199,39 @@ exports.requestSubscription = async (req, res) => {
       `SELECT name, email FROM restaurants WHERE id=$1`, [restaurantId]
     );
     const rest = restRow.rows[0];
+    const discountNote = discountPct > 0 ? ` (${discountPct}% multi-branch discount applied)` : '';
     if (isTrial) {
       await sendEmail(
         rest.email,
-        `Free Trial Activated – ${pricing.module_key}`,
+        `Free Trial Activated – ${module_key}`,
         `<h2>Your free trial for <b>${module_key}</b> is now active!</h2>
          <p>Trial expires: <b>${expiresAt.toDateString()}</b></p>
          <p>Thank you for trying RestaurantOS.</p>`
       );
     } else {
-      // Notify restaurant
       await sendEmail(
         rest.email,
         `Subscription Request Received – ${module_key}`,
         `<h2>Payment Request Received</h2>
          <p>Your request for <b>${module_key}</b> (${plan_type}) has been received.</p>
-         <p>Amount due: <b>PKR ${pricing.price}</b></p>
+         <p>Amount due: <b>PKR ${Math.round(finalPrice).toLocaleString()}</b>${discountNote}</p>
          <p>Your subscription will be activated once payment is confirmed by our team.</p>`
       );
-      // Notify admin
-      if (process.env.ADMIN_EMAIL) {
+      const adminEmail = await getConfig('app.admin_email', 'ADMIN_EMAIL');
+      if (adminEmail) {
         await sendEmail(
-          process.env.ADMIN_EMAIL,
+          adminEmail,
           `New Subscription Request – ${rest.name}`,
           `<h2>New Subscription Request</h2>
            <p>Restaurant: <b>${rest.name}</b></p>
            <p>Module: <b>${module_key}</b> | Plan: <b>${plan_type}</b></p>
-           <p>Amount: <b>PKR ${pricing.price}</b></p>
+           <p>Amount: <b>PKR ${Math.round(finalPrice).toLocaleString()}</b>${discountNote}</p>
            <p>Login to super admin to approve or reject.</p>`
         );
       }
     }
 
-    res.status(201).json(sub.rows[0]);
+    res.status(201).json({ ...sub.rows[0], discount_pct: discountPct });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

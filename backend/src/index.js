@@ -201,6 +201,40 @@ db.query('SELECT NOW()').then(async () => {
     );
   `).catch(e => console.warn('Migration 010 note:', e.message));
 
+  // Migration 012: Company groups, branch support, multi-level Chart of Accounts
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS company_groups (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name        TEXT NOT NULL,
+      slug        TEXT UNIQUE NOT NULL,
+      email       TEXT,
+      phone       TEXT,
+      address     TEXT,
+      logo_url    TEXT,
+      status      TEXT DEFAULT 'active' CHECK (status IN ('active','suspended')),
+      created_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+    ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS company_group_id UUID REFERENCES company_groups(id) ON DELETE SET NULL;
+    ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS branch_code TEXT;
+    ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS is_branch BOOLEAN DEFAULT FALSE;
+
+    CREATE TABLE IF NOT EXISTS group_branch_discounts (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      min_branches   INTEGER NOT NULL,
+      discount_pct   NUMERIC(5,2) NOT NULL,
+      UNIQUE(min_branches)
+    );
+    INSERT INTO group_branch_discounts(min_branches, discount_pct) VALUES
+      (2, 10), (3, 15), (5, 20), (10, 25)
+    ON CONFLICT (min_branches) DO NOTHING;
+
+    ALTER TABLE gl_accounts ADD COLUMN IF NOT EXISTS parent_id   UUID REFERENCES gl_accounts(id) ON DELETE SET NULL;
+    ALTER TABLE gl_accounts ADD COLUMN IF NOT EXISTS is_header   BOOLEAN DEFAULT FALSE;
+    ALTER TABLE gl_accounts ADD COLUMN IF NOT EXISTS level       INTEGER DEFAULT 1;
+    ALTER TABLE gl_accounts ADD COLUMN IF NOT EXISTS description TEXT;
+    ALTER TABLE gl_accounts ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT TRUE;
+  `).catch(e => console.warn('Migration 012 note:', e.message));
+
   // Migration 009: GL account mappings for auto-journalizing
   await db.query(`
     CREATE TABLE IF NOT EXISTS gl_sales_mappings (

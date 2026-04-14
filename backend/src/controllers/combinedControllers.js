@@ -315,13 +315,19 @@ exports.getAccounts = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT a.*,
-        COALESCE(SUM(jl.debit),0) as total_debit,
-        COALESCE(SUM(jl.credit),0) as total_credit,
-        COALESCE(SUM(jl.credit - jl.debit),0) as balance
+        p.name as parent_name, p.code as parent_code,
+        CASE WHEN a.is_header THEN 0
+             ELSE COALESCE(SUM(jl.debit),0)  END as total_debit,
+        CASE WHEN a.is_header THEN 0
+             ELSE COALESCE(SUM(jl.credit),0) END as total_credit,
+        CASE WHEN a.is_header THEN 0
+             ELSE COALESCE(SUM(jl.credit - jl.debit),0) END as balance
        FROM gl_accounts a
-       LEFT JOIN journal_lines jl ON jl.account_id = a.id
-       WHERE a.restaurant_id=$1
-       GROUP BY a.id ORDER BY a.code`,
+       LEFT JOIN gl_accounts p ON p.id = a.parent_id
+       LEFT JOIN journal_lines jl
+         ON jl.account_id = a.id AND (a.is_header = FALSE OR a.is_header IS NULL)
+       WHERE a.restaurant_id=$1 AND (a.is_active = TRUE OR a.is_active IS NULL)
+       GROUP BY a.id, p.name, p.code ORDER BY a.code`,
       [req.user.restaurantId]
     );
     res.json(result.rows);
@@ -330,18 +336,72 @@ exports.getAccounts = async (req, res) => {
 
 exports.createGLAccount = async (req, res) => {
   try {
-    const { code, name, type } = req.body;
+    const { code, name, type, parent_id, is_header, description } = req.body;
     if (!code || !name || !type) return res.status(400).json({ error: 'code, name and type required' });
+
+    let level = 1;
+    if (parent_id) {
+      const par = await db.query(
+        `SELECT level FROM gl_accounts WHERE id=$1 AND restaurant_id=$2`,
+        [parent_id, req.user.restaurantId]
+      );
+      if (par.rows.length) level = (par.rows[0].level || 1) + 1;
+    }
+
     const result = await db.query(
-      `INSERT INTO gl_accounts(restaurant_id, code, name, type)
-       VALUES($1,$2,$3,$4) RETURNING *`,
-      [req.user.restaurantId, code, name, type]
+      `INSERT INTO gl_accounts(restaurant_id, code, name, type, parent_id, is_header, level, description)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.user.restaurantId, code, name, type,
+       parent_id || null, is_header ? true : false, level, description || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Account code already exists' });
     res.status(500).json({ error: 'Server error' });
   }
+};
+
+exports.updateGLAccount = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, is_active, is_header } = req.body;
+    const result = await db.query(
+      `UPDATE gl_accounts
+       SET name        = COALESCE($1, name),
+           description = COALESCE($2, description),
+           is_active   = COALESCE($3, is_active),
+           is_header   = COALESCE($4, is_header)
+       WHERE id=$5 AND restaurant_id=$6 RETURNING *`,
+      [name || null, description || null,
+       is_active != null ? is_active : null,
+       is_header != null ? is_header : null,
+       id, req.user.restaurantId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Account not found' });
+    res.json(result.rows[0]);
+  } catch { res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.deleteGLAccount = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const used = await db.query(
+      `SELECT 1 FROM journal_lines WHERE account_id=$1 LIMIT 1`, [id]
+    );
+    if (used.rows.length) {
+      await db.query(
+        `UPDATE gl_accounts SET is_active=FALSE WHERE id=$1 AND restaurant_id=$2`,
+        [id, req.user.restaurantId]
+      );
+      return res.json({ success: true, soft: true, message: 'Account has transactions — marked inactive' });
+    }
+    const r = await db.query(
+      `DELETE FROM gl_accounts WHERE id=$1 AND restaurant_id=$2 AND (is_system IS NULL OR is_system=FALSE) RETURNING id`,
+      [id, req.user.restaurantId]
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Account not found or is a system account' });
+    res.json({ success: true });
+  } catch { res.status(500).json({ error: 'Server error' }); }
 };
 
 exports.getJournalEntries = async (req, res) => {
@@ -509,17 +569,21 @@ exports.getTrialBalance = async (req, res) => {
     const { from, to } = req.query;
     const result = await db.query(
       `SELECT
-         a.id, a.code, a.name, a.type,
+         a.id, a.code, a.name, a.type, a.level,
+         a.parent_id, p.code as parent_code, p.name as parent_name,
          COALESCE(SUM(jl.debit),  0) AS total_debit,
          COALESCE(SUM(jl.credit), 0) AS total_credit,
          COALESCE(SUM(jl.credit - jl.debit), 0) AS net_balance
        FROM gl_accounts a
+       LEFT JOIN gl_accounts p ON p.id = a.parent_id
        LEFT JOIN journal_lines jl ON jl.account_id = a.id
        LEFT JOIN journal_entries je ON je.id = jl.entry_id
          AND ($1::date IS NULL OR je.entry_date >= $1::date)
          AND ($2::date IS NULL OR je.entry_date <= $2::date)
        WHERE a.restaurant_id = $3
-       GROUP BY a.id, a.code, a.name, a.type
+         AND (a.is_header = FALSE OR a.is_header IS NULL)
+         AND (a.is_active = TRUE OR a.is_active IS NULL)
+       GROUP BY a.id, a.code, a.name, a.type, a.level, a.parent_id, p.code, p.name
        ORDER BY a.code`,
       [from || null, to || null, restaurantId]
     );
@@ -535,17 +599,20 @@ exports.getBalanceSheet = async (req, res) => {
   try {
     const { restaurantId } = req.user;
     const { as_of } = req.query;
-    // Get all account balances up to as_of date
     const result = await db.query(
       `SELECT
-         a.id, a.code, a.name, a.type,
+         a.id, a.code, a.name, a.type, a.level,
+         a.parent_id, p.code as parent_code, p.name as parent_name,
          COALESCE(SUM(jl.credit - jl.debit), 0) AS balance
        FROM gl_accounts a
+       LEFT JOIN gl_accounts p ON p.id = a.parent_id
        LEFT JOIN journal_lines jl ON jl.account_id = a.id
        LEFT JOIN journal_entries je ON je.id = jl.entry_id
          AND ($1::date IS NULL OR je.entry_date <= $1::date)
        WHERE a.restaurant_id = $2
-       GROUP BY a.id, a.code, a.name, a.type
+         AND (a.is_header = FALSE OR a.is_header IS NULL)
+         AND (a.is_active = TRUE OR a.is_active IS NULL)
+       GROUP BY a.id, a.code, a.name, a.type, a.level, a.parent_id, p.code, p.name
        ORDER BY a.code`,
       [as_of || null, restaurantId]
     );
@@ -630,17 +697,44 @@ exports.registerRestaurant = async (req, res) => {
       [rest.rows[0].id, role.rows[0].id, admin_name, email, hash]
     );
 
-    // Default GL accounts
-    const accounts = [
-      ['4001','Food Revenue','revenue'],['4002','Beverage Revenue','revenue'],
-      ['5001','Food Cost','cogs'],['6001','Staff Wages','expense'],
-      ['6002','Rent','expense'],['1001','Cash','asset'],
+    // Default multi-level Chart of Accounts
+    const coa = [
+      // [code, name, type, is_header, parent_code, level]
+      ['1000','Assets',              'asset',    true,  null, 1],
+      ['1100','Current Assets',      'asset',    true,  '1000', 2],
+      ['1110','Cash & Equivalents',  'asset',    true,  '1100', 3],
+      ['1111','Cash on Hand',        'asset',    false, '1110', 4],
+      ['1112','Bank Account',        'asset',    false, '1110', 4],
+      ['1120','Accounts Receivable', 'asset',    false, '1100', 3],
+      ['2000','Liabilities',         'liability',true,  null, 1],
+      ['2100','Current Liabilities', 'liability',true,  '2000', 2],
+      ['2110','Accounts Payable',    'liability',false, '2100', 3],
+      ['2120','Sales Tax Payable',   'liability',false, '2100', 3],
+      ['3000','Equity',              'equity',   true,  null, 1],
+      ['3100','Owner\'s Equity',     'equity',   false, '3000', 2],
+      ['3200','Retained Earnings',   'equity',   false, '3000', 2],
+      ['4000','Revenue',             'revenue',  true,  null, 1],
+      ['4100','Food Revenue',        'revenue',  false, '4000', 2],
+      ['4200','Beverage Revenue',    'revenue',  false, '4000', 2],
+      ['4300','Online Revenue',      'revenue',  false, '4000', 2],
+      ['5000','Cost of Goods Sold',  'cogs',     true,  null, 1],
+      ['5100','Food Cost',           'cogs',     false, '5000', 2],
+      ['5200','Beverage Cost',       'cogs',     false, '5000', 2],
+      ['6000','Operating Expenses',  'expense',  true,  null, 1],
+      ['6100','Staff Wages',         'expense',  false, '6000', 2],
+      ['6200','Rent & Utilities',    'expense',  false, '6000', 2],
+      ['6300','Supplies',            'expense',  false, '6000', 2],
     ];
-    for (const [code, name, type] of accounts) {
-      await client.query(
-        `INSERT INTO gl_accounts(restaurant_id,code,name,type,is_system) VALUES($1,$2,$3,$4,TRUE)`,
-        [rest.rows[0].id, code, name, type]
+    const coaIds = {};
+    for (const [code, name, type, is_header, parent_code] of coa) {
+      const parentId = parent_code ? coaIds[parent_code] : null;
+      const level = parent_code ? (coa.find(a => a[0] === parent_code)?.[5] || 1) + 1 : 1;
+      const r = await client.query(
+        `INSERT INTO gl_accounts(restaurant_id,code,name,type,is_header,parent_id,level,is_system)
+         VALUES($1,$2,$3,$4,$5,$6,$7,TRUE) RETURNING id`,
+        [rest.rows[0].id, code, name, type, is_header, parentId || null, level]
       );
+      coaIds[code] = r.rows[0].id;
     }
 
     await client.query('COMMIT');

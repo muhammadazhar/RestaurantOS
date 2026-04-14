@@ -15,6 +15,7 @@ exports.login = async (req, res) => {
 
     const result = await db.query(
       `SELECT e.*, r.name as restaurant_name, r.slug, r.status as restaurant_status,
+              r.company_group_id, r.branch_code, r.is_branch,
               ro.name as role_name, ro.permissions
        FROM employees e
        JOIN restaurants r ON e.restaurant_id = r.id
@@ -42,6 +43,9 @@ exports.login = async (req, res) => {
       restaurantId: emp.restaurant_id,
       restaurantName: emp.restaurant_name,
       restaurantSlug: emp.slug,
+      companyGroupId: emp.company_group_id || null,
+      branchCode: emp.branch_code || null,
+      isBranch: emp.is_branch || false,
       role: emp.role_name,
       permissions: emp.permissions,
       modules,
@@ -65,6 +69,9 @@ exports.login = async (req, res) => {
         role: emp.role_name, permissions: emp.permissions,
         modules,
         restaurantId: emp.restaurant_id, restaurantName: emp.restaurant_name,
+        companyGroupId: emp.company_group_id || null,
+        branchCode: emp.branch_code || null,
+        isBranch: emp.is_branch || false,
       }
     });
   } catch (err) {
