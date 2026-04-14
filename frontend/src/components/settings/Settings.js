@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Badge, T, useT } from '../shared/UI';
-import { getRestaurantSettings, updateRestaurantSettings, uploadRestaurantLogo, getRoles, createRole, updateRole } from '../../services/api';
+import { getRestaurantSettings, updateRestaurantSettings, uploadRestaurantLogo, getRoles, createRole, updateRole, testWhatsAppMsg } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
@@ -666,71 +666,131 @@ function AlertThresholds() {
 
 // ─── 6. Integrations ─────────────────────────────────────────────────────────
 function Integrations() {
-  const [integrations, setIntegrations] = useState([
-    { id: 'foodpanda',  name: 'Foodpanda',       icon: '🐼', category: 'Online Orders',  connected: false, color: '#D70F64' },
-    { id: 'careem',     name: 'Careem Food',     icon: '🚗', category: 'Online Orders',  connected: false, color: '#1DBF73' },
-    { id: 'stripe',     name: 'Stripe',          icon: '💳', category: 'Payments',       connected: true,  color: '#6772E5', detail: 'pk_live_...3k9f' },
-    { id: 'jazzcash_api', name: 'JazzCash API',  icon: '📱', category: 'Payments',       connected: false, color: '#A5192F' },
-    { id: 'quickbooks', name: 'QuickBooks',      icon: '📒', category: 'Accounting',     connected: false, color: '#2CA01C' },
-    { id: 'xero',       name: 'Xero',            icon: '📊', category: 'Accounting',     connected: false, color: '#13B5EA' },
-    { id: 'twilio',     name: 'Twilio SMS',      icon: '💬', category: 'Notifications',  connected: true,  color: '#F22F46', detail: 'AC...7b2e' },
-    { id: 'sendgrid',   name: 'SendGrid Email',  icon: '📧', category: 'Notifications',  connected: false, color: '#1A82E2' },
-  ]);
-  const [apiKeys, setApiKeys] = useState({});
+  useT();
+  const EMPTY_WA = { whatsapp_enabled: false, whatsapp_phone_number_id: '', whatsapp_access_token: '', whatsapp_from_name: '' };
+  const [wa,       setWa]       = useState(EMPTY_WA);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [testing,  setTesting]  = useState(false);
+  const [testTo,   setTestTo]   = useState('');
 
-  const toggle = (id) => {
-    setIntegrations(i => i.map(x => x.id === id ? { ...x, connected: !x.connected } : x));
-    const item = integrations.find(x => x.id === id);
-    toast.success(item.connected ? `${item.name} disconnected` : `${item.name} connected`);
+  useEffect(() => {
+    getRestaurantSettings()
+      .then(r => {
+        const s = r.data || {};
+        setWa({
+          whatsapp_enabled:          !!s.whatsapp_enabled,
+          whatsapp_phone_number_id:  s.whatsapp_phone_number_id  || '',
+          whatsapp_access_token:     s.whatsapp_access_token     || '',
+          whatsapp_from_name:        s.whatsapp_from_name        || '',
+        });
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const w = (k, v) => setWa(p => ({ ...p, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateRestaurantSettings(wa);
+      toast.success('WhatsApp settings saved');
+    } catch (e) { toast.error(e.response?.data?.error || 'Save failed'); }
+    finally { setSaving(false); }
   };
 
-  const categories = [...new Set(integrations.map(i => i.category))];
+  const handleTest = async () => {
+    const num = testTo.trim().replace(/\D/g, '');
+    if (!num) return toast.error('Enter a recipient phone number (with country code)');
+    if (!wa.whatsapp_phone_number_id || !wa.whatsapp_access_token)
+      return toast.error('Save Phone Number ID and Access Token first');
+    setTesting(true);
+    try {
+      await testWhatsAppMsg({ to: num, phone_number_id: wa.whatsapp_phone_number_id, access_token: wa.whatsapp_access_token });
+      toast.success('Test WhatsApp message sent!');
+    } catch (e) { toast.error(e.response?.data?.error || 'Test failed'); }
+    finally { setTesting(false); }
+  };
+
+  if (loading) return null;
+
+  const inp = (key, placeholder, type = 'text') => (
+    <input
+      type={type} value={wa[key]} onChange={e => w(key, e.target.value)}
+      placeholder={placeholder}
+      style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', boxSizing: 'border-box' }}
+    />
+  );
 
   return (
     <div>
-      <SectionHeader icon="🔌" title="Integrations" subtitle="Connect third-party services for ordering, payments, accounting and notifications." />
-      {categories.map(cat => (
-        <div key={cat} style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 }}>{cat}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {integrations.filter(i => i.category === cat).map(item => (
-              <div key={item.id} style={{
-                background: T.surface, border: `1px solid ${item.connected ? item.color + '44' : T.border}`,
-                borderRadius: 14, padding: '16px 18px', transition: 'all 0.2s',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: item.connected ? 12 : 0 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: item.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                    {item.icon}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{item.name}</div>
-                    {item.detail && <div style={{ fontSize: 11, color: T.textDim, fontFamily: 'monospace', marginTop: 2 }}>{item.detail}</div>}
-                  </div>
-                  <button onClick={() => toggle(item.id)} style={{
-                    background: item.connected ? T.redDim : item.color + '22',
-                    color: item.connected ? T.red : item.color,
-                    border: `1px solid ${item.connected ? T.red + '44' : item.color + '44'}`,
-                    borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 700,
-                    cursor: 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap',
-                  }}>
-                    {item.connected ? 'Disconnect' : 'Connect'}
-                  </button>
-                </div>
-                {item.connected && (
-                  <div>
-                    <input
-                      value={apiKeys[item.id] || ''}
-                      onChange={e => setApiKeys(k => ({ ...k, [item.id]: e.target.value }))}
-                      placeholder="API Key / Secret…"
-                      style={{ width: '100%', background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.textMid, fontSize: 12, fontFamily: 'monospace', outline: 'none' }}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
+      <SectionHeader icon="🔌" title="Integrations" subtitle="Connect messaging channels for notifications and order updates." />
+
+      {/* WhatsApp card */}
+      <Card style={{ padding: 24, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: '#25D36622', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>
+            💬
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>WhatsApp Business</div>
+            <div style={{ fontSize: 12, color: T.textMid, marginTop: 2 }}>Meta Cloud API — send order updates and notifications via WhatsApp</div>
+          </div>
+          {/* Enable toggle */}
+          <div
+            onClick={() => w('whatsapp_enabled', !wa.whatsapp_enabled)}
+            style={{ width: 44, height: 24, borderRadius: 12, cursor: 'pointer', transition: 'all 0.25s', background: wa.whatsapp_enabled ? '#25D366' : T.border, position: 'relative', flexShrink: 0 }}
+          >
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: wa.whatsapp_enabled ? 23 : 3, transition: 'left 0.25s' }} />
           </div>
         </div>
-      ))}
+
+        {wa.whatsapp_enabled && (
+          <div>
+            <Divider />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <Field label="Phone Number ID *">
+                {inp('whatsapp_phone_number_id', '123456789012345')}
+              </Field>
+              <Field label="Display Name">
+                {inp('whatsapp_from_name', 'My Restaurant')}
+              </Field>
+            </div>
+            <Field label="Access Token *" hint="From Meta for Developers → WhatsApp → API Setup">
+              {inp('whatsapp_access_token', 'EAABxx…', 'password')}
+            </Field>
+
+            <div style={{ background: T.accentGlow, border: `1px solid ${T.accent}44`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: T.textMid, marginBottom: 16 }}>
+              💡 Get your Phone Number ID and Access Token from{' '}
+              <b style={{ color: T.accent }}>developers.facebook.com → My Apps → WhatsApp → API Setup</b>
+            </div>
+          </div>
+        )}
+
+        <SaveBtn onClick={handleSave} saving={saving} />
+      </Card>
+
+      {/* Test card — only shown when WA is enabled and configured */}
+      {wa.whatsapp_enabled && wa.whatsapp_phone_number_id && wa.whatsapp_access_token && (
+        <Card style={{ padding: 24 }}>
+          <SectionHeader icon="🧪" title="Send Test Message" subtitle="Verify your WhatsApp config by sending a test message." />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <TextInput
+              value={testTo}
+              onChange={e => setTestTo(e.target.value)}
+              placeholder="923001234567 (with country code, no +)"
+            />
+            <button
+              onClick={handleTest}
+              disabled={testing}
+              style={{ background: '#25D366', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 20px', fontSize: 13, fontWeight: 700, cursor: testing ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap', opacity: testing ? 0.6 : 1 }}
+            >
+              {testing ? '⏳ Sending…' : '💬 Send Test'}
+            </button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -742,7 +802,7 @@ const TABS = [
   { id: 'payments',     icon: '💳', label: 'Payment Methods'    },
   { id: 'roles',        icon: '🔐', label: 'Roles & Permissions'},
   { id: 'alerts',       icon: '⚠️', label: 'Alert Thresholds'   },
-  { id: 'integrations', icon: '🔌', label: 'Integrations'       },
+  { id: 'integrations', icon: '🔌', label: 'Integrations'        },
 ];
 
 export default function Settings() {

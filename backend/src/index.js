@@ -347,6 +347,15 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS gl_entry_id UUID REFERENCES journal_entries(id) ON DELETE SET NULL;
   `).catch(e => console.warn('Migration 009 note:', e.message));
 
+  // Migration 019: system_config table
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS system_config (
+      key        TEXT PRIMARY KEY,
+      value      TEXT,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+  `).catch(e => console.warn('Migration 019 note:', e.message));
+
   // Migration 018: waiter_id on orders
   await db.query(`
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS waiter_id UUID REFERENCES employees(id) ON DELETE SET NULL;

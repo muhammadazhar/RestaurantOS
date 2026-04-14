@@ -285,6 +285,11 @@ export const getMySupportTickets    = ()        => API.get('/support/tickets');
 export const getTicketMessages      = (id)      => API.get(`/support/tickets/${id}/messages`);
 export const addTicketMessage       = (id, msg) => API.post(`/support/tickets/${id}/messages`, { message: msg });
 
+export const getSystemConfig        = ()         => API.get('/admin/system-config');
+export const saveSystemConfig       = (data)     => API.post('/admin/system-config', data);
+export const testSmtpEmail          = (to)       => API.post('/admin/system-config/test-email', { to });
+export const testWhatsAppMsg        = (data)     => API.post('/admin/system-config/test-whatsapp', data);
+
 export const adminGetAllTickets     = (p)        => API.get('/admin/support/tickets', { params: p });
 export const adminGetTicket         = (id)       => API.get(`/admin/support/tickets/${id}`);
 export const adminGetTicketMessages = (id)       => API.get(`/admin/support/tickets/${id}/messages`);

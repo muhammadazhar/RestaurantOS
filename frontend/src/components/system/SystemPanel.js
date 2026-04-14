@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getSystemHealth, listBackups, createBackup, downloadBackup, deleteBackup } from '../../services/api';
+import { getSystemHealth, listBackups, createBackup, downloadBackup, deleteBackup, getSystemConfig, saveSystemConfig, testSmtpEmail } from '../../services/api';
 import { Card, Btn, Badge, Spinner, PageHeader, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
 
@@ -379,6 +379,128 @@ function BackupTab() {
   );
 }
 
+// ─── Email Config Tab ─────────────────────────────────────────────────────────
+function EmailConfigTab() {
+  useT();
+  const EMPTY = { 'smtp.host': '', 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.user': '', 'smtp.pass': '', 'smtp.from': '', 'app.admin_email': '' };
+  const [form,    setForm]    = useState(EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testTo,  setTestTo]  = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await getSystemConfig();
+      setForm(f => ({ ...f, ...r.data }));
+    } catch { toast.error('Failed to load config'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await saveSystemConfig(form);
+      toast.success('Email config saved');
+    } catch (e) { toast.error(e.response?.data?.error || 'Save failed'); }
+    finally { setSaving(false); }
+  };
+
+  const handleTest = async () => {
+    if (!testTo.trim()) return toast.error('Enter a recipient email');
+    setTesting(true);
+    try {
+      await testSmtpEmail(testTo.trim());
+      toast.success(`Test email sent to ${testTo}`);
+    } catch (e) { toast.error(e.response?.data?.error || 'Test failed'); }
+    finally { setTesting(false); }
+  };
+
+  if (loading) return <Spinner />;
+
+  const inp = (key, placeholder, type = 'text') => (
+    <input
+      type={type} value={form[key]} onChange={e => f(key, e.target.value)}
+      placeholder={placeholder}
+      style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', boxSizing: 'border-box' }}
+    />
+  );
+
+  return (
+    <div style={{ maxWidth: 620 }}>
+      <Card style={{ padding: 24, marginBottom: 16 }}>
+        <SectionTitle icon="📧" title="SMTP / Email Configuration" />
+        <p style={{ fontSize: 13, color: T.textMid, marginBottom: 20, marginTop: -4 }}>
+          Settings are stored in the database and override .env variables.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Host</label>
+            {inp('smtp.host', 'smtp.gmail.com')}
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Port</label>
+            {inp('smtp.port', '587')}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Username</label>
+          {inp('smtp.user', 'user@gmail.com')}
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Password</label>
+          {inp('smtp.pass', '••••••••', 'password')}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>From Address</label>
+            {inp('smtp.from', 'noreply@yourapp.com')}
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Admin Notification Email</label>
+            {inp('app.admin_email', 'admin@yourapp.com')}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Use TLS (Secure)</label>
+          <select value={form['smtp.secure']} onChange={e => f('smtp.secure', e.target.value)}
+            style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
+            <option value="false">No (STARTTLS on port 587)</option>
+            <option value="true">Yes (SSL on port 465)</option>
+          </select>
+        </div>
+
+        <Btn onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
+          {saving ? '⏳ Saving…' : '✓ Save SMTP Config'}
+        </Btn>
+      </Card>
+
+      <Card style={{ padding: 24 }}>
+        <SectionTitle icon="🧪" title="Send Test Email" />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            value={testTo} onChange={e => setTestTo(e.target.value)}
+            placeholder="recipient@example.com"
+            style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
+          />
+          <Btn onClick={handleTest} disabled={testing}>
+            {testing ? '⏳ Sending…' : '📤 Send Test'}
+          </Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Main SystemPanel page ────────────────────────────────────────────────────
 export default function SystemPanel() {
   useT();
@@ -387,6 +509,7 @@ export default function SystemPanel() {
   const tabs = [
     { id: 'health', icon: '❤️', label: 'System Health' },
     { id: 'backup', icon: '💾', label: 'DB Backup' },
+    { id: 'email',  icon: '📧', label: 'Email / SMTP' },
   ];
 
   return (
@@ -415,6 +538,7 @@ export default function SystemPanel() {
 
       {tab === 'health' && <HealthTab />}
       {tab === 'backup' && <BackupTab />}
+      {tab === 'email'  && <EmailConfigTab />}
     </div>
   );
 }

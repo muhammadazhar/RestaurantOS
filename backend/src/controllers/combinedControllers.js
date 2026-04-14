@@ -1259,6 +1259,74 @@ exports.uploadRestaurantLogo = async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Upload failed' }); }
 };
 
+// ── System Config (super admin) ───────────────────────────────────────────────
+const SMTP_KEYS = [
+  'smtp.host', 'smtp.port', 'smtp.secure', 'smtp.user', 'smtp.pass', 'smtp.from', 'app.admin_email',
+];
+
+exports.getSystemConfig = async (req, res) => {
+  try {
+    const rows = await db.query(
+      `SELECT key, value FROM system_config WHERE key = ANY($1)`, [SMTP_KEYS]
+    );
+    const config = {};
+    for (const r of rows.rows) config[r.key] = r.value;
+    if (config['smtp.pass']) config['smtp.pass'] = '••••••••';
+    res.json(config);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.saveSystemConfig = async (req, res) => {
+  try {
+    const { setConfig } = require('../utils/config');
+    for (const [key, value] of Object.entries(req.body)) {
+      if (!SMTP_KEYS.includes(key)) continue;
+      if (key === 'smtp.pass' && String(value).includes('••')) continue;
+      await setConfig(key, String(value));
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.testSmtp = async (req, res) => {
+  try {
+    const nodemailer = require('nodemailer');
+    const { getConfig } = require('../utils/config');
+    const { to } = req.body;
+    const [host, port, secure, user, pass, from] = await Promise.all([
+      getConfig('smtp.host', 'SMTP_HOST'),
+      getConfig('smtp.port', 'SMTP_PORT'),
+      getConfig('smtp.secure', 'SMTP_SECURE'),
+      getConfig('smtp.user', 'SMTP_USER'),
+      getConfig('smtp.pass', 'SMTP_PASS'),
+      getConfig('smtp.from', 'SMTP_FROM'),
+    ]);
+    if (!host || !user || !pass) return res.status(400).json({ error: 'SMTP not configured' });
+    const transport = nodemailer.createTransport({
+      host, port: parseInt(port) || 587,
+      secure: secure === 'true',
+      auth: { user, pass },
+    });
+    await transport.sendMail({
+      from: from || user, to: to || user,
+      subject: 'RestaurantOS — SMTP Test',
+      html: '<p>✅ SMTP configuration is working correctly.</p>',
+    });
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+};
+
+exports.testWhatsApp = async (req, res) => {
+  try {
+    const { sendWhatsApp } = require('../utils/whatsapp');
+    const { to, phone_number_id, access_token } = req.body;
+    if (!to || !phone_number_id || !access_token)
+      return res.status(400).json({ error: 'to, phone_number_id and access_token are required' });
+    const result = await sendWhatsApp(to, 'RestaurantOS WhatsApp test message ✅', { phone_number_id, access_token });
+    res.json(result);
+  } catch (err) { res.status(400).json({ error: err.message }); }
+};
+
 // ── employee photo upload ──────────────────────────────────────────────────────
 exports.uploadEmployeePhoto = async (req, res) => {
   try {

@@ -139,6 +139,12 @@ router.get('/reports/shift-sales',  requirePermission('pos'), orders.getShiftSal
 router.get('/setup/status',    authenticate, ctrl.getSetupStatus);
 router.post('/setup/complete', authenticate, ctrl.completeSetup);
 
+// ── System Config (super admin) ───────────────────────────────────────────────
+router.get('/admin/system-config',                requireSuperAdmin, ctrl.getSystemConfig);
+router.post('/admin/system-config',               requireSuperAdmin, ctrl.saveSystemConfig);
+router.post('/admin/system-config/test-email',    requireSuperAdmin, ctrl.testSmtp);
+router.post('/admin/system-config/test-whatsapp', authenticate,      ctrl.testWhatsApp);
+
 // ── System ────────────────────────────────────────────────────────────────────
 router.get('/system/health',               requirePermission('settings'), system.getHealth);
 router.get('/system/backups',              requirePermission('settings'), system.listBackups);
