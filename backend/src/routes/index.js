@@ -52,6 +52,12 @@ router.post('/menu/items',                  requirePermission('settings'), ctrl.
 router.put('/menu/items/:id',               requirePermission('settings'), ctrl.updateMenuItem);
 router.post('/menu/items/:id/image',        requirePermission('settings'), upload.single('image'), ctrl.uploadMenuImage);
 
+// ── Categories ────────────────────────────────────────────────────────────────
+router.get('/menu/categories',              requirePermission('settings'), ctrl.getCategories);
+router.post('/menu/categories',             requirePermission('settings'), ctrl.createCategory);
+router.put('/menu/categories/:id',          requirePermission('settings'), ctrl.updateCategory);
+router.delete('/menu/categories/:id',       requirePermission('settings'), ctrl.deleteCategory);
+
 // ── Inventory ─────────────────────────────────────────────────────────────────
 router.get('/inventory',                requirePermission('inventory'), inventory.getInventory);
 router.post('/inventory',               requirePermission('inventory'), inventory.createItem);

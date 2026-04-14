@@ -261,6 +261,74 @@ exports.deleteMenuItemImage = async (req, res) => {
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
 
+// ── categories CRUD ───────────────────────────────────────────────────────────
+exports.getCategories = async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT c.*, p.name AS parent_name,
+              (SELECT COUNT(*) FROM menu_items mi WHERE mi.category_id = c.id)::int AS item_count
+       FROM categories c
+       LEFT JOIN categories p ON c.parent_id = p.id
+       WHERE c.restaurant_id = $1
+       ORDER BY COALESCE(p.sort_order, c.sort_order), COALESCE(p.name, c.name), c.sort_order, c.name`,
+      [req.user.restaurantId]
+    );
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.createCategory = async (req, res) => {
+  try {
+    const { name, description, parent_id, sort_order } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Category name required' });
+    const result = await db.query(
+      `INSERT INTO categories(restaurant_id, name, description, parent_id, sort_order)
+       VALUES($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.restaurantId, name.trim(), description || null, parent_id || null, sort_order ?? 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Category name already exists' });
+    console.error(err); res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.updateCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, parent_id, sort_order, is_active } = req.body;
+    // Prevent a category from being its own parent
+    if (parent_id === id) return res.status(400).json({ error: 'Category cannot be its own parent' });
+    const result = await db.query(
+      `UPDATE categories SET
+         name       = COALESCE($1, name),
+         description= COALESCE($2, description),
+         parent_id  = $3,
+         sort_order = COALESCE($4, sort_order),
+         is_active  = COALESCE($5, is_active)
+       WHERE id=$6 AND restaurant_id=$7 RETURNING *`,
+      [name || null, description !== undefined ? description : null,
+       parent_id || null, sort_order ?? null, is_active ?? null,
+       id, req.user.restaurantId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Category not found' });
+    res.json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.deleteCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const items = await db.query(`SELECT id FROM menu_items WHERE category_id=$1 LIMIT 1`, [id]);
+    if (items.rows.length) return res.status(400).json({ error: 'Category has menu items — reassign them first' });
+    const subs = await db.query(`SELECT id FROM categories WHERE parent_id=$1 LIMIT 1`, [id]);
+    if (subs.rows.length) return res.status(400).json({ error: 'Category has sub-categories — delete them first' });
+    const del = await db.query(`DELETE FROM categories WHERE id=$1 AND restaurant_id=$2 RETURNING id`, [id, req.user.restaurantId]);
+    if (!del.rows.length) return res.status(404).json({ error: 'Category not found' });
+    res.json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
 // ── recipes.js ────────────────────────────────────────────────────────────────
 exports.getRecipes = async (req, res) => {
   try {

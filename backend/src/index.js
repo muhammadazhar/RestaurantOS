@@ -265,6 +265,14 @@ db.query('SELECT NOW()').then(async () => {
       AND r.company_group_id IS NULL;
   `).catch(e => console.warn('Migration 014 note:', e.message));
 
+  // Migration 016: Category parent_id (sub-categories) + description column
+  await db.query(`
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS parent_id    UUID REFERENCES categories(id) ON DELETE SET NULL;
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS description  TEXT;
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_active    BOOLEAN DEFAULT TRUE;
+    ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url    TEXT;
+  `).catch(e => console.warn('Migration 016 note:', e.message));
+
   // Migration 015: Customer support ticketing system
   await db.query(`
     INSERT INTO modules(key, name, description) VALUES

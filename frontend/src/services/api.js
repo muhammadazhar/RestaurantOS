@@ -260,6 +260,12 @@ export const getAdminSubscriptions   = (p)    => API.get('/admin/subscriptions',
 export const approveSubscription     = (id, data) => API.patch(`/admin/subscriptions/${id}/approve`, data);
 export const rejectSubscription      = (id, data) => API.patch(`/admin/subscriptions/${id}/reject`, data);
 
+// ── Categories ────────────────────────────────────────────────────────────────
+export const getCategories    = ()        => API.get('/menu/categories');
+export const createCategory   = (data)    => API.post('/menu/categories', data);
+export const updateCategory   = (id, d)   => API.put(`/menu/categories/${id}`, d);
+export const deleteCategory   = (id)      => API.delete(`/menu/categories/${id}`);
+
 // ── Support Tickets ───────────────────────────────────────────────────────────
 export const createSupportTicket = (data) => {
   const form = new FormData();

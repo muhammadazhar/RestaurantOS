@@ -169,6 +169,9 @@ export default function POS() {
           notes: c.notes || undefined,
         })),
       });
+      // Print KOT first for all order types
+      printKOT(res.data, cart);
+
       if (['takeaway', 'delivery'].includes(orderType)) {
         // Store order + local totals for pay/print modal
         setCreatedOrder({
@@ -208,6 +211,61 @@ export default function POS() {
     } catch {
       toast.error('Payment failed — please try again');
     } finally { setTakePaying(false); }
+  };
+
+  // ── Kitchen Order Ticket (KOT) ──────────────────────────────────────────────
+  const printKOT = (order, cartItems) => {
+    const items = (order.items && order.items.length
+      ? order.items
+      : cartItems.map(c => ({ name: c.name, quantity: c.qty, notes: c.notes }))
+    ).filter(i => i?.name);
+
+    const tbl = tableId ? tables.find(t => t.id === tableId) : null;
+    const typeLabel = (order.order_type || orderType).replace(/_/g, ' ').toUpperCase();
+    const timeStr = new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+
+    const w = window.open('', '_blank', 'width=360,height=600');
+    if (!w) { toast.error('Pop-up blocked — please allow pop-ups for KOT printing'); return; }
+    w.document.write(`
+      <!DOCTYPE html><html><head><title>KOT — ${order.order_number}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier New', monospace; font-size: 14px; padding: 16px 12px; color: #000; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .kot-header { font-size: 15px; font-weight: 900; text-align: center; letter-spacing: 1px; }
+        .order-num { font-size: 34px; font-weight: 900; text-align: center; letter-spacing: 4px; margin: 8px 0; }
+        .line { border-top: 2px solid #000; margin: 8px 0; }
+        .dline { border-top: 1px dashed #aaa; margin: 5px 0; }
+        .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; }
+        .item-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; }
+        .item-name { font-size: 16px; font-weight: 800; flex: 1; }
+        .item-qty { font-size: 24px; font-weight: 900; min-width: 48px; text-align: right; }
+        .notes { font-size: 12px; color: #555; padding: 2px 0 4px 8px; font-style: italic; }
+        @media print { body { padding: 0 4px; } }
+      </style></head>
+      <body>
+        <div class="kot-header">⬛ KITCHEN ORDER</div>
+        <div class="order-num">#${order.order_number}</div>
+        <div class="line"></div>
+        <div class="row"><span class="bold">Type:</span><span>${typeLabel}</span></div>
+        ${tbl ? `<div class="row"><span class="bold">Table:</span><span>${tbl.section ? tbl.section + ' · ' : ''}${tbl.label}</span></div>` : ''}
+        ${(custName || order.customer_name) ? `<div class="row"><span class="bold">Customer:</span><span>${custName || order.customer_name}</span></div>` : ''}
+        <div class="row"><span class="bold">Time:</span><span>${timeStr}</span></div>
+        <div class="line"></div>
+        ${items.map(i => `
+          <div class="item-row">
+            <span class="item-name">${i.name}</span>
+            <span class="item-qty">×${i.quantity ?? i.qty}</span>
+          </div>
+          ${i.notes ? `<div class="notes">📝 ${i.notes}</div>` : ''}
+          <div class="dline"></div>
+        `).join('')}
+        ${orderNotes ? `<div style="margin-top:8px;padding:6px;border:1px solid #000;border-radius:4px"><span class="bold">⚠ Order Notes:</span><br><span style="font-size:13px">${orderNotes}</span></div>` : ''}
+      </body></html>
+    `);
+    w.document.close();
+    setTimeout(() => { w.print(); }, 300);
   };
 
   const printTakeawayReceipt = () => {
