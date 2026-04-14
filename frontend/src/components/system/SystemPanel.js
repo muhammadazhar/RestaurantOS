@@ -383,11 +383,13 @@ function BackupTab() {
 function EmailConfigTab() {
   useT();
   const EMPTY = { 'smtp.host': '', 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.user': '', 'smtp.pass': '', 'smtp.from': '', 'app.admin_email': '' };
-  const [form,    setForm]    = useState(EMPTY);
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testTo,  setTestTo]  = useState('');
+  const [form,       setForm]      = useState(EMPTY);
+  const [loading,    setLoading]   = useState(true);
+  const [saving,     setSaving]    = useState(false);
+  const [testing,    setTesting]   = useState(false);
+  const [testTo,     setTestTo]    = useState('');
+  const [testResult, setTestResult] = useState(null); // { ok, messageId, via, sentTo, error, code }
+  const [saveOk,     setSaveOk]    = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -399,24 +401,29 @@ function EmailConfigTab() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const f = (k, v) => { setForm(p => ({ ...p, [k]: v })); setSaveOk(false); };
 
   const handleSave = async () => {
-    setSaving(true);
+    setSaving(true); setSaveOk(false);
     try {
       await saveSystemConfig(form);
-      toast.success('Email config saved');
+      setSaveOk(true);
+      setTestResult(null);
+      toast.success('SMTP config saved');
     } catch (e) { toast.error(e.response?.data?.error || 'Save failed'); }
     finally { setSaving(false); }
   };
 
   const handleTest = async () => {
     if (!testTo.trim()) return toast.error('Enter a recipient email');
-    setTesting(true);
+    setTesting(true); setTestResult(null);
     try {
-      await testSmtpEmail(testTo.trim());
-      toast.success(`Test email sent to ${testTo}`);
-    } catch (e) { toast.error(e.response?.data?.error || 'Test failed'); }
+      const r = await testSmtpEmail(testTo.trim());
+      setTestResult({ ok: true, ...r.data });
+    } catch (e) {
+      const err = e.response?.data || {};
+      setTestResult({ ok: false, error: err.error || e.message, code: err.code });
+    }
     finally { setTesting(false); }
   };
 
@@ -455,8 +462,13 @@ function EmailConfigTab() {
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Password</label>
-          {inp('smtp.pass', '••••••••', 'password')}
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>
+            SMTP Password
+            {form['smtp.pass'] === '••••••••' && (
+              <span style={{ marginLeft: 8, fontSize: 10, color: T.textDim }}>(saved — leave unchanged to keep current)</span>
+            )}
+          </label>
+          {inp('smtp.pass', 'Enter password to update…', 'password')}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
@@ -480,22 +492,65 @@ function EmailConfigTab() {
         </div>
 
         <Btn onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
-          {saving ? '⏳ Saving…' : '✓ Save SMTP Config'}
+          {saving ? '⏳ Saving…' : saveOk ? '✅ Saved!' : '✓ Save SMTP Config'}
         </Btn>
       </Card>
 
       <Card style={{ padding: 24 }}>
         <SectionTitle icon="🧪" title="Send Test Email" />
-        <div style={{ display: 'flex', gap: 10 }}>
+        <p style={{ fontSize: 12, color: T.textMid, marginTop: -8, marginBottom: 14 }}>
+          Sends a test email using the saved SMTP config above. Save first if you made changes.
+        </p>
+        <div style={{ display: 'flex', gap: 10, marginBottom: testResult ? 14 : 0 }}>
           <input
-            value={testTo} onChange={e => setTestTo(e.target.value)}
+            value={testTo} onChange={e => { setTestTo(e.target.value); setTestResult(null); }}
             placeholder="recipient@example.com"
+            onKeyDown={e => e.key === 'Enter' && handleTest()}
             style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
           />
           <Btn onClick={handleTest} disabled={testing}>
             {testing ? '⏳ Sending…' : '📤 Send Test'}
           </Btn>
         </div>
+
+        {/* Persistent result block */}
+        {testResult && (
+          <div style={{
+            borderRadius: 10, padding: '12px 16px',
+            background: testResult.ok ? T.greenDim : T.redDim,
+            border: `1px solid ${testResult.ok ? T.green : T.red}44`,
+          }}>
+            {testResult.ok ? (
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.green, marginBottom: 6 }}>
+                  ✅ Email sent successfully
+                </div>
+                <div style={{ fontSize: 12, color: T.textMid, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span>To: <b style={{ color: T.text }}>{testResult.sentTo}</b></span>
+                  <span>Via: <b style={{ color: T.text, fontFamily: 'monospace' }}>{testResult.via}</b></span>
+                  {testResult.messageId && (
+                    <span>Message-ID: <span style={{ color: T.textDim, fontFamily: 'monospace', fontSize: 11 }}>{testResult.messageId}</span></span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.red, marginBottom: 6 }}>
+                  ❌ Failed to send email
+                </div>
+                <div style={{ fontSize: 12, color: T.text, fontFamily: 'monospace', wordBreak: 'break-word' }}>
+                  {testResult.error}
+                </div>
+                {testResult.code && (
+                  <div style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>Error code: {testResult.code}</div>
+                )}
+                <div style={{ fontSize: 11, color: T.textMid, marginTop: 8 }}>
+                  Common fixes: check host/port, ensure password is correct (re-enter and Save), verify firewall allows outbound SMTP.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
     </div>
   );

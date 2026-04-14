@@ -1294,26 +1294,42 @@ exports.testSmtp = async (req, res) => {
     const { getConfig } = require('../utils/config');
     const { to } = req.body;
     const [host, port, secure, user, pass, from] = await Promise.all([
-      getConfig('smtp.host', 'SMTP_HOST'),
-      getConfig('smtp.port', 'SMTP_PORT'),
+      getConfig('smtp.host',   'SMTP_HOST'),
+      getConfig('smtp.port',   'SMTP_PORT'),
       getConfig('smtp.secure', 'SMTP_SECURE'),
-      getConfig('smtp.user', 'SMTP_USER'),
-      getConfig('smtp.pass', 'SMTP_PASS'),
-      getConfig('smtp.from', 'SMTP_FROM'),
+      getConfig('smtp.user',   'SMTP_USER'),
+      getConfig('smtp.pass',   'SMTP_PASS'),
+      getConfig('smtp.from',   'SMTP_FROM'),
     ]);
-    if (!host || !user || !pass) return res.status(400).json({ error: 'SMTP not configured' });
+    const missing = [];
+    if (!host) missing.push('SMTP Host');
+    if (!user) missing.push('SMTP Username');
+    if (!pass) missing.push('SMTP Password');
+    if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+
     const transport = nodemailer.createTransport({
       host, port: parseInt(port) || 587,
       secure: secure === 'true',
       auth: { user, pass },
     });
-    await transport.sendMail({
-      from: from || user, to: to || user,
+
+    await transport.verify();
+
+    const info = await transport.sendMail({
+      from: from || user,
+      to: to || user,
       subject: 'RestaurantOS — SMTP Test',
-      html: '<p>✅ SMTP configuration is working correctly.</p>',
+      html: `<div style="font-family:sans-serif;padding:24px;max-width:480px">
+        <h2 style="color:#2ecc71">✅ SMTP Test Successful</h2>
+        <p>Your SMTP configuration is working correctly.</p>
+        <p style="font-size:12px;color:#888">Sent via ${host}:${port||587} as ${user}</p>
+      </div>`,
     });
-    res.json({ ok: true });
-  } catch (err) { res.status(400).json({ error: err.message }); }
+
+    res.json({ ok: true, messageId: info.messageId, via: `${host}:${port || 587}`, sentTo: to || user });
+  } catch (err) {
+    res.status(400).json({ error: err.message, code: err.code || null });
+  }
 };
 
 exports.testWhatsApp = async (req, res) => {
