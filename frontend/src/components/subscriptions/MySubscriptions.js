@@ -18,7 +18,7 @@ const PLAN_LABELS = {
 };
 const MODULE_ICONS = {
   base: '🍽', tables: '🪑', inventory: '📦', staff: '👥',
-  rider: '🛵', gl: '📒', reports: '📊',
+  rider: '🛵', gl: '📒', reports: '📊', support: '🎫',
 };
 
 export default function MySubscriptions() {
@@ -76,16 +76,18 @@ export default function MySubscriptions() {
     pricingByModule[p.module_key].push(p);
   }
 
-  const modules = ['base', 'tables', 'inventory', 'staff', 'rider', 'gl', 'reports'];
+  const modules = ['base', 'tables', 'inventory', 'staff', 'rider', 'gl', 'reports', 'support'];
   const moduleNames = {
     base: 'RestaurantOS Base', tables: 'Table Management', inventory: 'Inventory & Recipes',
     staff: 'Staff Management', rider: 'Rider Delivery', gl: 'General Ledger', reports: 'Advanced Reports',
+    support: 'Support Tickets',
   };
   const moduleDesc = {
     base: 'Core POS, orders, kitchen display', tables: 'Tables and reservations',
     inventory: 'Stock management, recipes, menu management', staff: 'Employees, attendance, shifts',
     rider: 'Rider management, delivery tracking, incentives',
     gl: 'Double-entry accounting, GL reports', reports: 'Sales reports, shift reports, analytics',
+    support: 'Submit and track support tickets, get help from our team',
   };
 
   const daysLeft = (expires_at) => {
