@@ -382,7 +382,7 @@ function BackupTab() {
 // ─── Email Config Tab ─────────────────────────────────────────────────────────
 function EmailConfigTab() {
   useT();
-  const EMPTY = { 'smtp.host': '', 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.user': '', 'smtp.pass': '', 'smtp.from': '', 'app.admin_email': '' };
+  const EMPTY = { 'smtp.host': '', 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.user': '', 'smtp.pass': '', 'smtp.from': '', 'app.admin_email': '', 'smtp.reject_unauthorized': 'false' };
   const [form,       setForm]      = useState(EMPTY);
   const [loading,    setLoading]   = useState(true);
   const [saving,     setSaving]    = useState(false);
@@ -482,27 +482,37 @@ function EmailConfigTab() {
           </div>
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Connection Security</label>
-          <select
-            value={form['smtp.secure']}
-            onChange={e => {
-              const val = e.target.value;
-              f('smtp.secure', val);
-              // Auto-suggest port when switching mode
-              if (val === 'true'  && form['smtp.port'] === '587') f('smtp.port', '465');
-              if (val === 'false' && form['smtp.port'] === '465') f('smtp.port', '587');
-            }}
-            style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
-          >
-            <option value="false">STARTTLS — upgrades connection to TLS (port 587, recommended)</option>
-            <option value="true">SSL / Implicit TLS — encrypted from the start (port 465)</option>
-          </select>
-          <div style={{ fontSize: 11, color: T.textDim, marginTop: 5 }}>
-            {form['smtp.secure'] === 'true'
-              ? 'SSL: connection is encrypted immediately. Use port 465. Common with older providers.'
-              : 'STARTTLS: starts plain then upgrades to TLS. Use port 587. Default for Gmail, Outlook, etc.'}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Connection Security</label>
+            <select
+              value={form['smtp.secure']}
+              onChange={e => {
+                const val = e.target.value;
+                f('smtp.secure', val);
+                if (val === 'true'  && form['smtp.port'] === '587') f('smtp.port', '465');
+                if (val === 'false' && form['smtp.port'] === '465') f('smtp.port', '587');
+              }}
+              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
+            >
+              <option value="false">STARTTLS — port 587 (C# EnableSsl=true)</option>
+              <option value="true">SSL / Implicit TLS — port 465</option>
+            </select>
           </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Certificate Verification</label>
+            <select
+              value={form['smtp.reject_unauthorized']}
+              onChange={e => f('smtp.reject_unauthorized', e.target.value)}
+              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
+            >
+              <option value="false">Accept all certificates (recommended for custom SMTP)</option>
+              <option value="true">Strict — reject self-signed certs</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ background: T.accentGlow, border: `1px solid ${T.accent}33`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: T.textMid, marginBottom: 20 }}>
+          💡 <b>C# mapping:</b> <code style={{ background: T.border, borderRadius: 3, padding: '1px 5px' }}>EnableSsl=true</code> on port 587 = <b>STARTTLS</b> here. Set Certificate to <b>Accept all</b> for netcorecloud and similar providers.
         </div>
 
         <Btn onClick={handleSave} disabled={saving} style={{ width: '100%' }}>

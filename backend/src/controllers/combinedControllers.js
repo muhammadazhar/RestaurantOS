@@ -1261,7 +1261,8 @@ exports.uploadRestaurantLogo = async (req, res) => {
 
 // ── System Config (super admin) ───────────────────────────────────────────────
 const SMTP_KEYS = [
-  'smtp.host', 'smtp.port', 'smtp.secure', 'smtp.user', 'smtp.pass', 'smtp.from', 'app.admin_email',
+  'smtp.host', 'smtp.port', 'smtp.secure', 'smtp.user', 'smtp.pass', 'smtp.from',
+  'smtp.reject_unauthorized', 'app.admin_email',
 ];
 
 exports.getSystemConfig = async (req, res) => {
@@ -1307,10 +1308,17 @@ exports.testSmtp = async (req, res) => {
     if (!pass) missing.push('SMTP Password');
     if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
 
+    const rejectUnauth = await getConfig('smtp.reject_unauthorized', 'SMTP_REJECT_UNAUTHORIZED');
+    const isSSL = secure === 'true';
     const transport = nodemailer.createTransport({
-      host, port: parseInt(port) || 587,
-      secure: secure === 'true',
+      host,
+      port: parseInt(port) || 587,
+      secure: isSSL,                          // true = implicit SSL (465), false = STARTTLS (587)
+      requireTLS: !isSSL,                     // force STARTTLS when not implicit SSL
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
       auth: { user, pass },
+      tls: { rejectUnauthorized: rejectUnauth === 'true' },
     });
 
     await transport.verify();
