@@ -108,10 +108,11 @@ export const uploadEmployeePhoto = (id, file) => {
 // ── Shifts ────────────────────────────────────────────────────────────────────
 export const getCurrentShift  = ()        => API.get('/shifts/current');
 export const getMyShifts      = ()        => API.get('/shifts/my');
-export const startMyShift     = (id)      => API.patch(`/shifts/${id}/start`);
-export const continueMyShift  = (id)      => API.patch(`/shifts/${id}/continue`);
-export const closeMyShift     = (id)      => API.patch(`/shifts/${id}/close-my`);
-export const getOpenShifts    = ()        => API.get('/shifts/open');
+export const startMyShift        = (id, body) => API.patch(`/shifts/${id}/start`, body || {});
+export const continueMyShift     = (id)       => API.patch(`/shifts/${id}/continue`);
+export const closeMyShift        = (id)       => API.patch(`/shifts/${id}/close-my`);
+export const getShiftCashSummary = (id)       => API.get(`/shifts/${id}/cash-summary`);
+export const getOpenShifts       = ()         => API.get('/shifts/open');
 export const autoCloseShifts  = ()        => API.post('/shifts/auto-close');
 export const getShifts        = (params)  => API.get('/shifts', { params });
 export const createShift      = (data)    => API.post('/shifts', data);
@@ -265,6 +266,12 @@ export const getCategories    = ()        => API.get('/menu/categories');
 export const createCategory   = (data)    => API.post('/menu/categories', data);
 export const updateCategory   = (id, d)   => API.put(`/menu/categories/${id}`, d);
 export const deleteCategory   = (id)      => API.delete(`/menu/categories/${id}`);
+
+// ── Discount Presets ──────────────────────────────────────────────────────────
+export const getDiscountPresets    = ()       => API.get('/discount-presets');
+export const createDiscountPreset  = (data)   => API.post('/discount-presets', data);
+export const updateDiscountPreset  = (id, d)  => API.put(`/discount-presets/${id}`, d);
+export const deleteDiscountPreset  = (id)     => API.delete(`/discount-presets/${id}`);
 
 // ── Support Tickets ───────────────────────────────────────────────────────────
 export const createSupportTicket = (data) => {

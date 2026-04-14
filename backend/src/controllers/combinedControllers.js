@@ -1471,12 +1471,13 @@ exports.startMyShift = async (req, res) => {
   try {
     const { id } = req.params;
     const today = new Date().toISOString().slice(0, 10);
+    const openingBalance = parseFloat(req.body.opening_balance) || 0;
     const result = await db.query(
-      `UPDATE shifts SET status='active'
+      `UPDATE shifts SET status='active', opening_balance=$4
        WHERE id=$1 AND restaurant_id=$2 AND employee_id=$3
-         AND date=$4 AND status='scheduled'
+         AND date=$5 AND status='scheduled'
        RETURNING *`,
-      [id, req.user.restaurantId, req.user.id, today]
+      [id, req.user.restaurantId, req.user.id, openingBalance, today]
     );
     if (!result.rows.length)
       return res.status(400).json({ error: 'Shift not found or cannot be started' });
@@ -1521,6 +1522,20 @@ exports.closeMyShift = async (req, res) => {
     const shift = sr.rows[0];
 
     await _closeShift(client, rid, shift, req.user.id, new Date());
+
+    // Compute cash sales for this shift
+    const cashResult = await client.query(
+      `SELECT COALESCE(SUM(total_amount),0) AS cash_sales
+       FROM orders
+       WHERE shift_id=$1 AND payment_method='cash' AND payment_status='paid'`,
+      [id]
+    );
+    const closingCash = parseFloat(cashResult.rows[0].cash_sales) + parseFloat(shift.opening_balance || 0);
+    await client.query(
+      `UPDATE shifts SET closing_cash=$1 WHERE id=$2`,
+      [closingCash, id]
+    );
+
     await client.query('COMMIT');
 
     try {
@@ -1528,10 +1543,97 @@ exports.closeMyShift = async (req, res) => {
       recomputeEmployee(rid, shift.employee_id, shift.date).catch(() => {});
     } catch (_) {}
 
-    res.json({ success: true });
+    res.json({ success: true, closing_cash: closingCash });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   } finally { client.release(); }
+};
+
+// GET /shifts/:id/cash-summary — opening balance, cash sales, expected closing
+exports.getShiftCashSummary = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const shift = await db.query(
+      `SELECT id, opening_balance, closing_cash FROM shifts
+       WHERE id=$1 AND restaurant_id=$2`,
+      [id, req.user.restaurantId]
+    );
+    if (!shift.rows.length) return res.status(404).json({ error: 'Shift not found' });
+    const cashResult = await db.query(
+      `SELECT COALESCE(SUM(total_amount),0) AS cash_sales
+       FROM orders WHERE shift_id=$1 AND payment_method='cash' AND payment_status='paid'`,
+      [id]
+    );
+    const openingBalance = parseFloat(shift.rows[0].opening_balance || 0);
+    const cashSales = parseFloat(cashResult.rows[0].cash_sales);
+    res.json({
+      opening_balance: openingBalance,
+      cash_sales: cashSales,
+      expected_closing: openingBalance + cashSales,
+      closing_cash: shift.rows[0].closing_cash,
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// ── Discount Presets ──────────────────────────────────────────────────────────
+
+// GET /discount-presets
+exports.getDiscountPresets = async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT * FROM discount_presets WHERE restaurant_id=$1 ORDER BY sort_order, name`,
+      [req.user.restaurantId]
+    );
+    res.json(result.rows);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+};
+
+// POST /discount-presets
+exports.createDiscountPreset = async (req, res) => {
+  try {
+    const { name, type, value, is_active = true, sort_order = 0 } = req.body;
+    if (!name || !type || value === undefined)
+      return res.status(400).json({ error: 'name, type and value are required' });
+    const result = await db.query(
+      `INSERT INTO discount_presets (restaurant_id, name, type, value, is_active, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [req.user.restaurantId, name, type, value, is_active, sort_order]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'A preset with this name already exists' });
+    console.error(e); res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// PUT /discount-presets/:id
+exports.updateDiscountPreset = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, type, value, is_active, sort_order } = req.body;
+    const result = await db.query(
+      `UPDATE discount_presets SET name=$1, type=$2, value=$3, is_active=$4, sort_order=$5
+       WHERE id=$6 AND restaurant_id=$7 RETURNING *`,
+      [name, type, value, is_active, sort_order, id, req.user.restaurantId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Preset not found' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'A preset with this name already exists' });
+    console.error(e); res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// DELETE /discount-presets/:id
+exports.deleteDiscountPreset = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query(
+      `DELETE FROM discount_presets WHERE id=$1 AND restaurant_id=$2`,
+      [id, req.user.restaurantId]
+    );
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };

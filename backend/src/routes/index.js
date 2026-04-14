@@ -52,6 +52,12 @@ router.post('/menu/items',                  requirePermission('settings'), ctrl.
 router.put('/menu/items/:id',               requirePermission('settings'), ctrl.updateMenuItem);
 router.post('/menu/items/:id/image',        requirePermission('settings'), upload.single('image'), ctrl.uploadMenuImage);
 
+// ── Discount Presets ──────────────────────────────────────────────────────────
+router.get('/discount-presets',             requirePermission('settings'), ctrl.getDiscountPresets);
+router.post('/discount-presets',            requirePermission('settings'), ctrl.createDiscountPreset);
+router.put('/discount-presets/:id',         requirePermission('settings'), ctrl.updateDiscountPreset);
+router.delete('/discount-presets/:id',      requirePermission('settings'), ctrl.deleteDiscountPreset);
+
 // ── Categories ────────────────────────────────────────────────────────────────
 router.get('/menu/categories',              requirePermission('settings'), ctrl.getCategories);
 router.post('/menu/categories',             requirePermission('settings'), ctrl.createCategory);
@@ -89,6 +95,7 @@ router.get('/shifts/my',                 requirePermission('pos'),       ctrl.ge
 router.patch('/shifts/:id/start',        requirePermission('pos'),       ctrl.startMyShift);
 router.patch('/shifts/:id/continue',     requirePermission('pos'),       ctrl.continueMyShift);
 router.patch('/shifts/:id/close-my',     requirePermission('pos'),       ctrl.closeMyShift);
+router.get('/shifts/:id/cash-summary',   requirePermission('pos'),       ctrl.getShiftCashSummary);
 router.get('/shifts/open',               requirePermission('employees'), ctrl.getOpenShifts);
 router.post('/shifts/auto-close',        requirePermission('employees'), ctrl.autoCloseShifts);
 router.get('/shifts',                    requirePermission('employees'), ctrl.getShifts);

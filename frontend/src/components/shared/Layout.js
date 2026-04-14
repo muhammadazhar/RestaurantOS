@@ -102,8 +102,9 @@ const NAV_GROUPS = [
       { to: '/module-pricing',     icon: '💰', label: 'Module Pricing',   superAdmin: true },
       { to: '/subscription-mgmt',  icon: '📋', label: 'Subscriptions',    superAdmin: true },
       { to: '/admin-support',      icon: '🎫', label: 'Support Tickets',  superAdmin: true },
-      { to: '/system',        icon: '🖥',  label: 'System',              perm: 'settings' },
-      { to: '/settings',      icon: '⚙️', label: 'Settings',            perm: 'settings' },
+      { to: '/discount-presets', icon: '🏷', label: 'Discount Presets',   perm: 'settings' },
+      { to: '/system',           icon: '🖥',  label: 'System',             perm: 'settings' },
+      { to: '/settings',         icon: '⚙️', label: 'Settings',           perm: 'settings' },
     ],
   },
 ];

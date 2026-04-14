@@ -18,7 +18,8 @@ import GLReports  from './components/reports/GLReports';
 import { Kitchen, Tables, Alerts, Admin } from './components/pages';
 import InventoryPage from './components/inventory/Inventory';
 
-import Settings       from './components/settings/Settings';
+import Settings          from './components/settings/Settings';
+import DiscountPresets   from './components/settings/DiscountPresets';
 import MenuManagement  from './components/menu/MenuManagement';
 import Orders          from './components/orders/Orders';
 import Reservations    from './components/reservations/Reservations';
@@ -94,8 +95,9 @@ function AppRoutes() {
       <Route path="/reservations" element={<PrivateRoute><Layout><Reservations /></Layout></PrivateRoute>} />
       <Route path="/reports"         element={<PrivateRoute><Layout><Reports /></Layout></PrivateRoute>} />
       <Route path="/shift-sales-report" element={<PrivateRoute><Layout><ShiftSalesReport /></Layout></PrivateRoute>} />
-      <Route path="/settings"  element={<PrivateRoute><Layout><Settings /></Layout></PrivateRoute>} />
-      <Route path="/system"    element={<PrivateRoute><Layout><SystemPanel /></Layout></PrivateRoute>} />
+      <Route path="/settings"          element={<PrivateRoute><Layout><Settings /></Layout></PrivateRoute>} />
+      <Route path="/discount-presets"  element={<PrivateRoute><Layout><DiscountPresets /></Layout></PrivateRoute>} />
+      <Route path="/system"            element={<PrivateRoute><Layout><SystemPanel /></Layout></PrivateRoute>} />
 
       {/* Rider Delivery Management */}
       <Route path="/phone-orders"  element={<PrivateRoute><Layout><PhoneOrder /></Layout></PrivateRoute>} />

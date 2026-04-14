@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary } from '../../services/api';
 import { Card, Pill, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -63,10 +63,13 @@ export default function POS() {
   const [createdOrder, setCreatedOrder] = useState(null);   // takeaway pay modal
   const [showPayModal, setShowPayModal] = useState(false);
   const [takePayMethod,setTakePayMethod]= useState('cash');
-  const [takePaying,   setTakePaying]   = useState(false);
-  const [takePrintRdy, setTakePrintRdy] = useState(false);
-  const [currentShift, setCurrentShift] = useState(null);   // { shift, allowed, reason }
-  const [shiftEndModal, setShiftEndModal] = useState(false);
+  const [takePaying,      setTakePaying]      = useState(false);
+  const [takePrintRdy,    setTakePrintRdy]    = useState(false);
+  const [tenderedAmount,  setTenderedAmount]  = useState('');
+  const [discountPresets, setDiscountPresets] = useState([]);
+  const [currentShift,    setCurrentShift]    = useState(null);   // { shift, allowed, reason }
+  const [shiftEndModal,   setShiftEndModal]   = useState(false);
+  const [cashSummary,     setCashSummary]     = useState(null);
   const shiftEndAlerted = useRef(false);
   const { on, off } = useSocket();
   const { user } = useAuth();
@@ -91,6 +94,7 @@ export default function POS() {
     load();
     loadShift();
     getRiders().then(r => setRiders(r.data)).catch(() => {});
+    getDiscountPresets().then(r => setDiscountPresets(r.data.filter(p => p.is_active))).catch(() => {});
     on('new_order', load);
     return () => off('new_order', load);
   }, [load, loadShift, on, off]);
@@ -106,6 +110,8 @@ export default function POS() {
       if (end && now > end) {
         shiftEndAlerted.current = true;
         setShiftEndModal(true);
+        // Load cash summary for the shift-end modal
+        getShiftCashSummary(currentShift.shift.id).then(r => setCashSummary(r.data)).catch(() => {});
       }
     };
     check();
@@ -333,6 +339,10 @@ export default function POS() {
         <div class="row big"><span>TOTAL</span><span>PKR ${ttl.toLocaleString()}</span></div>
         <div class="line"></div>
         <div class="row"><span>Payment</span><span class="bold">${methodLabel}</span></div>
+        ${takePayMethod === 'cash' && tenderedAmount ? `
+          <div class="row"><span>Tendered</span><span>PKR ${parseFloat(tenderedAmount).toLocaleString()}</span></div>
+          <div class="row bold"><span>Change</span><span>PKR ${Math.max(0, parseFloat(tenderedAmount) - ttl).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})}</span></div>
+        ` : ''}
         <div class="center" style="margin-top:12px">
           ${isCOD
             ? `<span class="cod-stamp">🏍 CASH ON DELIVERY</span>`
@@ -351,6 +361,7 @@ export default function POS() {
     setShowPayModal(false);
     setCreatedOrder(null);
     setTakePrintRdy(false);
+    setTenderedAmount('');
     setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setOrderNotes(''); setGuestCount(1);
   };
 
@@ -371,13 +382,33 @@ export default function POS() {
       {/* ── Shift-end confirmation modal ── */}
       {shiftEndModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 400, width: '90%', textAlign: 'center' }}>
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', textAlign: 'center' }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>⏰</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 8 }}>Shift Ended</div>
             <div style={{ fontSize: 14, color: T.textMid, marginBottom: 8 }}>
               Your shift ended at <b style={{ color: T.text }}>{currentShift?.shift?.end_time?.slice(0,5)}</b>
             </div>
-            <div style={{ fontSize: 13, color: T.textDim, marginBottom: 24 }}>
+
+            {/* Cash summary */}
+            {cashSummary && (
+              <div style={{ background: T.surface, borderRadius: 12, padding: '12px 16px', marginBottom: 16, textAlign: 'left' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.textDim, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Cash Summary</div>
+                {[
+                  ['Opening Balance', cashSummary.opening_balance],
+                  ['Cash Sales', cashSummary.cash_sales],
+                  ['Expected Closing', cashSummary.expected_closing],
+                ].map(([label, val]) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13 }}>
+                    <span style={{ color: T.textMid }}>{label}</span>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: label === 'Expected Closing' ? T.green : T.text }}>
+                      PKR {Number(val || 0).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ fontSize: 13, color: T.textDim, marginBottom: 20 }}>
               Would you like to close your shift or continue working?
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -386,6 +417,7 @@ export default function POS() {
                   try {
                     await continueMyShift(currentShift.shift.id);
                     setShiftEndModal(false);
+                    setCashSummary(null);
                     toast.success('Continuing in overtime');
                     loadShift();
                   } catch (e) { toast.error(e.response?.data?.error || 'Failed to continue shift'); }
@@ -396,9 +428,11 @@ export default function POS() {
               <button
                 onClick={async () => {
                   try {
-                    await closeMyShift(currentShift.shift.id);
+                    const r = await closeMyShift(currentShift.shift.id);
                     setShiftEndModal(false);
-                    toast.success('Shift closed');
+                    setCashSummary(null);
+                    const closingCash = r.data?.closing_cash;
+                    toast.success(closingCash != null ? `Shift closed · Closing cash: PKR ${Number(closingCash).toLocaleString()}` : 'Shift closed');
                     loadShift();
                   } catch (e) { toast.error(e.response?.data?.error || 'Failed to close shift'); }
                 }}
@@ -515,8 +549,8 @@ export default function POS() {
       </div>
 
       {/* ── Order panel ── */}
-      <div style={{ width: 300, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
-        <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ width: 300, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+        <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
             Order — {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
           </div>
@@ -577,32 +611,26 @@ export default function POS() {
           )}
 
           {/* Cart items */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {cart.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: T.textDim }}>
-                <div style={{ fontSize: 32 }}>🛒</div>
-                <div style={{ fontSize: 12, marginTop: 8 }}>Cart is empty</div>
+              <div style={{ textAlign: 'center', padding: '30px 0', color: T.textDim }}>
+                <div style={{ fontSize: 28 }}>🛒</div>
+                <div style={{ fontSize: 12, marginTop: 6 }}>Cart is empty</div>
               </div>
             )}
             {cart.map(item => (
-              <div key={item.id} style={{ marginBottom: 8, background: T.surface, borderRadius: 10, padding: '8px 10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ItemImage src={item.image_url} name={item.name} />
+              <div key={item.id} style={{ marginBottom: 4, background: T.surface, borderRadius: 8, padding: '6px 8px' }}>
+                {/* Main row: name + price + qty controls + remove */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                    <div style={{ fontSize: 11, color: T.textMid }}>PKR {Number(item.price).toLocaleString()}</div>
-                    {item.notes && <div style={{ fontSize: 10, color: T.accent, marginTop: 2 }}>📝 {item.notes}</div>}
+                    <div style={{ fontSize: 10, color: T.textMid }}>PKR {Number(item.price).toLocaleString()} {item.notes && <span style={{ color: T.accent }}>· 📝</span>}</div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <button onClick={() => changeQty(item.id,-1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>−</button>
-                    <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 12, color: T.text, minWidth: 16, textAlign: 'center' }}>{item.qty}</span>
-                    <button onClick={() => addToCart(item)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>+</button>
-                  </div>
-                </div>
-                {/* Per-item action row */}
-                <div style={{ display: 'flex', gap: 8, marginTop: 6, paddingTop: 6, borderTop: `1px solid ${T.border}` }}>
-                  <button onClick={() => { setNotesItem(item); }} style={{ flex: 1, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 6, padding: '3px 0', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>📝 Notes</button>
-                  <button onClick={() => removeItem(item.id)} style={{ background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, borderRadius: 6, padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Remove</button>
+                  <button onClick={() => changeQty(item.id,-1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>−</button>
+                  <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 12, color: T.text, minWidth: 16, textAlign: 'center', flexShrink: 0 }}>{item.qty}</span>
+                  <button onClick={() => addToCart(item)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</button>
+                  <button onClick={() => setNotesItem(item)} title="Add notes" style={{ width: 20, height: 20, borderRadius: '50%', background: 'none', border: `1px solid ${T.border}`, color: T.textMid, cursor: 'pointer', fontSize: 10, lineHeight: 1, flexShrink: 0 }}>📝</button>
+                  <button onClick={() => removeItem(item.id)} title="Remove" style={{ width: 20, height: 20, borderRadius: '50%', background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, cursor: 'pointer', fontSize: 11, lineHeight: 1, flexShrink: 0 }}>✕</button>
                 </div>
               </div>
             ))}
@@ -622,6 +650,23 @@ export default function POS() {
                 <span style={{ fontSize: 12, color: T.textMid }}>Subtotal</span>
                 <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.text }}>PKR {subtotal.toLocaleString()}</span>
               </div>
+              {/* Discount presets */}
+              {discountPresets.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                  {discountPresets.map(p => {
+                    const amt = p.type === 'percent' ? Math.round(subtotal * p.value / 100) : Math.min(p.value, subtotal);
+                    return (
+                      <button key={p.id} onClick={() => setDiscount(String(amt))} title={p.type === 'percent' ? `${p.value}%` : `PKR ${p.value}`}
+                        style={{ background: parseFloat(discount) === amt ? T.accent : T.surface, color: parseFloat(discount) === amt ? '#000' : T.textMid, border: `1px solid ${parseFloat(discount) === amt ? T.accent : T.border}`, borderRadius: 6, padding: '2px 7px', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif", fontWeight: 600 }}>
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                  {parseFloat(discount) > 0 && (
+                    <button onClick={() => setDiscount('')} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>✕</button>
+                  )}
+                </div>
+              )}
               {/* Discount */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 12, color: T.textMid, flex: 1 }}>Discount (PKR)</span>
@@ -735,6 +780,35 @@ export default function POS() {
                   <span>TOTAL DUE</span>
                   <span style={{ fontFamily: 'monospace', color: T.accent }}>PKR {Number(createdOrder._total).toLocaleString()}</span>
                 </div>
+
+                {/* Tendered amount + change — cash only */}
+                {takePayMethod === 'cash' && !takePrintRdy && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${T.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, color: T.textMid, flex: 1 }}>Tendered (PKR)</span>
+                      <input type="number" min="0" value={tenderedAmount}
+                        onChange={e => setTenderedAmount(e.target.value)}
+                        placeholder={Number(createdOrder._total).toFixed(0)}
+                        style={{ width: 110, background: T.card, border: `1px solid ${T.accent}88`, borderRadius: 8, padding: '6px 10px', color: T.text, fontSize: 14, fontFamily: 'monospace', outline: 'none', textAlign: 'right', fontWeight: 700 }} />
+                    </div>
+                    {tenderedAmount !== '' && parseFloat(tenderedAmount) >= Number(createdOrder._total) && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', background: T.greenDim, border: `1px solid ${T.green}44`, borderRadius: 8, padding: '6px 10px' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: T.green }}>Change</span>
+                        <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.green }}>
+                          PKR {(parseFloat(tenderedAmount) - Number(createdOrder._total)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                    {tenderedAmount !== '' && parseFloat(tenderedAmount) < Number(createdOrder._total) && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 8, padding: '6px 10px' }}>
+                        <span style={{ fontSize: 13, color: T.red }}>Shortfall</span>
+                        <span style={{ fontSize: 13, fontFamily: 'monospace', color: T.red }}>
+                          PKR {(Number(createdOrder._total) - parseFloat(tenderedAmount)).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Payment method selector */}
@@ -806,6 +880,8 @@ export default function POS() {
 // ── POS Gate Modal — shown when shift or attendance is missing ─────────────────
 function POSGateModal({ currentShift, onUnlocked }) {
   const [acting, setActing] = useState(null); // 'shift' | 'clock'
+  const [showBalanceInput, setShowBalanceInput] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState('');
 
   const hasShift     = !!currentShift?.shift && ['active','in_process'].includes(currentShift.shift.status);
   const isClockedIn  = currentShift?.attendance?.is_clocked_in;
@@ -826,9 +902,10 @@ function POSGateModal({ currentShift, onUnlocked }) {
 
   const handleStartShift = async () => {
     if (!scheduledShift) return;
+    if (!showBalanceInput) { setShowBalanceInput(true); return; }
     setActing('shift');
     try {
-      await startMyShift(scheduledShift.id);
+      await startMyShift(scheduledShift.id, { opening_balance: parseFloat(openingBalance) || 0 });
       onUnlocked();
     } catch (e) {
       const msg = e.response?.data?.error || 'Failed to start shift';
@@ -871,9 +948,19 @@ function POSGateModal({ currentShift, onUnlocked }) {
               ? `Scheduled: ${scheduledShift.shift_name} · ${scheduledShift.start_time?.slice(0,5)}–${scheduledShift.end_time?.slice(0,5)}`
               : 'No shift scheduled for today — ask your manager',
           scheduledShift
-            ? <button style={btnStyle('#f59e0b')} onClick={handleStartShift} disabled={!!acting}>
-                {acting === 'shift' ? '…' : '▶ Start Shift'}
-              </button>
+            ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                {showBalanceInput && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap' }}>Opening cash (PKR)</span>
+                    <input type="number" min="0" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)}
+                      placeholder="0" autoFocus
+                      style={{ width: 90, background: '#2a2a2a', border: '1px solid #f59e0b88', borderRadius: 6, padding: '4px 8px', color: '#fff', fontSize: 13, fontFamily: 'monospace', outline: 'none', textAlign: 'right' }} />
+                  </div>
+                )}
+                <button style={btnStyle('#f59e0b')} onClick={handleStartShift} disabled={!!acting}>
+                  {acting === 'shift' ? '…' : showBalanceInput ? '✓ Confirm & Start' : '▶ Start Shift'}
+                </button>
+              </div>
             : <a href="/my-shift" style={{ ...btnStyle('#444', '#fff'), textDecoration: 'none', display: 'inline-block' }}>My Shift ↗</a>
         )}
 

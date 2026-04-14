@@ -340,6 +340,24 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE inventory_transactions ADD COLUMN IF NOT EXISTS gl_entry_id UUID REFERENCES journal_entries(id) ON DELETE SET NULL;
   `).catch(e => console.warn('Migration 009 note:', e.message));
 
+  // Migration 017: Opening balance for shifts + discount presets table
+  await db.query(`
+    ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(10,2) DEFAULT 0;
+    ALTER TABLE shifts ADD COLUMN IF NOT EXISTS closing_cash    NUMERIC(10,2);
+
+    CREATE TABLE IF NOT EXISTS discount_presets (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL,
+      type          TEXT NOT NULL CHECK (type IN ('percent','flat')),
+      value         NUMERIC(10,2) NOT NULL,
+      is_active     BOOLEAN DEFAULT TRUE,
+      sort_order    INT DEFAULT 0,
+      created_at    TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(restaurant_id, name)
+    );
+  `).catch(e => console.warn('Migration 017 note:', e.message));
+
   server.listen(PORT, () => {
     console.log(`✓ RestaurantOS API running on http://localhost:${PORT}`);
     console.log(`✓ WebSocket ready`);
