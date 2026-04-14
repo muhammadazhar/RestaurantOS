@@ -282,12 +282,12 @@ exports.getMyGroupDashboard = async (req, res) => {
       SELECT
         r.id, r.name, r.branch_code, r.status, r.city,
         (r.id = $2) AS is_owner_branch,
-        COUNT(DISTINCT o.id)  FILTER (WHERE DATE(o.created_at) = CURRENT_DATE)                              AS orders_today,
-        COALESCE(SUM(o.total) FILTER (WHERE DATE(o.created_at) = CURRENT_DATE AND o.status = 'paid'), 0)    AS revenue_today,
-        COUNT(DISTINCT o.id)  FILTER (WHERE o.created_at >= NOW() - INTERVAL '30 days')                     AS orders_30d,
-        COALESCE(SUM(o.total) FILTER (WHERE o.created_at >= NOW() - INTERVAL '30 days' AND o.status = 'paid'), 0) AS revenue_30d,
-        COUNT(DISTINCT e.id)  FILTER (WHERE e.status = 'active')                                             AS employee_count,
-        COUNT(DISTINCT sh.id) FILTER (WHERE sh.status = 'open' AND sh.date = CURRENT_DATE)                  AS open_shifts
+        COUNT(DISTINCT o.id)  FILTER (WHERE DATE(o.created_at) = CURRENT_DATE)                                              AS orders_today,
+        COALESCE(SUM(o.total_amount) FILTER (WHERE DATE(o.created_at) = CURRENT_DATE AND o.payment_status = 'paid'), 0)    AS revenue_today,
+        COUNT(DISTINCT o.id)  FILTER (WHERE o.created_at >= NOW() - INTERVAL '30 days')                                     AS orders_30d,
+        COALESCE(SUM(o.total_amount) FILTER (WHERE o.created_at >= NOW() - INTERVAL '30 days' AND o.payment_status = 'paid'), 0) AS revenue_30d,
+        COUNT(DISTINCT e.id)  FILTER (WHERE e.status = 'active')                                                             AS employee_count,
+        COUNT(DISTINCT sh.id) FILTER (WHERE sh.status IN ('scheduled','active') AND sh.date = CURRENT_DATE)                 AS open_shifts
       FROM restaurants r
       LEFT JOIN orders    o  ON o.restaurant_id  = r.id
       LEFT JOIN employees e  ON e.restaurant_id  = r.id
