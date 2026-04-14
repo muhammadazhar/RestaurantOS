@@ -139,6 +139,35 @@ exports.logout = async (req, res) => {
   res.json({ message: 'Logged out' });
 };
 
+// GET /api/auth/groups  — public list of company groups (for registration + login)
+exports.getPublicGroups = async (req, res) => {
+  try {
+    const rows = await db.query(
+      `SELECT id, name FROM company_groups WHERE status = 'active' ORDER BY name`
+    );
+    res.json(rows.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// GET /api/auth/groups/:groupId/restaurants  — restaurants in a group (for login picker)
+exports.getGroupRestaurants = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const rows = await db.query(
+      `SELECT id, name, slug, branch_code, city
+       FROM restaurants
+       WHERE company_group_id = $1 AND status != 'suspended'
+       ORDER BY name`,
+      [groupId]
+    );
+    res.json(rows.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 // POST /api/auth/register  — public self-registration (no auth required)
 exports.register = async (req, res) => {
   const client = await db.getClient();
@@ -146,6 +175,9 @@ exports.register = async (req, res) => {
     await client.query('BEGIN');
     const bcrypt = require('bcryptjs');
     const {
+      // Step 0 - Company (either create new or join existing)
+      company_name, company_email, company_phone, company_address,
+      company_group_id,           // set if joining existing group
       // Step 1 - Restaurant Info
       restaurant_name, slug_override, email, phone, address, city,
       country, currency, timezone,
@@ -157,8 +189,16 @@ exports.register = async (req, res) => {
 
     if (!restaurant_name || !email || !admin_name || !admin_password)
       return res.status(400).json({ error: 'restaurant_name, email, admin_name and admin_password are required' });
+    if (!company_name && !company_group_id)
+      return res.status(400).json({ error: 'company_name or company_group_id is required' });
     if (admin_password.length < 6)
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    // Validate existing group if joining
+    if (company_group_id) {
+      const grp = await client.query(`SELECT id FROM company_groups WHERE id = $1`, [company_group_id]);
+      if (!grp.rows.length) return res.status(400).json({ error: 'Company group not found' });
+    }
 
     // Auto-generate slug from name
     const slug = (slug_override || restaurant_name)
@@ -179,15 +219,36 @@ exports.register = async (req, res) => {
     );
     const resolvedPlanId = plan_id || planRes.rows[0]?.id;
 
-    // Create restaurant
+    // Create new company group if not joining existing
+    let resolvedGroupId = company_group_id || null;
+    if (!company_group_id && company_name) {
+      const groupSlug = company_name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now();
+      const newGroup = await client.query(
+        `INSERT INTO company_groups(name, slug, email, phone, address)
+         VALUES($1,$2,$3,$4,$5) RETURNING id`,
+        [company_name.trim(), groupSlug, company_email || null, company_phone || null, company_address || null]
+      );
+      resolvedGroupId = newGroup.rows[0].id;
+    }
+
+    // Create restaurant (linked to group, marked as branch)
     const rest = await client.query(
-      `INSERT INTO restaurants(plan_id,name,slug,email,phone,address,city,country,currency,timezone,status)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'trial') RETURNING *`,
+      `INSERT INTO restaurants(plan_id,name,slug,email,phone,address,city,country,currency,timezone,status,company_group_id,is_branch)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'trial',$11,true) RETURNING *`,
       [resolvedPlanId, restaurant_name, slug, email,
         phone || null, address || null, city || null,
-        country || 'Pakistan', currency || 'PKR', timezone || 'Asia/Karachi']
+        country || 'Pakistan', currency || 'PKR', timezone || 'Asia/Karachi',
+        resolvedGroupId]
     );
     const restaurant = rest.rows[0];
+
+    // If we created a new group, set this restaurant as the owner
+    if (!company_group_id && resolvedGroupId) {
+      await client.query(
+        `UPDATE company_groups SET owner_restaurant_id = $1 WHERE id = $2`,
+        [restaurant.id, resolvedGroupId]
+      );
+    }
 
     // Create all default roles
     const roleNames = [

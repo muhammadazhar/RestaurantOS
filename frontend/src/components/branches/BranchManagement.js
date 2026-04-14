@@ -12,85 +12,38 @@ const addBranch         = (d) => API.post('/my-group/branches', d);
 
 const STATUS_COLOR = { active: '#2ecc71', trial: '#f39c12', suspended: '#e74c3c', pending: '#3498db' };
 
-// ─── Group Registration Wizard ────────────────────────────────────────────────
-function GroupSetupWizard({ onComplete }) {
-  useT();
-  const [step,   setStep]   = useState(1);
+// ─── Create Company Group Modal (for existing restaurants) ───────────────────
+function CreateGroupModal({ open, onClose, onSaved }) {
   const [form,   setForm]   = useState({ name: '', email: '', phone: '', address: '' });
   const [saving, setSaving] = useState(false);
-  const navigate = useNavigate();
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const handleRegister = async () => {
+  useEffect(() => { if (open) setForm({ name: '', email: '', phone: '', address: '' }); }, [open]);
+
+  const handleSave = async () => {
     if (!form.name.trim()) return toast.error('Company name is required');
     setSaving(true);
     try {
       await registerMyGroup(form);
-      setStep(2);
-    } catch (err) { toast.error(err.response?.data?.error || 'Failed to register group'); }
+      toast.success('Company group created! Your restaurant is now Branch #1.');
+      onSaved(); onClose();
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed to create group'); }
     finally { setSaving(false); }
   };
 
   return (
-    <div style={{ maxWidth: 620, margin: '0 auto' }}>
-      {/* Step indicator */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 32 }}>
-        {[1, 2].map(s => (
-          <React.Fragment key={s}>
-            <div style={{
-              width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0,
-              background: step >= s ? T.accent : T.surface,
-              color: step >= s ? '#000' : T.textDim,
-              border: `2px solid ${step >= s ? T.accent : T.border}`,
-            }}>{step > s ? '✓' : s}</div>
-            {s < 2 && <div style={{ flex: 1, height: 2, background: step > s ? T.accent : T.border, borderRadius: 2 }} />}
-          </React.Fragment>
-        ))}
-        <span style={{ fontSize: 12, color: T.textDim, marginLeft: 8 }}>
-          {step === 1 ? 'Company Info' : 'Done'}
-        </span>
+    <Modal open={open} onClose={onClose} title="Create Company Group" width={460}>
+      <div style={{ fontSize: 13, color: T.textMid, marginBottom: 20 }}>
+        Your current restaurant will become the first branch of this group. You can add more branches afterward.
       </div>
-
-      {step === 1 && (
-        <Card style={{ padding: 28 }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>🏢</div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4 }}>Register Your Company Group</div>
-          <div style={{ fontSize: 13, color: T.textMid, marginBottom: 24 }}>
-            Set up your company group to manage multiple branches, view consolidated reports, and get multi-branch subscription discounts.
-            Your current restaurant will become the first branch.
-          </div>
-
-          <Input label="Company / Group Name *" value={form.name}    onChange={set('name')}    placeholder="e.g. Al-Barakat Restaurant Group" />
-          <Input label="Business Email"         value={form.email}   onChange={set('email')}   type="email" placeholder="info@company.com" />
-          <Input label="Business Phone"         value={form.phone}   onChange={set('phone')}   placeholder="+92 300 1234567" />
-          <Input label="Head Office Address"    value={form.address} onChange={set('address')} placeholder="Street, City, Country" />
-
-          <div style={{ background: T.accentGlow, border: `1px solid ${T.accent}44`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: T.textMid, marginBottom: 20 }}>
-            💡 <strong style={{ color: T.text }}>Multi-branch discounts:</strong> 2 branches → 10% off · 3 branches → 15% off · 5+ branches → 20% off · 10+ branches → 25% off on all subscriptions.
-          </div>
-
-          <Btn onClick={handleRegister} disabled={saving} style={{ width: '100%' }} size="lg">
-            {saving ? '⏳ Registering…' : '✓ Register Company Group'}
-          </Btn>
-        </Card>
-      )}
-
-      {step === 2 && (
-        <Card style={{ padding: 32, textAlign: 'center' }}>
-          <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: T.text, marginBottom: 8 }}>Group Registered!</div>
-          <div style={{ fontSize: 13, color: T.textMid, marginBottom: 28, maxWidth: 400, margin: '0 auto 28px' }}>
-            Your company group is live. Your restaurant is now Branch #1.
-            Head to the Group Dashboard to add more branches and view consolidated stats.
-          </div>
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Btn onClick={() => navigate('/group-dashboard')} size="lg">📊 Open Group Dashboard</Btn>
-            <Btn variant="ghost" onClick={onComplete}>View Branch Info</Btn>
-          </div>
-        </Card>
-      )}
-    </div>
+      <Input label="Company / Group Name *" value={form.name}    onChange={set('name')}    placeholder="e.g. Al-Barakat Restaurant Group" />
+      <Input label="Business Email"         value={form.email}   onChange={set('email')}   type="email" placeholder="info@company.com" />
+      <Input label="Business Phone"         value={form.phone}   onChange={set('phone')}   placeholder="+92 300 1234567" />
+      <Input label="Head Office Address"    value={form.address} onChange={set('address')} placeholder="Street, City, Country" />
+      <Btn onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
+        {saving ? '⏳ Creating…' : '✓ Create Company Group'}
+      </Btn>
+    </Modal>
   );
 }
 
@@ -178,9 +131,10 @@ export default function BranchManagement() {
   const navigate  = useNavigate();
   const [group,     setGroup]     = useState(undefined);
   const [loading,   setLoading]   = useState(true);
-  const [editModal, setEditModal] = useState(false);
-  const [addModal,  setAddModal]  = useState(false);
-  const [reload,    setReload]    = useState(0);
+  const [editModal,   setEditModal]   = useState(false);
+  const [addModal,    setAddModal]    = useState(false);
+  const [createModal, setCreateModal] = useState(false);
+  const [reload,      setReload]      = useState(0);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -194,24 +148,29 @@ export default function BranchManagement() {
 
   if (loading) return <Spinner />;
 
-  // No group — show wizard or empty state
+  // No group — show prompt
   if (!group) {
     const canCreate = !!(user?.permissions?.includes('settings') || user?.isSuperAdmin);
     return (
       <div>
         <PageHeader title="🏢 My Company Group" subtitle="Manage your restaurant group and branches" />
-        {canCreate ? (
-          <GroupSetupWizard onComplete={() => setReload(r => r + 1)} />
-        ) : (
-          <Card style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🏪</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.textMid, marginBottom: 6 }}>Not part of a group</div>
+        <Card style={{ textAlign: 'center', padding: '60px 20px', maxWidth: 560, margin: '0 auto' }}>
+          <div style={{ fontSize: 52, marginBottom: 12 }}>🏢</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 8 }}>No Company Group Yet</div>
+          {canCreate ? (
+            <>
+              <div style={{ fontSize: 13, color: T.textMid, marginBottom: 24, maxWidth: 380, margin: '0 auto 24px' }}>
+                Create a company group to manage multiple branches, view consolidated reports, and unlock multi-branch subscription discounts.
+              </div>
+              <Btn onClick={() => setCreateModal(true)} size="lg">🏗 Create Company Group</Btn>
+            </>
+          ) : (
             <div style={{ fontSize: 13, color: T.textDim }}>
-              Your restaurant is not assigned to a company group.
-              Ask your group admin or system administrator to add you.
+              Your restaurant is not assigned to a company group. Ask your group admin or system administrator to add you.
             </div>
-          </Card>
-        )}
+          )}
+        </Card>
+        <CreateGroupModal open={createModal} onClose={() => setCreateModal(false)} onSaved={() => setReload(r => r + 1)} />
       </div>
     );
   }

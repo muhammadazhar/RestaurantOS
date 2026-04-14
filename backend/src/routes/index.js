@@ -15,6 +15,8 @@ const subscription = require('../controllers/subscriptionController');
 const branch       = require('../controllers/branchController');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+router.get('/auth/groups',                           auth.getPublicGroups);       // public
+router.get('/auth/groups/:groupId/restaurants',      auth.getGroupRestaurants);   // public
 router.post('/auth/register',     auth.register);   // public self-registration
 router.post('/auth/login',        auth.login);
 router.post('/auth/super-login',  auth.superLogin);
