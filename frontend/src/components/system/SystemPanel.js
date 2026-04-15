@@ -382,7 +382,7 @@ function BackupTab() {
 // ─── Email Config Tab ─────────────────────────────────────────────────────────
 function EmailConfigTab() {
   useT();
-  const EMPTY = { 'smtp.host': '', 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.user': '', 'smtp.pass': '', 'smtp.from': '', 'app.admin_email': '', 'smtp.reject_unauthorized': 'false' };
+  const EMPTY = { 'email.provider': 'smtp', 'email.api_key': '', 'email.mg_domain': '', 'smtp.host': '', 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.user': '', 'smtp.pass': '', 'smtp.from': '', 'app.admin_email': '', 'smtp.reject_unauthorized': 'false' };
   const [form,       setForm]      = useState(EMPTY);
   const [loading,    setLoading]   = useState(true);
   const [saving,     setSaving]    = useState(false);
@@ -440,90 +440,134 @@ function EmailConfigTab() {
   return (
     <div style={{ maxWidth: 620 }}>
       <Card style={{ padding: 24, marginBottom: 16 }}>
-        <SectionTitle icon="📧" title="SMTP / Email Configuration" />
-        <p style={{ fontSize: 13, color: T.textMid, marginBottom: 20, marginTop: -4 }}>
-          Settings are stored in the database and override .env variables.
+        <SectionTitle icon="📧" title="Email Configuration" />
+        <p style={{ fontSize: 13, color: T.textMid, marginBottom: 16, marginTop: -4 }}>
+          Settings are stored in the database. API providers (Resend, Mailgun, SendGrid) send over HTTPS and work on any hosting.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12, marginBottom: 12 }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Host</label>
-            {inp('smtp.host', 'smtp.gmail.com')}
-          </div>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Port</label>
-            {inp('smtp.port', '587')}
+        {/* Provider selector */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Email Provider</label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
+            {[
+              { val: 'smtp',     label: '🖧 SMTP',     sub: 'Direct (may be blocked)' },
+              { val: 'resend',   label: '⚡ Resend',   sub: 'Free 3k/mo · Recommended' },
+              { val: 'mailgun',  label: '📮 Mailgun',  sub: 'Free 100/day' },
+              { val: 'sendgrid', label: '📨 SendGrid', sub: 'Free 100/day' },
+            ].map(p => (
+              <div
+                key={p.val}
+                onClick={() => f('email.provider', p.val)}
+                style={{
+                  padding: '10px 12px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                  border: `2px solid ${form['email.provider'] === p.val ? T.accent : T.border}`,
+                  background: form['email.provider'] === p.val ? T.accentGlow : T.card,
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{p.label}</div>
+                <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{p.sub}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Username</label>
-          {inp('smtp.user', 'user@gmail.com')}
-        </div>
-
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>
-            SMTP Password
-            {form['smtp.pass'] === '••••••••' && (
-              <span style={{ marginLeft: 8, fontSize: 10, color: T.textDim }}>(saved — leave unchanged to keep current)</span>
+        {/* API provider fields */}
+        {form['email.provider'] !== 'smtp' && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ background: T.greenDim, border: `1px solid ${T.green}44`, borderRadius: 8, padding: '8px 12px', fontSize: 12, color: T.textMid, marginBottom: 12 }}>
+              ✅ API providers send over HTTPS port 443 — works on all hosting providers (Railway, Render, VPS, etc.)
+            </div>
+            {form['email.provider'] === 'resend' && (
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 8 }}>
+                Get your API key at <b style={{ color: T.accent }}>resend.com → API Keys</b>. Free plan: 3,000 emails/month.
+              </div>
             )}
-          </label>
-          {inp('smtp.pass', 'Enter password to update…', 'password')}
+            {form['email.provider'] === 'mailgun' && (
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 8 }}>
+                Get API key at <b style={{ color: T.accent }}>mailgun.com → API Keys</b>. Also enter your Mailgun sending domain below.
+              </div>
+            )}
+            {form['email.provider'] === 'sendgrid' && (
+              <div style={{ fontSize: 11, color: T.textDim, marginBottom: 8 }}>
+                Get API key at <b style={{ color: T.accent }}>app.sendgrid.com → Settings → API Keys</b>.
+              </div>
+            )}
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>API Key *</label>
+            {inp('email.api_key', 'Enter API key…', 'password')}
+            {form['email.provider'] === 'mailgun' && (
+              <div style={{ marginTop: 10 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Mailgun Sending Domain *</label>
+                {inp('email.mg_domain', 'mg.yourdomain.com')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* From address — always shown */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>From Address</label>
+          {inp('smtp.from', 'noreply@yourdomain.com')}
+        </div>
+        <div style={{ marginBottom: form['email.provider'] === 'smtp' ? 12 : 20 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Admin Notification Email</label>
+          {inp('app.admin_email', 'admin@yourdomain.com')}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>From Address</label>
-            {inp('smtp.from', 'noreply@yourapp.com')}
+        {/* SMTP-only fields */}
+        {form['email.provider'] === 'smtp' && (<>
+          <div style={{ borderTop: `1px solid ${T.border}`, margin: '16px 0' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Host</label>
+              {inp('smtp.host', 'smtp.gmail.com')}
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Port</label>
+              {inp('smtp.port', '587')}
+            </div>
           </div>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Admin Notification Email</label>
-            {inp('app.admin_email', 'admin@yourapp.com')}
-          </div>
-        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Connection Security</label>
-            <select
-              value={form['smtp.secure']}
-              onChange={e => {
-                const val = e.target.value;
-                f('smtp.secure', val);
-                if (val === 'true'  && form['smtp.port'] === '587') f('smtp.port', '465');
-                if (val === 'false' && form['smtp.port'] === '465') f('smtp.port', '587');
-              }}
-              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
-            >
-              <option value="false">STARTTLS — port 587 (C# EnableSsl=true)</option>
-              <option value="true">SSL / Implicit TLS — port 465</option>
-            </select>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>SMTP Username</label>
+            {inp('smtp.user', 'user@gmail.com')}
           </div>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Certificate Verification</label>
-            <select
-              value={form['smtp.reject_unauthorized']}
-              onChange={e => f('smtp.reject_unauthorized', e.target.value)}
-              style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
-            >
-              <option value="false">Accept all certificates (recommended for custom SMTP)</option>
-              <option value="true">Strict — reject self-signed certs</option>
-            </select>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>
+              SMTP Password
+              {form['smtp.pass'] === '••••••••' && <span style={{ marginLeft: 8, fontSize: 10, color: T.textDim }}>(saved — leave unchanged)</span>}
+            </label>
+            {inp('smtp.pass', 'Enter password to update…', 'password')}
           </div>
-        </div>
-        <div style={{ background: T.accentGlow, border: `1px solid ${T.accent}33`, borderRadius: 8, padding: '8px 12px', fontSize: 11, color: T.textMid, marginBottom: 20 }}>
-          💡 <b>C# mapping:</b> <code style={{ background: T.border, borderRadius: 3, padding: '1px 5px' }}>EnableSsl=true</code> on port 587 = <b>STARTTLS</b> here. Set Certificate to <b>Accept all</b> for netcorecloud and similar providers.
-        </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Connection Security</label>
+              <select value={form['smtp.secure']} onChange={e => { const v = e.target.value; f('smtp.secure', v); if (v === 'true' && form['smtp.port'] === '587') f('smtp.port', '465'); if (v === 'false' && form['smtp.port'] === '465') f('smtp.port', '587'); }}
+                style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
+                <option value="false">STARTTLS — port 587</option>
+                <option value="true">SSL / Implicit TLS — port 465</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>Certificate Verification</label>
+              <select value={form['smtp.reject_unauthorized']} onChange={e => f('smtp.reject_unauthorized', e.target.value)}
+                style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
+                <option value="false">Accept all (recommended)</option>
+                <option value="true">Strict — reject self-signed</option>
+              </select>
+            </div>
+          </div>
+        </>)}
 
         <Btn onClick={handleSave} disabled={saving} style={{ width: '100%' }}>
-          {saving ? '⏳ Saving…' : saveOk ? '✅ Saved!' : '✓ Save SMTP Config'}
+          {saving ? '⏳ Saving…' : saveOk ? '✅ Saved!' : '✓ Save Config'}
         </Btn>
       </Card>
 
       <Card style={{ padding: 24 }}>
         <SectionTitle icon="🧪" title="Send Test Email" />
         <p style={{ fontSize: 12, color: T.textMid, marginTop: -8, marginBottom: 14 }}>
-          Sends a test email using the saved SMTP config above. Save first if you made changes.
+          Sends a test using the saved config above. Save first if you made changes.
         </p>
         <div style={{ display: 'flex', gap: 10, marginBottom: testResult ? 14 : 0 }}>
           <input
@@ -551,10 +595,10 @@ function EmailConfigTab() {
                 </div>
                 <div style={{ fontSize: 12, color: T.textMid, display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <span>To: <b style={{ color: T.text }}>{testResult.sentTo}</b></span>
-                  <span>Via: <b style={{ color: T.text, fontFamily: 'monospace' }}>{testResult.via}</b></span>
-                  {testResult.messageId && (
-                    <span>Message-ID: <span style={{ color: T.textDim, fontFamily: 'monospace', fontSize: 11 }}>{testResult.messageId}</span></span>
-                  )}
+                  {testResult.provider && <span>Provider: <b style={{ color: T.text }}>{testResult.provider}</b></span>}
+                  {testResult.via && <span>Via: <b style={{ color: T.text, fontFamily: 'monospace' }}>{testResult.via}</b></span>}
+                  {testResult.messageId && <span>Message-ID: <span style={{ color: T.textDim, fontFamily: 'monospace', fontSize: 11 }}>{testResult.messageId}</span></span>}
+                  {testResult.id && <span>ID: <span style={{ color: T.textDim, fontFamily: 'monospace', fontSize: 11 }}>{testResult.id}</span></span>}
                 </div>
               </div>
             ) : (

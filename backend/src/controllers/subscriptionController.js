@@ -1,34 +1,10 @@
 const db = require('../config/db');
-const nodemailer = require('nodemailer');
 
-// Lazy-load config util (avoids circular dep during startup)
-const getConfig = async (key, envVar) => {
-  try {
-    const { getConfig: _gc } = require('../utils/config');
-    return await _gc(key, envVar);
-  } catch {
-    return process.env[envVar] || null;
-  }
-};
-
-// ── Email helper ──────────────────────────────────────────────────────────────
+// ── Email helper (uses shared utils/email — supports SMTP, Resend, Mailgun, SendGrid)
 const sendEmail = async (to, subject, html) => {
-  const [host, port, secure, user, pass, from] = await Promise.all([
-    getConfig('smtp.host',   'SMTP_HOST'),
-    getConfig('smtp.port',   'SMTP_PORT'),
-    getConfig('smtp.secure', 'SMTP_SECURE'),
-    getConfig('smtp.user',   'SMTP_USER'),
-    getConfig('smtp.pass',   'SMTP_PASS'),
-    getConfig('smtp.from',   'SMTP_FROM'),
-  ]);
-  if (!host || !user || !pass) return;
   try {
-    const t = nodemailer.createTransport({
-      host, port: parseInt(port || '587'),
-      secure: secure === 'true',
-      auth: { user, pass },
-    });
-    await t.sendMail({ from: from || user, to, subject, html });
+    const { sendEmail: _send } = require('../utils/email');
+    await _send(to, subject, html);
   } catch (e) {
     console.warn('Email send failed:', e.message);
   }

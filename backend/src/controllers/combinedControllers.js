@@ -1261,6 +1261,7 @@ exports.uploadRestaurantLogo = async (req, res) => {
 
 // ── System Config (super admin) ───────────────────────────────────────────────
 const SMTP_KEYS = [
+  'email.provider', 'email.api_key', 'email.mg_domain',
   'smtp.host', 'smtp.port', 'smtp.secure', 'smtp.user', 'smtp.pass', 'smtp.from',
   'smtp.reject_unauthorized', 'app.admin_email',
 ];
@@ -1289,92 +1290,54 @@ exports.saveSystemConfig = async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
 
-// TCP pre-flight: try to open a socket to host:port with a 6s timeout
-const tcpCheck = (host, port) => new Promise((resolve) => {
-  const net = require('net');
-  const sock = new net.Socket();
-  const done = (ok, msg) => { sock.destroy(); resolve({ ok, msg }); };
-  sock.setTimeout(6000);
-  sock.on('connect', () => done(true, 'reachable'));
-  sock.on('timeout', () => done(false, `TCP timeout — port ${port} unreachable from this server. Check firewall / hosting provider outbound rules.`));
-  sock.on('error',   (e) => done(false, `TCP error: ${e.message} (code: ${e.code})`));
-  sock.connect(port, host);
-});
-
 exports.testSmtp = async (req, res) => {
   try {
-    const nodemailer = require('nodemailer');
-    const dns = require('dns').promises;
     const { getConfig } = require('../utils/config');
+    const { sendEmail } = require('../utils/email');
     const { to } = req.body;
-    const [host, port, secure, user, pass, from] = await Promise.all([
-      getConfig('smtp.host',   'SMTP_HOST'),
-      getConfig('smtp.port',   'SMTP_PORT'),
-      getConfig('smtp.secure', 'SMTP_SECURE'),
-      getConfig('smtp.user',   'SMTP_USER'),
-      getConfig('smtp.pass',   'SMTP_PASS'),
-      getConfig('smtp.from',   'SMTP_FROM'),
-    ]);
-    const missing = [];
-    if (!host) missing.push('SMTP Host');
-    if (!user) missing.push('SMTP Username');
-    if (!pass) missing.push('SMTP Password');
-    if (missing.length) return res.status(400).json({ error: `Missing: ${missing.join(', ')}` });
+    if (!to) return res.status(400).json({ error: 'Recipient email (to) is required' });
 
-    const portNum = parseInt(port) || 587;
+    const provider = (await getConfig('email.provider', 'EMAIL_PROVIDER')) || 'smtp';
 
-    // Step 1: DNS resolution check
-    let resolvedIP = null;
-    try {
-      const addrs = await dns.resolve4(host);
-      resolvedIP = addrs[0];
-    } catch (dnsErr) {
-      return res.status(400).json({
-        error: `DNS lookup failed for "${host}": ${dnsErr.message}`,
-        code: 'EDNS',
-        hint: 'Check the SMTP Host spelling.',
+    // For SMTP provider only — do TCP pre-flight so error is immediate and clear
+    if (provider === 'smtp') {
+      const dns = require('dns').promises;
+      const net = require('net');
+      const host = await getConfig('smtp.host', 'SMTP_HOST');
+      const port = parseInt(await getConfig('smtp.port', 'SMTP_PORT')) || 587;
+      if (!host) return res.status(400).json({ error: 'SMTP Host not configured', code: 'EMISSINGHOST' });
+
+      let resolvedIP = null;
+      try { [resolvedIP] = await dns.resolve4(host); }
+      catch (e) { return res.status(400).json({ error: `DNS failed for "${host}": ${e.message}`, code: 'EDNS', hint: 'Check the SMTP Host spelling.' }); }
+
+      const tcp = await new Promise(resolve => {
+        const sock = new net.Socket();
+        const done = (ok, msg) => { sock.destroy(); resolve({ ok, msg }); };
+        sock.setTimeout(6000);
+        sock.on('connect', () => done(true, null));
+        sock.on('timeout', () => done(false, `TCP timeout on port ${port}`));
+        sock.on('error',   e  => done(false, `TCP error: ${e.message}`));
+        sock.connect(port, host);
       });
+      if (!tcp.ok) {
+        return res.status(400).json({
+          error: tcp.msg,
+          code: 'ETCP',
+          resolvedIP,
+          hint: `Your server cannot reach ${host}:${port}. Hosting providers (Railway, Render, etc.) block outbound SMTP ports. Switch to an API provider (Resend, Mailgun, or SendGrid) — they send over HTTPS port 443 which is always open.`,
+        });
+      }
     }
 
-    // Step 2: TCP connectivity check
-    const tcp = await tcpCheck(host, portNum);
-    if (!tcp.ok) {
-      return res.status(400).json({
-        error: tcp.msg,
-        code: 'ETCP',
-        resolvedIP,
-        hint: `Host resolved to ${resolvedIP} but TCP connection to port ${portNum} failed. Your hosting provider likely blocks outbound SMTP. Try port 25, or switch to an API-based email service (Mailgun, SendGrid).`,
-      });
-    }
+    const result = await sendEmail(to, 'RestaurantOS — Email Test', `
+      <div style="font-family:sans-serif;padding:24px;max-width:480px">
+        <h2 style="color:#2ecc71">✅ Email Test Successful</h2>
+        <p>Your email configuration is working correctly.</p>
+        <p style="font-size:12px;color:#888">Provider: ${provider}</p>
+      </div>`);
 
-    const rejectUnauth = await getConfig('smtp.reject_unauthorized', 'SMTP_REJECT_UNAUTHORIZED');
-    const isSSL = secure === 'true';
-    const transport = nodemailer.createTransport({
-      host,
-      port: portNum,
-      secure: isSSL,
-      requireTLS: !isSSL,
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      family: 4,                              // force IPv4
-      auth: { user, pass },
-      tls: { rejectUnauthorized: rejectUnauth === 'true' },
-    });
-
-    await transport.verify();
-
-    const info = await transport.sendMail({
-      from: from || user,
-      to: to || user,
-      subject: 'RestaurantOS — SMTP Test',
-      html: `<div style="font-family:sans-serif;padding:24px;max-width:480px">
-        <h2 style="color:#2ecc71">✅ SMTP Test Successful</h2>
-        <p>Your SMTP configuration is working correctly.</p>
-        <p style="font-size:12px;color:#888">Sent via ${host}:${port||587} as ${user}</p>
-      </div>`,
-    });
-
-    res.json({ ok: true, messageId: info.messageId, via: `${host}:${port || 587}`, sentTo: to || user });
+    res.json({ ok: true, sentTo: to, provider, ...result });
   } catch (err) {
     res.status(400).json({ error: err.message, code: err.code || null });
   }
