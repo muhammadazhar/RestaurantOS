@@ -271,6 +271,12 @@ function PlanModal({ module_key, module_name, plans, requesting, onRequest, onCl
           Select a plan. Your subscription will activate after payment confirmation.
         </div>
 
+        {plans.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: T.textMid, fontSize: 13 }}>
+            Pricing not yet configured for this module.<br />
+            Please contact your administrator or restart the backend server.
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
           {plans.map(p => (
             <div
