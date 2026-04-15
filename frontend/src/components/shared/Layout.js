@@ -63,7 +63,6 @@ const NAV_GROUPS = [
       { to: '/daily-audit',       icon: '🗒',  label: 'Daily Audit',       perm: 'pos' },
       { to: '/incentives',        icon: '🏆', label: 'Rider Incentives',  perm: 'employees' },
       { to: '/rider-reports',     icon: '📈', label: 'Rider Reports',     perm: 'pos' },
-      { to: '/delivery-pricing',  icon: '💲', label: 'Delivery Pricing',  perm: 'settings' },
     ],
   },
   {
@@ -103,6 +102,7 @@ const NAV_GROUPS = [
       { to: '/module-pricing',     icon: '💰', label: 'Module Pricing',   superAdmin: true },
       { to: '/subscription-mgmt',  icon: '📋', label: 'Subscriptions',    superAdmin: true },
       { to: '/admin-support',      icon: '🎫', label: 'Support Tickets',  superAdmin: true },
+      { to: '/delivery-pricing',  icon: '💲', label: 'Delivery Pricing',  perm: 'settings' },
       { to: '/discount-presets', icon: '🏷', label: 'Discount Presets',   perm: 'settings' },
       { to: '/system',           icon: '🖥',  label: 'System',             perm: 'settings' },
       { to: '/settings',         icon: '⚙️', label: 'Settings',           perm: 'settings' },
