@@ -38,6 +38,9 @@
       "last 1 safari version"
     ]
   },
+  "overrides": {
+    "ajv": "^8.17.1"
+  },
   "devDependencies": {
     "@types/prop-types": "^15.7.15",
     "@types/react": "^18.3.28",
