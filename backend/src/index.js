@@ -361,6 +361,98 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS waiter_id UUID REFERENCES employees(id) ON DELETE SET NULL;
   `).catch(e => console.warn('Migration 018 note:', e.message));
 
+  // Migration 020: Delivery pricing engine
+  await db.query(`
+    -- Restaurant origin lat/lng for distance fallback
+    ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS lat DECIMAL(10,7) DEFAULT NULL;
+    ALTER TABLE restaurants ADD COLUMN IF NOT EXISTS lng DECIMAL(10,7) DEFAULT NULL;
+
+    -- Delivery fee & rider payout on orders
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee    NUMERIC(10,2) DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS rider_payout    NUMERIC(10,2) DEFAULT 0;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_zone_id UUID DEFAULT NULL;
+
+    -- Delivery zones (polygon or distance-range based)
+    CREATE TABLE IF NOT EXISTS delivery_zones (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id  UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      name           TEXT NOT NULL,
+      sort_order     INT  DEFAULT 0,
+      -- Distance-range fallback (km)
+      min_km         NUMERIC(8,3) DEFAULT 0,
+      max_km         NUMERIC(8,3) DEFAULT NULL,
+      -- Pricing
+      customer_fee   NUMERIC(10,2) NOT NULL DEFAULT 0,
+      rider_payout   NUMERIC(10,2) NOT NULL DEFAULT 0,
+      -- Polygon GeoJSON (null = use distance range only)
+      polygon        JSONB DEFAULT NULL,
+      is_active      BOOLEAN DEFAULT TRUE,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(restaurant_id, name)
+    );
+
+    -- Named areas mapped to zones (e.g. "Nazimabad" → Zone 1)
+    CREATE TABLE IF NOT EXISTS delivery_areas (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id  UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      zone_id        UUID NOT NULL REFERENCES delivery_zones(id) ON DELETE CASCADE,
+      name           TEXT NOT NULL,
+      -- Optional representative lat/lng for map pin
+      lat            DECIMAL(10,7) DEFAULT NULL,
+      lng            DECIMAL(10,7) DEFAULT NULL,
+      is_active      BOOLEAN DEFAULT TRUE,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(restaurant_id, name)
+    );
+
+    -- Surge pricing rules
+    CREATE TABLE IF NOT EXISTS delivery_surge_rules (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id  UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      name           TEXT NOT NULL,
+      -- Trigger type: 'peak_hours' | 'manual' | 'weather'
+      trigger_type   TEXT NOT NULL DEFAULT 'peak_hours'
+                     CHECK (trigger_type IN ('peak_hours','manual','weather')),
+      -- Peak hours window (HH:MM strings, nullable for manual/weather)
+      start_time     TIME DEFAULT NULL,
+      end_time       TIME DEFAULT NULL,
+      -- Days of week: comma list '1,2,3,4,5' (1=Mon … 7=Sun), null = all days
+      days_of_week   TEXT DEFAULT NULL,
+      -- Adjustment: flat addition or multiplier
+      adj_type       TEXT NOT NULL DEFAULT 'flat' CHECK (adj_type IN ('flat','multiplier')),
+      adj_value      NUMERIC(10,2) NOT NULL DEFAULT 0,
+      is_active      BOOLEAN DEFAULT TRUE,
+      created_at     TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- VIP / special customer rules (by phone number)
+    CREATE TABLE IF NOT EXISTS delivery_customer_rules (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id  UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      phone          TEXT NOT NULL,
+      rule_type      TEXT NOT NULL DEFAULT 'free_delivery'
+                     CHECK (rule_type IN ('free_delivery','flat_discount','pct_discount')),
+      discount_value NUMERIC(10,2) DEFAULT 0,
+      note           TEXT,
+      is_active      BOOLEAN DEFAULT TRUE,
+      created_at     TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(restaurant_id, phone)
+    );
+
+    -- maps module
+    INSERT INTO modules(key, name, description) VALUES
+      ('maps', 'Delivery Zone Maps', 'Visual zone editor with Leaflet polygon drawing for delivery pricing')
+    ON CONFLICT (key) DO NOTHING;
+
+    INSERT INTO module_pricing(module_key, plan_type, price, duration_days) VALUES
+      ('maps','trial',0,14),
+      ('maps','monthly',799,30),
+      ('maps','quarterly',1999,90),
+      ('maps','half_yearly',3499,180),
+      ('maps','yearly',5999,365)
+    ON CONFLICT (module_key, plan_type) DO NOTHING;
+  `).catch(e => console.warn('Migration 020 note:', e.message));
+
   // Migration 017: Opening balance for shifts + discount presets table
   await db.query(`
     ALTER TABLE shifts ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(10,2) DEFAULT 0;

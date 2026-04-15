@@ -32,8 +32,9 @@ exports.createPhoneOrder = async (req, res) => {
     const { restaurantId, id: employeeId } = req.user;
     const {
       customer_name, customer_phone, customer_address,
-      customer_lat, customer_lng,
-      items, discount_amount = 0, notes, rider_id
+      customer_lat, customer_lng, area_name,
+      items, discount_amount = 0, notes, rider_id,
+      delivery_fee: reqDeliveryFee, rider_payout: reqRiderPayout,
     } = req.body;
 
     if (!customer_name || !customer_phone) return res.status(400).json({ error: 'Customer name and phone required' });
@@ -72,14 +73,33 @@ exports.createPhoneOrder = async (req, res) => {
 
     const delivery_address = customer_address ? { address: customer_address } : null;
 
+    // Auto-compute delivery fee if not provided
+    let delivery_fee = 0;
+    let rider_payout = 0;
+    if (reqDeliveryFee != null) {
+      delivery_fee = parseFloat(reqDeliveryFee) || 0;
+      rider_payout = parseFloat(reqRiderPayout) || 0;
+    } else {
+      try {
+        const { computeDeliveryFee } = require('./deliveryPricingController');
+        const pricing = await computeDeliveryFee(restaurantId, {
+          customerLat: customer_lat, customerLng: customer_lng,
+          areaName: area_name, customerPhone: customer_phone,
+        });
+        delivery_fee = pricing.finalFee || 0;
+        rider_payout = pricing.riderPayout || 0;
+      } catch { /* no zones configured — skip */ }
+    }
+
     const orderRes = await client.query(
       `INSERT INTO orders (
         restaurant_id, employee_id, rider_id,
         order_number, order_type, source, status, payment_status,
         customer_name, customer_phone, customer_lat, customer_lng,
         delivery_address, subtotal, tax_amount, discount_amount, total_amount,
+        delivery_fee, rider_payout,
         notes, guest_count
-      ) VALUES ($1,$2,$3,$4,'delivery','phone','pending','unpaid',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,1)
+      ) VALUES ($1,$2,$3,$4,'delivery','phone','pending','unpaid',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,1)
       RETURNING *`,
       [
         restaurantId, employeeId, rider_id || null,
@@ -88,6 +108,7 @@ exports.createPhoneOrder = async (req, res) => {
         customer_lat || null, customer_lng || null,
         delivery_address ? JSON.stringify(delivery_address) : null,
         subtotal, tax_amount, discount_amount, total_amount,
+        delivery_fee, rider_payout,
         notes || null
       ]
     );

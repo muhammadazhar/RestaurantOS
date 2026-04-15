@@ -14,6 +14,7 @@ const rider        = require('../controllers/riderController');
 const subscription = require('../controllers/subscriptionController');
 const branch       = require('../controllers/branchController');
 const support      = require('../controllers/supportController');
+const pricing      = require('../controllers/deliveryPricingController');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.get('/auth/groups',                           auth.getPublicGroups);       // public
@@ -258,6 +259,31 @@ router.post('/admin/module-pricing',   requireSuperAdmin, subscription.saveModul
 router.get('/admin/subscriptions',     requireSuperAdmin, subscription.getAllSubscriptions);
 router.patch('/admin/subscriptions/:id/approve', requireSuperAdmin, subscription.approveSubscription);
 router.patch('/admin/subscriptions/:id/reject',  requireSuperAdmin, subscription.rejectSubscription);
+
+// ── Delivery Pricing Engine ───────────────────────────────────────────────────
+router.get('/delivery-pricing/zones',                     requirePermission('settings'), pricing.getZones);
+router.post('/delivery-pricing/zones',                    requirePermission('settings'), pricing.createZone);
+router.put('/delivery-pricing/zones/:id',                 requirePermission('settings'), pricing.updateZone);
+router.delete('/delivery-pricing/zones/:id',              requirePermission('settings'), pricing.deleteZone);
+
+router.get('/delivery-pricing/areas',                     requirePermission('settings'), pricing.getAreas);
+router.post('/delivery-pricing/areas',                    requirePermission('settings'), pricing.createArea);
+router.put('/delivery-pricing/areas/:id',                 requirePermission('settings'), pricing.updateArea);
+router.delete('/delivery-pricing/areas/:id',              requirePermission('settings'), pricing.deleteArea);
+
+router.get('/delivery-pricing/surge-rules',               requirePermission('settings'), pricing.getSurgeRules);
+router.post('/delivery-pricing/surge-rules',              requirePermission('settings'), pricing.createSurgeRule);
+router.put('/delivery-pricing/surge-rules/:id',           requirePermission('settings'), pricing.updateSurgeRule);
+router.delete('/delivery-pricing/surge-rules/:id',        requirePermission('settings'), pricing.deleteSurgeRule);
+
+router.get('/delivery-pricing/customer-rules',            requirePermission('settings'), pricing.getCustomerRules);
+router.post('/delivery-pricing/customer-rules',           requirePermission('settings'), pricing.createCustomerRule);
+router.put('/delivery-pricing/customer-rules/:id',        requirePermission('settings'), pricing.updateCustomerRule);
+router.delete('/delivery-pricing/customer-rules/:id',     requirePermission('settings'), pricing.deleteCustomerRule);
+
+router.post('/delivery-pricing/preview-fee',              requirePermission('pos'), pricing.previewFee);
+router.get('/delivery-pricing/restaurant-location',       requirePermission('settings'), pricing.getRestaurantLocation);
+router.post('/delivery-pricing/restaurant-location',      requirePermission('settings'), pricing.saveRestaurantLocation);
 
 // ── Support Tickets (restaurant) ─────────────────────────────────────────────
 router.post('/support/tickets',                    requireModule('support'), upload.single('screenshot'), support.createTicket);

@@ -297,4 +297,29 @@ export const adminAddTicketMessage  = (id, msg)  => API.post(`/admin/support/tic
 export const adminAssignTicket      = (id, name) => API.patch(`/admin/support/tickets/${id}/assign`, { assigned_to_name: name });
 export const adminResolveTicket     = (id)       => API.patch(`/admin/support/tickets/${id}/resolve`);
 
+// ── Delivery Pricing ──────────────────────────────────────────────────────────
+export const getDeliveryZones           = ()       => API.get('/delivery-pricing/zones');
+export const createDeliveryZone         = (data)   => API.post('/delivery-pricing/zones', data);
+export const updateDeliveryZone         = (id, d)  => API.put(`/delivery-pricing/zones/${id}`, d);
+export const deleteDeliveryZone         = (id)     => API.delete(`/delivery-pricing/zones/${id}`);
+
+export const getDeliveryAreas           = ()       => API.get('/delivery-pricing/areas');
+export const createDeliveryArea         = (data)   => API.post('/delivery-pricing/areas', data);
+export const updateDeliveryArea         = (id, d)  => API.put(`/delivery-pricing/areas/${id}`, d);
+export const deleteDeliveryArea         = (id)     => API.delete(`/delivery-pricing/areas/${id}`);
+
+export const getSurgeRules              = ()       => API.get('/delivery-pricing/surge-rules');
+export const createSurgeRule            = (data)   => API.post('/delivery-pricing/surge-rules', data);
+export const updateSurgeRule            = (id, d)  => API.put(`/delivery-pricing/surge-rules/${id}`, d);
+export const deleteSurgeRule            = (id)     => API.delete(`/delivery-pricing/surge-rules/${id}`);
+
+export const getCustomerRules           = ()       => API.get('/delivery-pricing/customer-rules');
+export const createCustomerRule         = (data)   => API.post('/delivery-pricing/customer-rules', data);
+export const updateCustomerRule         = (id, d)  => API.put(`/delivery-pricing/customer-rules/${id}`, d);
+export const deleteCustomerRule         = (id)     => API.delete(`/delivery-pricing/customer-rules/${id}`);
+
+export const previewDeliveryFee         = (data)   => API.post('/delivery-pricing/preview-fee', data);
+export const getRestaurantLocation      = ()       => API.get('/delivery-pricing/restaurant-location');
+export const saveRestaurantLocation     = (data)   => API.post('/delivery-pricing/restaurant-location', data);
+
 export default API;

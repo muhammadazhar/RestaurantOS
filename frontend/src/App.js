@@ -45,6 +45,7 @@ import BranchManagement     from './components/branches/BranchManagement';
 import GroupDashboard       from './components/branches/GroupDashboard';
 import Support              from './components/support/Support';
 import AdminSupport         from './components/admin/AdminSupport';
+import DeliveryPricing      from './components/delivery/DeliveryPricing';
 
 function ThemedToaster() {
   const { theme: T } = useTheme();
@@ -120,6 +121,9 @@ function AppRoutes() {
       {/* Support */}
       <Route path="/support"          element={<PrivateRoute><Layout><Support /></Layout></PrivateRoute>} />
       <Route path="/admin-support"    element={<PrivateRoute><Layout><AdminSupport /></Layout></PrivateRoute>} />
+
+      {/* Delivery Pricing */}
+      <Route path="/delivery-pricing" element={<PrivateRoute><Layout><DeliveryPricing /></Layout></PrivateRoute>} />
 
       <Route path="*"          element={<Navigate to="/dashboard" replace />} />
     </Routes>

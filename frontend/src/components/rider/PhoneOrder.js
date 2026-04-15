@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   getMenu, getRiders, createPhoneOrder, assignRider,
-  getPhoneOrders, updateOrderStatus
+  getPhoneOrders, updateOrderStatus, previewDeliveryFee,
 } from '../../services/api';
 import { Card, PageHeader, Btn, Input, Select, Modal, Spinner, T, useT } from '../shared/UI';
 import toast from 'react-hot-toast';
@@ -225,8 +225,11 @@ export default function PhoneOrder() {
   const [custAddr,   setCustAddr]  = useState('');
   const [custLat,    setCustLat]   = useState('');
   const [custLng,    setCustLng]   = useState('');
+  const [areaName,   setAreaName]  = useState('');
   const [riderId,    setRiderId]   = useState('');
   const [discount,   setDiscount]  = useState('');
+  const [feeData,    setFeeData]   = useState(null);  // { zone, finalFee, riderPayout, surgeAdj, breakdown }
+  const [feeLoading, setFeeLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -294,11 +297,24 @@ export default function PhoneOrder() {
     return found ? { quantity: found.quantity } : null;
   };
 
+  const calcFee = async () => {
+    if (!areaName && !custLat && !custLng && !custPhone) return;
+    setFeeLoading(true);
+    try {
+      const r = await previewDeliveryFee({ customerLat: custLat || undefined, customerLng: custLng || undefined, areaName: areaName || undefined, customerPhone: custPhone || undefined });
+      setFeeData(r.data);
+    } catch { setFeeData(null); }
+    finally { setFeeLoading(false); }
+  };
+
+  const deliveryFee = feeData ? (feeData.finalFee || 0) : 0;
+  const riderPayout = feeData ? (feeData.riderPayout || 0) : 0;
+
   const subtotal    = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const discountAmt = Math.min(parseFloat(discount) || 0, subtotal);
   const taxable     = subtotal - discountAmt;
   const tax         = Math.round(taxable * 0.08 * 100) / 100;
-  const total       = taxable + tax;
+  const total       = taxable + tax + deliveryFee;
 
   const handleSubmit = async () => {
     if (!custName.trim()) return toast.error('Customer name required');
@@ -309,7 +325,7 @@ export default function PhoneOrder() {
       await createPhoneOrder({
         customer_name: custName, customer_phone: custPhone,
         customer_address: custAddr, customer_lat: custLat || null,
-        customer_lng: custLng || null,
+        customer_lng: custLng || null, area_name: areaName || null,
         items: cart.map(i => ({
           menu_item_id: i.id, name: i.name,
           quantity: i.quantity, unit_price: i.price,
@@ -318,11 +334,13 @@ export default function PhoneOrder() {
         discount_amount: discountAmt || undefined,
         notes: orderNotes || undefined,
         rider_id: riderId || null,
+        delivery_fee: deliveryFee || undefined,
+        rider_payout: riderPayout || undefined,
       });
       toast.success('Order placed!');
       setCart([]); setCustName(''); setCustPhone(''); setCustAddr('');
-      setCustLat(''); setCustLng(''); setRiderId(''); setDiscount('');
-      setOrderNotes('');
+      setCustLat(''); setCustLng(''); setAreaName(''); setRiderId(''); setDiscount('');
+      setOrderNotes(''); setFeeData(null);
       loadOrders();
       setTab('orders');
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to create order'); }
@@ -380,12 +398,34 @@ export default function PhoneOrder() {
                 </div>
                 <Input label="Latitude (GPS)" value={custLat} onChange={e => setCustLat(e.target.value)} placeholder="24.8607" type="number" step="any" />
                 <Input label="Longitude (GPS)" value={custLng} onChange={e => setCustLng(e.target.value)} placeholder="67.0011" type="number" step="any" />
+                <Input label="Area Name (for zone lookup)" value={areaName} onChange={e => setAreaName(e.target.value)} placeholder="e.g. Nazimabad, Block 5" />
+                <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+                  <button
+                    type="button" onClick={calcFee} disabled={feeLoading}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: T.accent, color: '#000', border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', opacity: feeLoading ? 0.6 : 1, height: 36 }}
+                  >
+                    {feeLoading ? '⏳' : '💲 Calc Fee'}
+                  </button>
+                </div>
               </div>
               {custLat && custLng && (
                 <a href={`https://www.google.com/maps?q=${custLat},${custLng}`} target="_blank" rel="noopener noreferrer"
                   style={{ fontSize: 12, color: T.accent, display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                   View on Map →
                 </a>
+              )}
+              {feeData && (
+                <div style={{ marginTop: 10, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: T.textMid }}>Zone: <strong style={{ color: T.text }}>{feeData.zone?.name || 'Default'}</strong></span>
+                    <span style={{ fontWeight: 800, color: T.accent }}>Customer Fee: PKR {Number(feeData.finalFee || 0).toLocaleString()}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                    <span style={{ color: T.textMid }}>Rider Payout: PKR {Number(feeData.riderPayout || 0).toLocaleString()}</span>
+                    {feeData.surgeAdj > 0 && <span style={{ color: '#F5A623' }}>⚡ Surge +PKR {Number(feeData.surgeAdj).toLocaleString()}</span>}
+                    {feeData.breakdown && <span style={{ color: '#2ECC71' }}>{feeData.breakdown}</span>}
+                  </div>
+                </div>
               )}
             </Card>
 
@@ -514,6 +554,12 @@ export default function PhoneOrder() {
                     <span style={{ fontSize: 12, color: T.textMid }}>Tax (8%)</span>
                     <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.text }}>PKR {tax.toLocaleString(undefined, { minimumFractionDigits: 0 })}</span>
                   </div>
+                  {deliveryFee > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, color: T.textMid }}>Delivery Fee {feeData?.zone ? `(${feeData.zone.name})` : ''}</span>
+                      <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.accent }}>PKR {deliveryFee.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
                     <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>Total</span>
                     <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.accent }}>PKR {total.toLocaleString(undefined, { minimumFractionDigits: 0 })}</span>
