@@ -38,6 +38,9 @@ router.get('/dashboard/stats', orders.getDashboardStats);
 // ── Orders ────────────────────────────────────────────────────────────────────
 router.get('/orders',              requirePermission('pos'), orders.getOrders);
 router.post('/orders',             requirePermission('pos'), orders.createOrder);
+router.get('/orders/table/:tableId/active', requirePermission('pos'), orders.getActiveTableOrder);
+router.post('/orders/:id/replace-item',     requirePermission('pos'), orders.replaceOrderItem);
+router.post('/orders/:id/cancel-return',    requirePermission('pos'), orders.cancelOrderReturn);
 router.patch('/orders/:id/status', requirePermission('pos', 'kitchen'), orders.updateOrderStatus);
 
 // ── Tables ────────────────────────────────────────────────────────────────────

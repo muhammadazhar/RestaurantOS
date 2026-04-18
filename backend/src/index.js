@@ -232,6 +232,55 @@ db.query('SELECT NOW()').then(async () => {
       ON password_reset_tokens(token_hash);
   `).catch(e => console.warn('Password reset migration note:', e.message));
 
+  // Order returns/replacements audit trail.
+  await db.query(`
+    CREATE SEQUENCE IF NOT EXISTS order_adjustment_number_seq;
+
+    CREATE TABLE IF NOT EXISTS order_adjustments (
+      id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      restaurant_id           UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      order_id                UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      adjustment_number       VARCHAR(40) NOT NULL UNIQUE,
+      type                    VARCHAR(30) NOT NULL
+                                CHECK (type IN ('item_replacement','item_return','full_cancellation')),
+      reason                  TEXT NOT NULL,
+      status                  VARCHAR(20) NOT NULL DEFAULT 'completed'
+                                CHECK (status IN ('pending','completed','voided')),
+      original_subtotal       NUMERIC(10,2) NOT NULL DEFAULT 0,
+      replacement_subtotal    NUMERIC(10,2) NOT NULL DEFAULT 0,
+      refund_amount           NUMERIC(10,2) NOT NULL DEFAULT 0,
+      additional_amount       NUMERIC(10,2) NOT NULL DEFAULT 0,
+      net_amount              NUMERIC(10,2) NOT NULL DEFAULT 0,
+      tax_adjustment          NUMERIC(10,2) NOT NULL DEFAULT 0,
+      total_adjustment        NUMERIC(10,2) NOT NULL DEFAULT 0,
+      original_payment_method VARCHAR(30),
+      created_by              UUID REFERENCES employees(id) ON DELETE SET NULL,
+      metadata                JSONB NOT NULL DEFAULT '{}',
+      created_at              TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS order_adjustment_items (
+      id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      adjustment_id  UUID NOT NULL REFERENCES order_adjustments(id) ON DELETE CASCADE,
+      order_item_id  UUID REFERENCES order_items(id) ON DELETE SET NULL,
+      menu_item_id   UUID REFERENCES menu_items(id) ON DELETE SET NULL,
+      name           VARCHAR(150) NOT NULL,
+      action         VARCHAR(20) NOT NULL CHECK (action IN ('return','sale')),
+      quantity       INT NOT NULL DEFAULT 1,
+      unit_price     NUMERIC(10,2) NOT NULL DEFAULT 0,
+      total_amount   NUMERIC(10,2) NOT NULL DEFAULT 0,
+      notes          TEXT,
+      created_at     TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_order_adjustments_restaurant
+      ON order_adjustments(restaurant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_order_adjustments_order
+      ON order_adjustments(order_id);
+    CREATE INDEX IF NOT EXISTS idx_order_adjustment_items_adjustment
+      ON order_adjustment_items(adjustment_id);
+  `).catch(e => console.warn('Order return migration note:', e.message));
+
   // Migration 010: Module-based licensing system
   await db.query(`
     CREATE TABLE IF NOT EXISTS modules (

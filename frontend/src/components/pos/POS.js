@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getActiveTableOrder, replaceOrderItem, cancelOrderReturn, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -145,6 +145,9 @@ export default function POS() {
   const [sending,      setSending]      = useState(false);
   const [notesItem,    setNotesItem]    = useState(null);
   const [createdOrder, setCreatedOrder] = useState(null);   // takeaway pay modal
+  const [activeTableOrder, setActiveTableOrder] = useState(null);
+  const [replaceTarget, setReplaceTarget] = useState(null);
+  const [loadingTableOrder, setLoadingTableOrder] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
   const [takePayMethod,setTakePayMethod]= useState('cash');
   const [takePaying,      setTakePaying]      = useState(false);
@@ -260,7 +263,93 @@ export default function POS() {
       weekend_applied: item.weekend_price_rule && (Array.isArray(item.weekend_days) ? item.weekend_days : ['FRI', 'SAT']).includes(todayDayKey()) && (v.weekend_price != null || item.weekend_price != null),
     }));
 
+  const cartFromOrder = (order) => (order?.items || []).filter(i => i.status !== 'cancelled').map(i => ({
+    id: i.menu_item_id,
+    menu_item_id: i.menu_item_id,
+    order_item_id: i.id,
+    cart_key: `existing:${i.id}`,
+    name: i.name,
+    base_name: i.name,
+    price: Number(i.unit_price || 0),
+    qty: Number(i.quantity || 1),
+    notes: i.notes || '',
+    existing_order_item: true,
+  }));
+
+  const clearLoadedOrder = () => {
+    setActiveTableOrder(null);
+    setReplaceTarget(null);
+  };
+
+  const loadActiveTableForCart = async (selectedTableId) => {
+    if (!selectedTableId) {
+      clearLoadedOrder();
+      setCart([]);
+      return;
+    }
+    const table = tables.find(t => t.id === selectedTableId);
+    if (table?.status !== 'occupied') {
+      clearLoadedOrder();
+      return;
+    }
+    setLoadingTableOrder(true);
+    try {
+      const res = await getActiveTableOrder(selectedTableId);
+      setActiveTableOrder(res.data);
+      setCart(cartFromOrder(res.data));
+      setDiscount(String(Number(res.data.discount_amount || 0) || ''));
+      setGuestCount(res.data.guest_count || 1);
+      setWaiterId(res.data.waiter_id || '');
+      setOrderNotes(res.data.notes || '');
+      toast.success(`${res.data.order_number} loaded`);
+    } catch (err) {
+      clearLoadedOrder();
+      toast.error(err.response?.data?.error || 'No active order found for this table');
+    } finally {
+      setLoadingTableOrder(false);
+    }
+  };
+
+  const handleTableSelect = (selectedTableId) => {
+    setTableId(selectedTableId);
+    loadActiveTableForCart(selectedTableId);
+  };
+
+  const processReplacement = async (menuItem, variant = getItemVariants(menuItem)[0]) => {
+    if (!activeTableOrder || !replaceTarget) return;
+    const reason = window.prompt(`Reason for replacing ${replaceTarget.name}?`, 'Customer requested replacement');
+    if (!reason) return;
+    setSending(true);
+    try {
+      const displayName = variant.name === 'Regular' ? menuItem.name : `${menuItem.name} - ${variant.name}`;
+      const res = await replaceOrderItem(activeTableOrder.id, {
+        order_item_id: replaceTarget.order_item_id,
+        replacement_menu_item_id: menuItem.id,
+        replacement_name: displayName,
+        quantity: replaceTarget.qty,
+        unit_price: variant.price,
+        reason,
+      });
+      setActiveTableOrder(res.data.order);
+      setCart(cartFromOrder(res.data.order));
+      setReplaceTarget(null);
+      const adjustment = Number(res.data.total_adjustment || 0);
+      toast.success(adjustment === 0 ? 'Item replaced' : `Item replaced, adjustment PKR ${adjustment.toLocaleString()}`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Replacement failed');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleMenuItemClick = (item, variant = getItemVariants(item)[0]) => {
+    if (replaceTarget) return processReplacement(item, variant);
+    if (activeTableOrder) return toast.error('Select Replace on the current order item first');
+    addToCart(item, variant);
+  };
+
   const addToCart = (item, variant = getItemVariants(item)[0]) => setCart(prev => {
+    if (activeTableOrder && item.existing_order_item) return prev;
     const cartKey = `${item.id}:${variant.id || variant.name}`;
     const displayName = variant.name === 'Regular' ? item.name : `${item.name} - ${variant.name}`;
     const ex = prev.find(c => c.cart_key === cartKey);
@@ -292,6 +381,26 @@ export default function POS() {
 
   const removeItem = (cartKey) => setCart(prev => prev.filter(c => c.cart_key !== cartKey));
 
+  const cancelLoadedOrder = async () => {
+    if (!activeTableOrder) return;
+    const reason = window.prompt(`Reason for cancelling ${activeTableOrder.order_number}?`, 'Customer cancelled order');
+    if (!reason) return;
+    setSending(true);
+    try {
+      await cancelOrderReturn(activeTableOrder.id, { reason });
+      toast.success('Order cancelled and return recorded');
+      setCart([]);
+      setDiscount('');
+      clearLoadedOrder();
+      setTableId('');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Cancellation failed');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const setItemNotes = (cartKey, notes) => setCart(prev =>
     prev.map(c => c.cart_key === cartKey ? { ...c, notes } : c)
   );
@@ -303,6 +412,7 @@ export default function POS() {
   const total        = taxable + tax;
 
   const sendToKitchen = async () => {
+    if (activeTableOrder) return toast.error('This table order is loaded for returns. Use Replace or Cancel Return.');
     if (!cart.length)                             return toast.error('Cart is empty');
     if (orderType === 'dine_in' && !tableId)      return toast.error('Select a table');
     if (['takeaway','delivery'].includes(orderType) && !custName) return toast.error('Customer name required');
@@ -735,7 +845,7 @@ export default function POS() {
           <div style={{ display: 'flex', gap: 6 }}>
             {[['dine_in','Dine In'],['takeaway','Takeaway'],['delivery','Delivery'],['online','Online']]
               .map(([v,lbl]) => (
-              <button key={v} onClick={() => setOrderType(v)} style={{
+              <button key={v} onClick={() => { setOrderType(v); if (v !== 'dine_in') { setTableId(''); clearLoadedOrder(); } }} style={{
                 ...(orderType === v ? S.active : S.inactive),
                 borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
                 cursor: 'pointer', fontFamily: "'Inter', sans-serif",
@@ -745,13 +855,15 @@ export default function POS() {
 
           {/* Table selector (dine-in only) */}
           {orderType === 'dine_in' && (
-            <select value={tableId} onChange={e => setTableId(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
+            <select value={tableId} onChange={e => handleTableSelect(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
               <option value="">Select Table</option>
               {tables.filter(t => t.status !== 'cleaning').map(t => (
                 <option key={t.id} value={t.id}>{t.label} - {t.section} ({t.status})</option>
               ))}
             </select>
           )}
+          {loadingTableOrder && <Badge color={T.accent} small>Loading table order</Badge>}
+          {replaceTarget && <Badge color={T.red} small>Replacing: {replaceTarget.name}</Badge>}
 
           {/* Search */}
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu..."
@@ -801,7 +913,7 @@ export default function POS() {
                   borderRadius: 16, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 0,
                 }}>
                   {/* Image */}
-                  <div onClick={() => addToCart(item, variants[0])} style={{ height: 104, minHeight: 104, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
+                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 104, minHeight: 104, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
                     {item.image_url ? (
                       <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
                         alt={item.name} onError={e => e.target.style.display='none'}
@@ -823,7 +935,7 @@ export default function POS() {
                         const cartKey = `${item.id}:${variant.id || variant.name}`;
                         const selected = cart.find(c => c.cart_key === cartKey);
                         return (
-                          <button key={cartKey} onClick={() => addToCart(item, variant)} style={{
+                          <button key={cartKey} onClick={() => handleMenuItemClick(item, variant)} style={{
                             borderRadius: 12,
                             ...(selected ? S.active : S.inactive),
                             padding: '8px 10px',
@@ -864,6 +976,14 @@ export default function POS() {
           <div style={{ fontSize: 11, color: T.textMid, marginBottom: 12 }}>
             {cart.length} item{cart.length !== 1 ? 's' : ''} - tap to add
           </div>
+          {activeTableOrder && (
+            <div style={{ marginBottom: 10, background: light ? '#fee2e2' : 'rgba(239,68,68,0.14)', border: `1px solid ${T.red}55`, borderRadius: 10, padding: '9px 10px' }}>
+              <div style={{ fontSize: 12, fontWeight: 900, color: light ? '#991b1b' : T.red }}>{activeTableOrder.order_number} loaded</div>
+              <div style={{ fontSize: 11, color: light ? '#7f1d1d' : T.textMid, marginTop: 3 }}>
+                Select Replace on an item, then choose the new menu item.
+              </div>
+            </div>
+          )}
 
           {/* Customer info for takeaway/delivery */}
           {needCustomer && (
@@ -963,11 +1083,19 @@ export default function POS() {
                       {item.notes && <span style={{ color: T.accent }}> - note</span>}
                     </div>
                   </div>
-                  <button onClick={() => changeQty(item.cart_key,-1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>-</button>
-                    <div style={{ textAlign: 'center', fontSize: 13, color: T.textMid, fontFamily: 'monospace' }}>x{item.qty}</div>
-                  <button onClick={() => addToCart(item, { id: item.variant_id, name: item.variant_name, price: item.price })} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</button>
+                  {!item.existing_order_item && (
+                    <button onClick={() => changeQty(item.cart_key,-1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>-</button>
+                  )}
+                  <div style={{ textAlign: 'center', fontSize: 13, color: T.textMid, fontFamily: 'monospace' }}>x{item.qty}</div>
+                  {!item.existing_order_item && (
+                    <button onClick={() => addToCart(item, { id: item.variant_id, name: item.variant_name, price: item.price })} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</button>
+                  )}
                   <button onClick={() => setNotesItem(item)} title="Add notes" style={{ width: 28, height: 20, borderRadius: 10, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, cursor: 'pointer', fontSize: 9, lineHeight: 1, flexShrink: 0 }}>Note</button>
-                  <button onClick={() => removeItem(item.cart_key)} title="Remove" style={{ width: 20, height: 20, borderRadius: '50%', background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, cursor: 'pointer', fontSize: 11, lineHeight: 1, flexShrink: 0 }}>x</button>
+                  {item.existing_order_item ? (
+                    <button onClick={() => setReplaceTarget(item)} title="Replace item" style={{ height: 22, borderRadius: 10, background: replaceTarget?.cart_key === item.cart_key ? T.red : T.redDim, border: `1px solid ${T.red}44`, color: replaceTarget?.cart_key === item.cart_key ? '#fff' : T.red, cursor: 'pointer', fontSize: 9, lineHeight: 1, flexShrink: 0, padding: '0 8px', fontWeight: 800 }}>Replace</button>
+                  ) : (
+                    <button onClick={() => removeItem(item.cart_key)} title="Remove" style={{ width: 20, height: 20, borderRadius: '50%', background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, cursor: 'pointer', fontSize: 11, lineHeight: 1, flexShrink: 0 }}>x</button>
+                  )}
                 </div>
               </div>
             ))}
@@ -1025,10 +1153,22 @@ export default function POS() {
                 <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>Total</span>
                 <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.accent }}>PKR {total.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
               </div>
-              <Btn onClick={sendToKitchen} disabled={sending} style={{ width: '100%', padding: '13px' }}>
-                {sending ? 'Sending...' : orderType === 'delivery' ? 'Place Delivery Order' : 'Send to Kitchen'}
-              </Btn>
-              <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); }} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
+              {activeTableOrder ? (
+                <>
+                  <Btn onClick={() => setReplaceTarget(null)} disabled={!replaceTarget || sending} style={{ width: '100%', padding: '13px' }}>
+                    {replaceTarget ? 'Cancel Replacement Selection' : 'Select an Item to Replace'}
+                  </Btn>
+                  <Btn variant="danger" onClick={cancelLoadedOrder} disabled={sending} style={{ width: '100%', marginTop: 6 }}>Cancel / Return Order</Btn>
+                  <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); clearLoadedOrder(); }} style={{ width: '100%', marginTop: 6 }}>Close Loaded Order</Btn>
+                </>
+              ) : (
+                <>
+                  <Btn onClick={sendToKitchen} disabled={sending} style={{ width: '100%', padding: '13px' }}>
+                    {sending ? 'Sending...' : orderType === 'delivery' ? 'Place Delivery Order' : 'Send to Kitchen'}
+                  </Btn>
+                  <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); }} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
+                </>
+              )}
             </div>
           )}
         </Card>

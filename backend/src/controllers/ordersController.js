@@ -121,6 +121,106 @@ async function refreshShiftClosingCash(client, shiftSessionId) {
   return { closing_cash: closingCash, cash_sales: cashSales, shift_date: session.shift_date };
 }
 
+function numeric(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function roundMoney(value) {
+  return Math.round(numeric(value) * 100) / 100;
+}
+
+async function getOrderWithItems(client, restaurantId, orderId) {
+  const result = await client.query(
+    `SELECT o.*,
+            dt.label as table_label,
+            e.full_name as server_name,
+            w.full_name as waiter_name,
+            s.shift_number, s.shift_name,
+            s.start_time as shift_start, s.end_time as shift_end,
+            COALESCE(
+              json_agg(json_build_object(
+                'id', oi.id, 'menu_item_id', oi.menu_item_id, 'name', oi.name,
+                'quantity', oi.quantity, 'unit_price', oi.unit_price,
+                'total_price', oi.total_price, 'status', oi.status,
+                'notes', oi.notes
+              ) ORDER BY oi.created_at) FILTER (WHERE oi.id IS NOT NULL),
+              '[]'::json
+            ) as items
+     FROM orders o
+     LEFT JOIN dining_tables dt ON o.table_id = dt.id
+     LEFT JOIN employees e ON o.employee_id = e.id
+     LEFT JOIN employees w ON o.waiter_id = w.id
+     LEFT JOIN shifts s ON o.shift_id = s.id
+     LEFT JOIN order_items oi ON o.id = oi.order_id AND oi.status <> 'cancelled'
+     WHERE o.id = $1 AND o.restaurant_id = $2
+     GROUP BY o.id, dt.label, e.full_name, w.full_name, s.shift_number, s.shift_name, s.start_time, s.end_time`,
+    [orderId, restaurantId]
+  );
+  return result.rows[0] || null;
+}
+
+async function recalculateOrderTotals(client, order) {
+  const activeRes = await client.query(
+    `SELECT COALESCE(SUM(total_price),0) AS subtotal
+     FROM order_items
+     WHERE order_id=$1 AND status <> 'cancelled'`,
+    [order.id]
+  );
+
+  const subtotal = roundMoney(activeRes.rows[0]?.subtotal);
+  const oldTaxable = Math.max(0, numeric(order.subtotal) - numeric(order.discount_amount));
+  const taxRate = oldTaxable > 0 ? numeric(order.tax_amount) / oldTaxable : 0.08;
+  const discount = Math.min(numeric(order.discount_amount), subtotal);
+  const taxable = Math.max(0, subtotal - discount);
+  const taxAmount = roundMoney(taxable * taxRate);
+  const totalAmount = roundMoney(taxable + taxAmount);
+
+  const updateRes = await client.query(
+    `UPDATE orders
+     SET subtotal=$1, discount_amount=$2, tax_amount=$3, total_amount=$4, updated_at=NOW()
+     WHERE id=$5
+     RETURNING *`,
+    [subtotal, discount, taxAmount, totalAmount, order.id]
+  );
+
+  return updateRes.rows[0];
+}
+
+async function createAdjustment(client, restaurantId, order, type, reason, employeeId, amounts = {}, metadata = {}) {
+  const result = await client.query(
+    `INSERT INTO order_adjustments(
+       restaurant_id, order_id, adjustment_number, type, reason, status,
+       original_subtotal, replacement_subtotal, refund_amount, additional_amount,
+       net_amount, tax_adjustment, total_adjustment, original_payment_method,
+       created_by, metadata
+     )
+     VALUES(
+       $1,$2,
+       'RET-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(nextval('order_adjustment_number_seq')::text, 5, '0'),
+       $3,$4,'completed',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+     )
+     RETURNING *`,
+    [
+      restaurantId,
+      order.id,
+      type,
+      reason,
+      numeric(amounts.original_subtotal),
+      numeric(amounts.replacement_subtotal),
+      numeric(amounts.refund_amount),
+      numeric(amounts.additional_amount),
+      numeric(amounts.net_amount),
+      numeric(amounts.tax_adjustment),
+      numeric(amounts.total_adjustment),
+      order.payment_method || null,
+      employeeId || null,
+      JSON.stringify(metadata || {}),
+    ]
+  );
+  return result.rows[0];
+}
+
 // GET /api/orders?status=pending  OR  ?status=pending,preparing,ready
 exports.getOrders = async (req, res) => {
   try {
@@ -160,7 +260,7 @@ exports.getOrders = async (req, res) => {
               s.shift_number, s.shift_name,
               s.start_time as shift_start, s.end_time as shift_end,
               json_agg(json_build_object(
-                'id', oi.id, 'name', oi.name, 'quantity', oi.quantity,
+                'id', oi.id, 'menu_item_id', oi.menu_item_id, 'name', oi.name, 'quantity', oi.quantity,
                 'unit_price', oi.unit_price, 'total_price', oi.total_price,
                 'status', oi.status, 'notes', oi.notes
               ) ORDER BY oi.created_at) as items
@@ -177,6 +277,40 @@ exports.getOrders = async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+// GET /api/orders/table/:tableId/active
+exports.getActiveTableOrder = async (req, res) => {
+  try {
+    const { restaurantId, id: userId, permissions = [] } = req.user;
+    const isManager = permissions.includes('settings');
+    const { tableId } = req.params;
+
+    const params = [restaurantId, tableId];
+    const ownFilter = isManager ? '' : 'AND o.employee_id = $3';
+    if (!isManager) params.push(userId);
+
+    const orderRes = await db.query(
+      `SELECT o.id
+       FROM orders o
+       WHERE o.restaurant_id=$1
+         AND o.table_id=$2
+         AND o.status NOT IN ('paid','cancelled')
+         AND o.payment_status <> 'refunded'
+         ${ownFilter}
+       ORDER BY o.created_at DESC
+       LIMIT 1`,
+      params
+    );
+
+    if (!orderRes.rows.length) return res.status(404).json({ error: 'No active order for this table' });
+
+    const order = await getOrderWithItems(db, restaurantId, orderRes.rows[0].id);
+    res.json(order);
+  } catch (err) {
+    console.error('getActiveTableOrder error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
 };
 
 // POST /api/orders
@@ -390,6 +524,259 @@ exports.updateOrderStatus = async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+};
+
+// POST /api/orders/:id/replace-item
+exports.replaceOrderItem = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const { restaurantId, id: employeeId } = req.user;
+    const { id } = req.params;
+    const {
+      order_item_id,
+      replacement_menu_item_id,
+      replacement_name,
+      quantity,
+      unit_price,
+      reason,
+    } = req.body;
+
+    if (!order_item_id || !replacement_menu_item_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Original item and replacement item are required' });
+    }
+    if (!reason || !String(reason).trim()) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Return reason is required' });
+    }
+
+    const orderRes = await client.query(
+      `SELECT * FROM orders WHERE id=$1 AND restaurant_id=$2 FOR UPDATE`,
+      [id, restaurantId]
+    );
+    if (!orderRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = orderRes.rows[0];
+    if (['paid', 'cancelled'].includes(order.status) || order.payment_status === 'refunded') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Only active table orders can be replaced from POS' });
+    }
+
+    const itemRes = await client.query(
+      `SELECT * FROM order_items
+       WHERE id=$1 AND order_id=$2 AND status <> 'cancelled'
+       FOR UPDATE`,
+      [order_item_id, id]
+    );
+    if (!itemRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order item not found or already returned' });
+    }
+    const oldItem = itemRes.rows[0];
+
+    const menuRes = await client.query(
+      `SELECT id, name, price
+       FROM menu_items
+       WHERE id=$1
+         AND restaurant_id=$2
+         AND COALESCE(is_available, true)=true
+         AND COALESCE(status, 'active') <> 'inactive'
+       LIMIT 1`,
+      [replacement_menu_item_id, restaurantId]
+    );
+    if (!menuRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Replacement menu item not found' });
+    }
+    const menuItem = menuRes.rows[0];
+
+    const qty = Math.max(1, parseInt(quantity || oldItem.quantity || 1, 10));
+    const oldTotal = roundMoney(numeric(oldItem.unit_price) * qty);
+    const newUnitPrice = roundMoney(unit_price ?? menuItem.price);
+    const newTotal = roundMoney(newUnitPrice * qty);
+    const net = roundMoney(newTotal - oldTotal);
+
+    const oldTaxable = Math.max(0, numeric(order.subtotal) - numeric(order.discount_amount));
+    const taxRate = oldTaxable > 0 ? numeric(order.tax_amount) / oldTaxable : 0.08;
+    const taxAdjustment = roundMoney(net * taxRate);
+    const totalAdjustment = roundMoney(net + taxAdjustment);
+
+    const adjustment = await createAdjustment(client, restaurantId, order, 'item_replacement', reason, employeeId, {
+      original_subtotal: oldTotal,
+      replacement_subtotal: newTotal,
+      refund_amount: totalAdjustment < 0 ? Math.abs(totalAdjustment) : 0,
+      additional_amount: totalAdjustment > 0 ? totalAdjustment : 0,
+      net_amount: net,
+      tax_adjustment: taxAdjustment,
+      total_adjustment: totalAdjustment,
+    }, {
+      original_order_item_id: oldItem.id,
+      replacement_menu_item_id,
+    });
+
+    await client.query(
+      `INSERT INTO order_adjustment_items(
+         adjustment_id, order_item_id, menu_item_id, name, action, quantity, unit_price, total_amount, notes
+       )
+       VALUES($1,$2,$3,$4,'return',$5,$6,$7,$8)`,
+      [
+        adjustment.id,
+        oldItem.id,
+        oldItem.menu_item_id,
+        oldItem.name,
+        qty,
+        oldItem.unit_price,
+        -oldTotal,
+        `Replacement return: ${reason}`,
+      ]
+    );
+
+    await client.query(
+      `UPDATE order_items SET status='cancelled' WHERE id=$1`,
+      [oldItem.id]
+    );
+
+    const newItemRes = await client.query(
+      `INSERT INTO order_items(order_id, menu_item_id, name, quantity, unit_price, total_price, notes)
+       VALUES($1,$2,$3,$4,$5,$6,$7)
+       RETURNING *`,
+      [
+        id,
+        replacement_menu_item_id,
+        replacement_name || menuItem.name,
+        qty,
+        newUnitPrice,
+        newTotal,
+        `Replacement for ${oldItem.name}`,
+      ]
+    );
+
+    await client.query(
+      `INSERT INTO order_adjustment_items(
+         adjustment_id, order_item_id, menu_item_id, name, action, quantity, unit_price, total_amount, notes
+       )
+       VALUES($1,$2,$3,$4,'sale',$5,$6,$7,$8)`,
+      [
+        adjustment.id,
+        newItemRes.rows[0].id,
+        replacement_menu_item_id,
+        replacement_name || menuItem.name,
+        qty,
+        newUnitPrice,
+        newTotal,
+        `Replacement sale: ${reason}`,
+      ]
+    );
+
+    const updatedOrder = await recalculateOrderTotals(client, order);
+    const fullOrder = await getOrderWithItems(client, restaurantId, updatedOrder.id);
+
+    await client.query('COMMIT');
+
+    const io = req.app.get('io');
+    if (io) io.to(restaurantId).emit('order_updated', { orderId: id, status: fullOrder.status, tableId: fullOrder.table_id });
+
+    res.json({ order: fullOrder, adjustment, net_amount: net, tax_adjustment: taxAdjustment, total_adjustment: totalAdjustment });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('replaceOrderItem error:', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Server error' });
+  } finally { client.release(); }
+};
+
+// POST /api/orders/:id/cancel-return
+exports.cancelOrderReturn = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const { restaurantId, id: employeeId } = req.user;
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || !String(reason).trim()) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cancellation reason is required' });
+    }
+
+    const orderRes = await client.query(
+      `SELECT * FROM orders WHERE id=$1 AND restaurant_id=$2 FOR UPDATE`,
+      [id, restaurantId]
+    );
+    if (!orderRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = orderRes.rows[0];
+    if (order.status === 'cancelled' || order.payment_status === 'refunded') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Order is already cancelled or refunded' });
+    }
+
+    const activeItems = await client.query(
+      `SELECT * FROM order_items WHERE order_id=$1 AND status <> 'cancelled' ORDER BY created_at`,
+      [id]
+    );
+
+    const adjustment = await createAdjustment(client, restaurantId, order, 'full_cancellation', reason, employeeId, {
+      original_subtotal: order.subtotal,
+      replacement_subtotal: 0,
+      refund_amount: order.payment_status === 'paid' ? order.total_amount : 0,
+      additional_amount: 0,
+      net_amount: -numeric(order.subtotal),
+      tax_adjustment: -numeric(order.tax_amount),
+      total_adjustment: -numeric(order.total_amount),
+    }, {
+      cancelled_order_number: order.order_number,
+    });
+
+    for (const item of activeItems.rows) {
+      await client.query(
+        `INSERT INTO order_adjustment_items(
+           adjustment_id, order_item_id, menu_item_id, name, action, quantity, unit_price, total_amount, notes
+         )
+         VALUES($1,$2,$3,$4,'return',$5,$6,$7,$8)`,
+        [
+          adjustment.id,
+          item.id,
+          item.menu_item_id,
+          item.name,
+          item.quantity,
+          item.unit_price,
+          -numeric(item.total_price),
+          `Full order cancellation: ${reason}`,
+        ]
+      );
+    }
+
+    await client.query(`UPDATE order_items SET status='cancelled' WHERE order_id=$1 AND status <> 'cancelled'`, [id]);
+    const updatedRes = await client.query(
+      `UPDATE orders
+       SET status='cancelled',
+           payment_status=CASE WHEN payment_status='paid' THEN 'refunded' ELSE payment_status END,
+           updated_at=NOW()
+       WHERE id=$1
+       RETURNING *`,
+      [id]
+    );
+
+    if (updatedRes.rows[0].table_id) {
+      await client.query(`UPDATE dining_tables SET status='available' WHERE id=$1`, [updatedRes.rows[0].table_id]);
+    }
+
+    await client.query('COMMIT');
+
+    const io = req.app.get('io');
+    if (io) io.to(restaurantId).emit('order_updated', { orderId: id, status: 'cancelled', tableId: updatedRes.rows[0].table_id });
+
+    res.json({ order: updatedRes.rows[0], adjustment });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('cancelOrderReturn error:', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Server error' });
+  } finally { client.release(); }
 };
 
 // GET /api/reports/performance
