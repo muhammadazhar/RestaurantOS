@@ -313,6 +313,7 @@ const insertMenuAddOnGroups = async (client, menuItemId, groups) => {
 
 exports.getMenu = async (req, res) => {
   try {
+    const includeInactive = req.query.includeInactive === 'true';
     const result = await db.query(
       `SELECT mi.*, c.name as category_name,
               COALESCE(sales.total_sold, 0)::int AS total_sold,
@@ -350,12 +351,22 @@ exports.getMenu = async (req, res) => {
        ) sales ON TRUE
        WHERE mi.restaurant_id=$1
          AND COALESCE(mi.is_deleted, FALSE)=FALSE
+         AND ($2::boolean OR (
+           COALESCE(mi.is_available, TRUE)=TRUE
+           AND COALESCE(mi.status, 'active')='active'
+           AND (mi.category_id IS NULL OR COALESCE(c.is_active, TRUE)=TRUE)
+         ))
        GROUP BY mi.id, c.name, c.sort_order, sales.total_sold, sales.gross_sales
        ORDER BY c.sort_order, mi.sort_order, mi.name`,
-      [req.user.restaurantId]
+      [req.user.restaurantId, includeInactive]
     );
     const cats = await db.query(
-      `SELECT * FROM categories WHERE restaurant_id=$1 ORDER BY sort_order`, [req.user.restaurantId]
+      `SELECT *
+       FROM categories
+       WHERE restaurant_id=$1
+         AND ($2::boolean OR COALESCE(is_active, TRUE)=TRUE)
+       ORDER BY sort_order`,
+      [req.user.restaurantId, includeInactive]
     );
     const itemIds = result.rows.map(item => item.id);
     let addonGroups = [];
@@ -590,6 +601,40 @@ exports.updateMenuItem = async (req, res) => {
 exports.deleteMenuItem = async (req, res) => {
   try {
     const { id } = req.params;
+    const existing = await db.query(
+      `SELECT id, name FROM menu_items
+       WHERE id=$1 AND restaurant_id=$2 AND COALESCE(is_deleted, FALSE)=FALSE`,
+      [id, req.user.restaurantId]
+    );
+    if (!existing.rows.length) return res.status(404).json({ error: 'Item not found' });
+
+    const sales = await db.query(
+      `SELECT 1
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       WHERE oi.menu_item_id=$1
+         AND o.restaurant_id=$2
+         AND o.status <> 'cancelled'
+       LIMIT 1`,
+      [id, req.user.restaurantId]
+    );
+    if (sales.rows.length) {
+      const inactive = await db.query(
+        `UPDATE menu_items
+         SET is_available=FALSE, status='inactive',
+             visible_pos=FALSE, visible_web=FALSE, visible_delivery=FALSE
+         WHERE id=$1 AND restaurant_id=$2
+         RETURNING id`,
+        [id, req.user.restaurantId]
+      );
+      return res.json({
+        success: true,
+        deactivated: true,
+        message: 'Menu item has sales history, so it was made inactive instead of deleted.',
+        item: inactive.rows[0],
+      });
+    }
+
     const result = await db.query(
       `UPDATE menu_items
        SET is_deleted=TRUE, deleted_at=NOW(), is_available=FALSE, status='inactive'
@@ -639,7 +684,14 @@ exports.getCategories = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT c.*, p.name AS parent_name,
-              (SELECT COUNT(*) FROM menu_items mi WHERE mi.category_id = c.id)::int AS item_count
+              (SELECT COUNT(*) FROM menu_items mi WHERE mi.category_id = c.id AND COALESCE(mi.is_deleted, FALSE)=FALSE)::int AS item_count,
+              (SELECT COUNT(*)
+               FROM order_items oi
+               JOIN menu_items mi ON mi.id = oi.menu_item_id
+               JOIN orders o ON o.id = oi.order_id
+               WHERE mi.category_id = c.id
+                 AND o.restaurant_id = c.restaurant_id
+                 AND o.status <> 'cancelled')::int AS sold_item_count
        FROM categories c
        LEFT JOIN categories p ON c.parent_id = p.id
        WHERE c.restaurant_id = $1
@@ -692,6 +744,37 @@ exports.updateCategory = async (req, res) => {
 exports.deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
+    const existing = await db.query(
+      `SELECT id FROM categories WHERE id=$1 AND restaurant_id=$2`,
+      [id, req.user.restaurantId]
+    );
+    if (!existing.rows.length) return res.status(404).json({ error: 'Category not found' });
+
+    const categoryItems = await db.query(
+      `SELECT id FROM menu_items
+       WHERE category_id=$1 AND restaurant_id=$2 AND COALESCE(is_deleted, FALSE)=FALSE
+       LIMIT 1`,
+      [id, req.user.restaurantId]
+    );
+    const childCategories = await db.query(
+      `SELECT id FROM categories WHERE parent_id=$1 AND restaurant_id=$2 LIMIT 1`,
+      [id, req.user.restaurantId]
+    );
+    if (categoryItems.rows.length || childCategories.rows.length) {
+      const inactive = await db.query(
+        `UPDATE categories SET is_active=FALSE WHERE id=$1 AND restaurant_id=$2 RETURNING *`,
+        [id, req.user.restaurantId]
+      );
+      return res.json({
+        success: true,
+        deactivated: true,
+        message: categoryItems.rows.length
+          ? 'Category has menu items, so it was made inactive instead of deleted.'
+          : 'Category has sub-categories, so it was made inactive instead of deleted.',
+        category: inactive.rows[0],
+      });
+    }
+
     const items = await db.query(`SELECT id FROM menu_items WHERE category_id=$1 LIMIT 1`, [id]);
     if (items.rows.length) return res.status(400).json({ error: 'Category has menu items — reassign them first' });
     const subs = await db.query(`SELECT id FROM categories WHERE parent_id=$1 LIMIT 1`, [id]);

@@ -69,7 +69,7 @@ export const uploadRestaurantLogo     = (file) => {
 };
 
 // ── Menu ──────────────────────────────────────────────────────────────────────
-export const getMenu             = ()          => API.get('/menu');
+export const getMenu             = (params)   => API.get('/menu', { params });
 export const createMenuItem      = (data)      => API.post('/menu/items', data);
 export const updateMenuItem      = (id, d)     => API.put(`/menu/items/${id}`, d);
 export const deleteMenuItem      = (id)        => API.delete(`/menu/items/${id}`);

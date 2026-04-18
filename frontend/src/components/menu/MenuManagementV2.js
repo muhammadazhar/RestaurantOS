@@ -139,6 +139,36 @@ function Modal({ title, children, onClose, width = 560 }) {
   );
 }
 
+function IconButton({ title, icon, onClick, tone = 'neutral', style }) {
+  const colors = tone === 'danger'
+    ? { border: '#fecaca', bg: '#fff1f2', color: '#dc2626' }
+    : { border: '#cbd5e1', bg: '#ffffff', color: '#334155' };
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        border: `1px solid ${colors.border}`,
+        background: colors.bg,
+        color: colors.color,
+        cursor: 'pointer',
+        display: 'inline-grid',
+        placeItems: 'center',
+        fontSize: 15,
+        lineHeight: 1,
+        ...style,
+      }}
+    >
+      {icon}
+    </button>
+  );
+}
+
 export default function MenuManagementV2() {
   const { mode, theme } = useTheme();
   const light = mode === 'light';
@@ -161,7 +191,7 @@ export default function MenuManagementV2() {
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [menuRes, catsRes] = await Promise.all([getMenu(), getCategories()]);
+      const [menuRes, catsRes] = await Promise.all([getMenu({ includeInactive: true }), getCategories()]);
       setMenu(menuRes.data);
       setAllCategories(catsRes.data);
       setSmartSortEnabled(menuRes.data?.settings?.pos_smart_menu_sort_enabled === true);
@@ -294,6 +324,16 @@ export default function MenuManagementV2() {
     },
     pendingFile: null,
   });
+  const openEditCategory = (category) => setCatModal({
+    mode: 'edit',
+    category,
+    form: {
+      ...BLANK_CAT,
+      ...category,
+      parent_id: category.parent_id || '',
+      is_active: category.is_active !== false,
+    },
+  });
 
   const saveItem = async () => {
     const { mode, item, form, pendingFile } = itemModal;
@@ -381,12 +421,29 @@ export default function MenuManagementV2() {
     if (!window.confirm(`Delete "${itemModal.item.name}" from the menu?`)) return;
     setSaving(true);
     try {
-      await deleteMenuItem(itemModal.item.id);
-      toast.success('Menu item deleted');
+      const res = await deleteMenuItem(itemModal.item.id);
+      toast.success(res.data?.message || 'Menu item deleted');
       setItemModal(null);
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not delete item');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeCategory = async (category) => {
+    if (!category?.id) return;
+    if (!window.confirm(`Delete "${category.name}"? Categories with child records will be made inactive instead.`)) return;
+    setSaving(true);
+    try {
+      const res = await deleteCategory(category.id);
+      toast.success(res.data?.message || 'Category deleted');
+      if (activeCategory === category.id) setActiveCategory('all');
+      setCatModal(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not delete category');
     } finally {
       setSaving(false);
     }
@@ -465,13 +522,24 @@ export default function MenuManagementV2() {
           <div style={{ display: 'grid', gap: 8 }}>
             {[{ id: 'all', name: 'All' }, ...categories].map(cat => {
               const active = activeCategory === cat.id;
+              const isAll = cat.id === 'all';
               return (
-                <button key={cat.id} onClick={() => setActiveCategory(cat.id)} style={{ width: '100%', borderRadius: 16, padding: '13px 14px', cursor: 'pointer', ...(active ? S.active : S.inactive), textAlign: 'left', fontWeight: active ? 800 : 600 }}>
-                  <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                    <span>{cat.name}</span>
-                    <span style={{ opacity: 0.7 }}>{cat.id === 'all' ? items.length : (categoryCounts[cat.id] || 0)}</span>
-                  </span>
-                </button>
+                <div key={cat.id} style={{ display: 'grid', gridTemplateColumns: isAll ? '1fr' : '1fr auto auto', gap: 6, alignItems: 'center' }}>
+                  <button onClick={() => setActiveCategory(cat.id)} style={{ width: '100%', borderRadius: 16, padding: '13px 14px', cursor: 'pointer', ...(active ? S.active : S.inactive), textAlign: 'left', fontWeight: active ? 800 : 600 }}>
+                    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {cat.name}{cat.is_active === false ? ' (Inactive)' : ''}
+                      </span>
+                      <span style={{ opacity: 0.7 }}>{cat.id === 'all' ? items.length : (categoryCounts[cat.id] || 0)}</span>
+                    </span>
+                  </button>
+                  {!isAll && (
+                    <>
+                      <IconButton title={`Edit ${cat.name}`} icon="✎" onClick={() => openEditCategory(cat)} style={{ width: 38, height: 38 }} />
+                      <IconButton title={`Delete ${cat.name}`} icon="🗑" tone="danger" onClick={() => removeCategory(cat)} style={{ width: 38, height: 38 }} />
+                    </>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -569,7 +637,7 @@ export default function MenuManagementV2() {
         <Modal title={catModal.mode === 'edit' ? 'Edit Category' : 'New Category'} onClose={() => setCatModal(null)} width={500}>
           <CategoryForm state={catModal} setState={setCatModal} categories={allCategories} inputStyle={inputStyle} labelColor={T.textDim} />
           <div style={{ display: 'flex', gap: 10 }}>
-            {catModal.mode === 'edit' && <button onClick={async () => { if (!window.confirm('Delete this category?')) return; await deleteCategory(catModal.category.id); setCatModal(null); load(); }} style={{ flex: 1, borderRadius: 14, border: '1px solid #ef4444', background: 'transparent', color: '#ef4444', padding: 14, fontWeight: 900, cursor: 'pointer' }}>Delete</button>}
+            {catModal.mode === 'edit' && <IconButton title="Delete category" icon="🗑" tone="danger" onClick={() => removeCategory(catModal.category)} style={{ width: 48, height: 48, borderRadius: 14, fontWeight: 900 }} />}
             <button onClick={saveCategory} disabled={saving} style={{ flex: 2, border: 0, borderRadius: 14, ...S.primary, padding: 14, fontWeight: 900, cursor: saving ? 'not-allowed' : 'pointer' }}>{saving ? 'Saving...' : 'Save Category'}</button>
           </div>
         </Modal>
@@ -1002,6 +1070,10 @@ function CategoryForm({ state, setState, categories, inputStyle, labelColor }) {
         <Field label="Parent" labelColor={labelColor}><select style={inputStyle} value={form.parent_id || ''} onChange={e => set('parent_id', e.target.value)}><option value="">Top level</option>{parents.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
         <Field label="Sort" labelColor={labelColor}><input style={inputStyle} type="number" value={form.sort_order || 0} onChange={e => set('sort_order', e.target.value)} /></Field>
       </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: labelColor, fontSize: 13, fontWeight: 800 }}>
+        <input type="checkbox" checked={form.is_active !== false} onChange={e => set('is_active', e.target.checked)} />
+        Active in POS / Orders
+      </label>
     </div>
   );
 }
