@@ -761,88 +761,97 @@ export default function POS() {
           </Badge>
         </div>
 
-        {/* Category pills */}
-        <div style={{ borderRadius: 16, padding: 12, ...S.panel }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {cats.map(c => {
-              const active = cat === c.id;
-              const count = c.id === 'all' ? menu.items.filter(i => i.is_available !== false).length : (categoryCounts[c.id] || 0);
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)', gap: 12, overflow: 'hidden' }}>
+          <aside style={{ borderRadius: 16, padding: 12, ...S.panel, minHeight: 0, overflowY: 'auto' }}>
+            <div style={{ fontSize: 12, fontWeight: 900, color: T.text, marginBottom: 10 }}>Categories</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {cats.map(c => {
+                const active = cat === c.id;
+                const count = c.id === 'all' ? menu.items.filter(i => i.is_available !== false).length : (categoryCounts[c.id] || 0);
+                return (
+                  <button key={c.id} onClick={() => setCat(c.id)} style={{
+                    borderRadius: 12,
+                    ...(active ? S.active : S.inactive),
+                    padding: '10px 12px',
+                    fontWeight: active ? 800 : 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    width: '100%',
+                    textAlign: 'left',
+                  }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                    <span style={{ opacity: 0.7, fontSize: 11 }}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* Menu grid */}
+          <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px,1fr))', gridAutoRows: 'max-content', alignItems: 'start', gap: 14, alignContent: 'start', paddingBottom: 10 }}>
+            {filtered.map(item => {
+              const variants = getItemVariants(item);
+              const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
+              const inCart = itemCartQty ? { qty: itemCartQty } : null;
               return (
-                <button key={c.id} onClick={() => setCat(c.id)} style={{
-                  borderRadius: 999,
-                  ...(active ? S.active : S.inactive),
-                  padding: '9px 14px', fontWeight: active ? 800 : 600, cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                <div key={item.id} style={{
+                  ...(itemCartQty ? S.cardSelected : S.card),
+                  borderRadius: 16, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 0,
                 }}>
-                  <span>{c.name}</span><span style={{ opacity: 0.7, fontSize: 11 }}>{count}</span>
-                </button>
+                  {/* Image */}
+                  <div onClick={() => addToCart(item, variants[0])} style={{ height: 104, minHeight: 104, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
+                    {item.image_url ? (
+                      <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
+                        alt={item.name} onError={e => e.target.style.display='none'}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, opacity: 0.45, fontWeight: 800 }}>IMG</div>
+                    )}
+                    {item.is_popular && <div style={{ position: 'absolute', top: 6, right: 6 }}><Badge color={T.accent} small>Popular</Badge></div>}
+                    {inCart && <div style={{ position: 'absolute', top: 6, left: 6, background: T.accent, color: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 800 }}>x{inCart.qty}</div>}
+                  </div>
+                  <div style={{ padding: 12, display: 'block', background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
+                    <div title={item.name} style={{ fontSize: 14, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.2, marginBottom: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 12 }}>From PKR {Number(item.price).toLocaleString()}</span>
+                      <span style={{ fontSize: 10, color: T.textDim }}>~{item.prep_time_min}m</span>
+                    </div>
+                    <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
+                      {variants.map(variant => {
+                        const cartKey = `${item.id}:${variant.id || variant.name}`;
+                        const selected = cart.find(c => c.cart_key === cartKey);
+                        return (
+                          <button key={cartKey} onClick={() => addToCart(item, variant)} style={{
+                            borderRadius: 12,
+                            ...(selected ? S.active : S.inactive),
+                            padding: '8px 10px',
+                            minHeight: 36,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 10,
+                            fontWeight: 800,
+                            width: '100%',
+                          }}>
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{variant.name}</span>
+                            <span>PKR {Number(variant.price).toLocaleString()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               );
             })}
-          </div>
-        </div>
-
-        {/* Menu grid */}
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px,1fr))', gridAutoRows: 'max-content', alignItems: 'start', gap: 14, alignContent: 'start', paddingBottom: 10 }}>
-          {filtered.map(item => {
-            const variants = getItemVariants(item);
-            const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
-            const inCart = itemCartQty ? { qty: itemCartQty } : null;
-            return (
-              <div key={item.id} style={{
-                ...(itemCartQty ? S.cardSelected : S.card),
-                borderRadius: 16, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 0,
-              }}>
-                {/* Image */}
-                <div onClick={() => addToCart(item, variants[0])} style={{ height: 104, minHeight: 104, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
-                  {item.image_url ? (
-                    <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
-                      alt={item.name} onError={e => e.target.style.display='none'}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, opacity: 0.45, fontWeight: 800 }}>IMG</div>
-                  )}
-                  {item.is_popular && <div style={{ position: 'absolute', top: 6, right: 6 }}><Badge color={T.accent} small>Popular</Badge></div>}
-                  {inCart && <div style={{ position: 'absolute', top: 6, left: 6, background: T.accent, color: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 800 }}>x{inCart.qty}</div>}
-                </div>
-                <div style={{ padding: 12, display: 'block', background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
-                  <div title={item.name} style={{ fontSize: 14, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.2, marginBottom: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 12 }}>From PKR {Number(item.price).toLocaleString()}</span>
-                    <span style={{ fontSize: 10, color: T.textDim }}>~{item.prep_time_min}m</span>
-                  </div>
-                  <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
-                    {variants.map(variant => {
-                      const cartKey = `${item.id}:${variant.id || variant.name}`;
-                      const selected = cart.find(c => c.cart_key === cartKey);
-                      return (
-                        <button key={cartKey} onClick={() => addToCart(item, variant)} style={{
-                          borderRadius: 12,
-                          ...(selected ? S.active : S.inactive),
-                          padding: '8px 10px',
-                          minHeight: 36,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          gap: 10,
-                          fontWeight: 800,
-                          width: '100%',
-                        }}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{variant.name}</span>
-                          <span>PKR {Number(variant.price).toLocaleString()}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+            {filtered.length === 0 && (
+              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: T.textDim }}>
+                <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>No matches</div>
+                <div>No items found</div>
               </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: T.textDim }}>
-              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>No matches</div>
-              <div>No items found</div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

@@ -554,11 +554,7 @@ export default function MenuManagementV2() {
         <section>
           <div style={{ borderRadius: 22, ...S.panel, padding: 16, marginBottom: 18 }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-              {[{ id: 'all', name: 'All' }, ...categories].map(cat => {
-                const active = activeCategory === cat.id;
-                return <button key={cat.id} onClick={() => setActiveCategory(cat.id)} style={{ borderRadius: 999, ...(active ? S.active : S.inactive), padding: '9px 14px', fontWeight: active ? 800 : 600, cursor: 'pointer' }}>{cat.name}</button>;
-              })}
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu items..." style={{ ...inputStyle, width: 260, marginLeft: 'auto' }} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu items..." style={{ ...inputStyle, width: 320, marginLeft: 'auto' }} />
               <button style={{ borderRadius: 14, ...S.secondary, padding: '12px 16px', cursor: 'pointer' }}>Filter</button>
               <button onClick={openNewItem} style={{ border: 0, borderRadius: 14, ...S.primary, padding: '12px 16px', fontWeight: 900, cursor: 'pointer' }}>+ New Item</button>
             </div>
