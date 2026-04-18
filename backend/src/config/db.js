@@ -22,6 +22,10 @@ function parseDatabaseInfo(connectionString) {
   }
 }
 
+function isNeonHost(host) {
+  return typeof host === 'string' && host.endsWith('.neon.tech');
+}
+
 // DB_MODE=local always wins, which keeps local development off Neon even if a
 // DATABASE_URL exists in the shell. Railway should set NEON_DATABASE_URL for an
 // explicit Neon connection; DATABASE_URL remains a fallback for existing setups.
@@ -31,6 +35,9 @@ if (mode === 'neon') {
   }
   console.log('🌩  Database: Neon (cloud)');
   dbInfo = parseDatabaseInfo(cloudDatabaseUrl);
+  if (process.env.NODE_ENV === 'production' && !isNeonHost(dbInfo.host)) {
+    throw new Error(`DB_MODE=neon requires a Neon host in production, received ${dbInfo.host} from ${dbInfo.source}`);
+  }
   console.log(`Database host: ${dbInfo.host}/${dbInfo.database || ''} via ${dbInfo.source}`);
   pool = new Pool({
     connectionString: cloudDatabaseUrl,

@@ -3,6 +3,7 @@ const router  = express.Router();
 
 const { authenticate, requirePermission, requireSuperAdmin, requireModule } = require('../middleware/auth');
 const upload = require('../middleware/upload');  // multer: stores images in Cloudinary
+const db           = require('../config/db');
 const auth         = require('../controllers/authController');
 const orders       = require('../controllers/ordersController');
 const inventory    = require('../controllers/inventoryController');
@@ -26,6 +27,7 @@ router.post('/auth/refresh',      auth.refresh);
 router.post('/auth/logout',       auth.logout);
 router.post('/auth/forgot-password', auth.forgotPassword);
 router.post('/auth/reset-password',  auth.resetPassword);
+router.get('/db-info', (_req, res) => res.json({ database: db.dbInfo }));
 
 // All routes below require authentication
 router.use(authenticate);
