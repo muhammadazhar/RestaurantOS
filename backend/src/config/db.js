@@ -2,20 +2,38 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const explicitMode = process.env.DB_MODE?.toLowerCase();
-const mode = explicitMode || (process.env.DATABASE_URL ? 'neon' : 'local');
+const cloudDatabaseUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+const mode = explicitMode || (cloudDatabaseUrl ? 'neon' : 'local');
 
 let pool;
+let dbInfo = { mode, host: 'localhost', database: process.env.DB_NAME || 'restaurantos' };
+
+function parseDatabaseInfo(connectionString) {
+  try {
+    const parsed = new URL(connectionString);
+    return {
+      mode,
+      host: parsed.hostname,
+      database: parsed.pathname.replace(/^\//, '') || null,
+      source: process.env.NEON_DATABASE_URL ? 'NEON_DATABASE_URL' : 'DATABASE_URL',
+    };
+  } catch {
+    return { mode, host: 'unknown', database: null, source: 'invalid-url' };
+  }
+}
 
 // DB_MODE=local always wins, which keeps local development off Neon even if a
-// DATABASE_URL exists in the shell. Railway can still auto-use DATABASE_URL
-// when DB_MODE is not set.
+// DATABASE_URL exists in the shell. Railway should set NEON_DATABASE_URL for an
+// explicit Neon connection; DATABASE_URL remains a fallback for existing setups.
 if (mode === 'neon') {
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DB_MODE=neon requires DATABASE_URL');
+  if (!cloudDatabaseUrl) {
+    throw new Error('DB_MODE=neon requires NEON_DATABASE_URL or DATABASE_URL');
   }
   console.log('🌩  Database: Neon (cloud)');
+  dbInfo = parseDatabaseInfo(cloudDatabaseUrl);
+  console.log(`Database host: ${dbInfo.host}/${dbInfo.database || ''} via ${dbInfo.source}`);
   pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: cloudDatabaseUrl,
     ssl: { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30000,
@@ -68,4 +86,5 @@ module.exports = {
     }
   },
   pool,
+  dbInfo,
 };
