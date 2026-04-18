@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 
 const { authenticate, requirePermission, requireSuperAdmin, requireModule } = require('../middleware/auth');
-const upload = require('../middleware/upload');  // multer: saves to /uploads/
+const upload = require('../middleware/upload');  // multer: stores images in Cloudinary
 const auth         = require('../controllers/authController');
 const orders       = require('../controllers/ordersController');
 const inventory    = require('../controllers/inventoryController');
@@ -24,6 +24,8 @@ router.post('/auth/login',        auth.login);
 router.post('/auth/super-login',  auth.superLogin);
 router.post('/auth/refresh',      auth.refresh);
 router.post('/auth/logout',       auth.logout);
+router.post('/auth/forgot-password', auth.forgotPassword);
+router.post('/auth/reset-password',  auth.resetPassword);
 
 // All routes below require authentication
 router.use(authenticate);
@@ -38,7 +40,9 @@ router.patch('/orders/:id/status', requirePermission('pos', 'kitchen'), orders.u
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 router.get('/tables',                      requirePermission('tables'),   ctrl.getTables);
-router.post('/tables',                     requirePermission('settings'), ctrl.createTable);
+router.post('/tables',                     requirePermission('tables', 'settings'), ctrl.createTable);
+router.patch('/tables/:id',                requirePermission('tables', 'settings'), ctrl.updateTable);
+router.delete('/tables/:id',               requirePermission('tables', 'settings'), ctrl.deleteTable);
 router.patch('/tables/:id/status',         requirePermission('tables'),   ctrl.updateTableStatus);
 router.post('/tables/:id/overtime-alert',  requirePermission('tables'),   ctrl.createOvertimeAlert);
 
@@ -51,6 +55,7 @@ router.post('/restaurant/logo',      requirePermission('settings'), upload.singl
 router.get('/menu',                         ctrl.getMenu);
 router.post('/menu/items',                  requirePermission('settings'), ctrl.createMenuItem);
 router.put('/menu/items/:id',               requirePermission('settings'), ctrl.updateMenuItem);
+router.delete('/menu/items/:id',            requirePermission('settings'), ctrl.deleteMenuItem);
 router.post('/menu/items/:id/image',        requirePermission('settings'), upload.single('image'), ctrl.uploadMenuImage);
 
 // ── Discount Presets ──────────────────────────────────────────────────────────
@@ -80,7 +85,7 @@ router.get('/recipes',   requirePermission('recipes'), ctrl.getRecipes);
 router.post('/recipes',  requirePermission('recipes'), ctrl.createRecipe);
 
 // ── Employees ─────────────────────────────────────────────────────────────────
-router.get('/employees',               requirePermission('employees'), ctrl.getEmployees);
+router.get('/employees',               requirePermission('employees', 'shift_management'), ctrl.getEmployees);
 router.post('/employees',              requirePermission('employees'), ctrl.createEmployee);
 router.put('/employees/:id',           requirePermission('employees'), ctrl.updateEmployee);
 router.post('/employees/:id/photo',    requirePermission('employees'), upload.single('image'), ctrl.uploadEmployeePhoto);
@@ -93,18 +98,18 @@ router.patch('/roles/:id',       requirePermission('employees'), ctrl.updateRole
 // ── Shifts ────────────────────────────────────────────────────────────────────
 router.get('/shifts/current',            requirePermission('pos'),       ctrl.getCurrentShift);
 router.get('/shifts/my',                 requirePermission('pos'),       ctrl.getMyShifts);
-router.patch('/shifts/:id/start',        requirePermission('pos'),       ctrl.startMyShift);
-router.patch('/shifts/:id/continue',     requirePermission('pos'),       ctrl.continueMyShift);
-router.patch('/shifts/:id/close-my',     requirePermission('pos'),       ctrl.closeMyShift);
-router.get('/shifts/:id/cash-summary',   requirePermission('pos'),       ctrl.getShiftCashSummary);
-router.get('/shifts/open',               requirePermission('employees'), ctrl.getOpenShifts);
-router.post('/shifts/auto-close',        requirePermission('employees'), ctrl.autoCloseShifts);
-router.get('/shifts',                    requirePermission('employees'), ctrl.getShifts);
-router.post('/shifts',                   requirePermission('employees'), ctrl.createShift);
-router.post('/shifts/bulk',              requirePermission('employees'), ctrl.bulkCreateShifts);
-router.patch('/shifts/:id',              requirePermission('employees'), ctrl.updateShift);
-router.patch('/shifts/:id/force-close',  requirePermission('employees'), ctrl.forceCloseShift);
-router.delete('/shifts/:id',             requirePermission('employees'), ctrl.deleteShift);
+router.patch('/shifts/:id/start',        requirePermission('pos', 'shift_management'),       ctrl.startMyShift);
+router.patch('/shifts/:id/continue',     requirePermission('pos', 'shift_management'),       ctrl.continueMyShift);
+router.patch('/shifts/:id/close-my',     requirePermission('pos', 'shift_management'),       ctrl.closeMyShift);
+router.get('/shifts/:id/cash-summary',   requirePermission('pos', 'shift_management'),       ctrl.getShiftCashSummary);
+router.get('/shifts/open',               requirePermission('shift_management', 'employees'), ctrl.getOpenShifts);
+router.post('/shifts/auto-close',        requirePermission('shift_management', 'employees'), ctrl.autoCloseShifts);
+router.get('/shifts',                    requirePermission('shift_management', 'employees'), ctrl.getShifts);
+router.post('/shifts',                   requirePermission('shift_management', 'employees'), ctrl.createShift);
+router.post('/shifts/bulk',              requirePermission('shift_management', 'employees'), ctrl.bulkCreateShifts);
+router.patch('/shifts/:id',              requirePermission('shift_management', 'employees'), ctrl.updateShift);
+router.patch('/shifts/:id/force-close',  requirePermission('shift_management', 'employees'), ctrl.forceCloseShift);
+router.delete('/shifts/:id',             requirePermission('shift_management', 'employees'), ctrl.deleteShift);
 
 // ── General Ledger ────────────────────────────────────────────────────────────
 router.get('/gl/accounts',                requirePermission('gl'), ctrl.getAccounts);
@@ -134,7 +139,7 @@ router.get('/reports/sales',        requirePermission('pos'), orders.getSalesRep
 router.get('/reports/employees',    requirePermission('pos'), orders.getEmployeeReport);
 router.get('/reports/menu',         requirePermission('pos'), orders.getMenuReport);
 router.get('/reports/performance',  requirePermission('pos'), orders.getPerformanceMatrix);
-router.get('/reports/shift-sales',  requirePermission('pos'), orders.getShiftSalesReport);
+router.get('/reports/shift-sales',  requirePermission('shift_management', 'employees'), orders.getShiftSalesReport);
 
 // ── Setup Wizard ─────────────────────────────────────────────────────────────
 router.get('/setup/status',    authenticate, ctrl.getSetupStatus);

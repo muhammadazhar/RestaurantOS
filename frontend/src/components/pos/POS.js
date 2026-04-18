@@ -1,14 +1,65 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
-import { Card, Pill, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
+import { Card, Badge, Spinner, Btn, Modal, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import toast from 'react-hot-toast';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
   || (window.location.protocol + '//' + window.location.hostname + ':5000');
 
-// ─── Menu item image ──────────────────────────────────────────────────────────
+const apiDate = (dateStr) => {
+  if (!dateStr) return new Date().toLocaleDateString('en-CA');
+  if (String(dateStr).includes('T')) return new Date(dateStr).toLocaleDateString('en-CA');
+  return String(dateStr).slice(0, 10);
+};
+
+const DAY_KEYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const todayDayKey = () => DAY_KEYS[new Date().getDay()];
+const minutesFromTime = value => {
+  const [hours, minutes] = String(value || '00:00').slice(0, 5).split(':').map(Number);
+  return (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0);
+};
+const isShiftOpenableNow = (shift, date = new Date()) => {
+  if (!shift) return false;
+  const shiftDate = apiDate(shift.date);
+  const currentDate = date.toLocaleDateString('en-CA');
+  const now = date.getHours() * 60 + date.getMinutes();
+  const start = minutesFromTime(shift.start_time);
+  const end = minutesFromTime(shift.end_time);
+  if (start === end) return shiftDate === currentDate;
+  if (start < end) return shiftDate === currentDate && now >= start && now <= end;
+
+  const yesterday = new Date(date);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDate = yesterday.toLocaleDateString('en-CA');
+  return (shiftDate === currentDate && now >= start) || (shiftDate === yesterdayDate && now <= end);
+};
+const selectOpenableScheduledShift = currentShift => {
+  const primary = currentShift?.shift;
+  const backendSaysStartable = currentShift?.reason === 'Start your shift before placing orders';
+  const isOpenableSchedule = shift => (
+    shift
+    && !['active', 'in_process', 'absent'].includes(shift.status)
+    && isShiftOpenableNow(shift)
+  );
+  if (primary && backendSaysStartable) return primary;
+  if (isOpenableSchedule(primary)) return primary;
+
+  const scheduled = (currentShift?.shifts || [])
+    .filter(isOpenableSchedule)
+    .sort((a, b) => minutesFromTime(b.start_time) - minutesFromTime(a.start_time));
+  return scheduled[0] || null;
+};
+const selectDisplayScheduledShift = currentShift => {
+  const openable = selectOpenableScheduledShift(currentShift);
+  if (openable) return openable;
+  if (currentShift?.shift && !['active', 'in_process', 'absent'].includes(currentShift.shift.status)) return currentShift.shift;
+  return (currentShift?.shifts || []).find(shift => !['active', 'in_process', 'absent'].includes(shift.status)) || null;
+};
+
+// POS section
 const ItemImage = ({ src, name }) => {
   const [err, setErr] = useState(false);
   const url = src && !err ? (src.startsWith('http') ? src : `${IMG_BASE}${src}`) : null;
@@ -16,20 +67,20 @@ const ItemImage = ({ src, name }) => {
     <div style={{ fontSize: url ? 0 : 32, width: 56, height: 56, borderRadius: 10, overflow: 'hidden', background: T.surface, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       {url
         ? <img src={url} alt={name} onError={() => setErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        : '🍽'
+        : 'IMG'
       }
     </div>
   );
 };
 
-// ─── Cart item notes modal ────────────────────────────────────────────────────
+// POS section
 function ItemNotesModal({ item, open, onClose, onSave }) {
   const [notes, setNotes] = useState('');
   useEffect(() => { if (open) setNotes(item?.notes || ''); }, [open, item]);
   return (
-    <Modal open={open} onClose={onClose} title={`Notes — ${item?.name}`} width={380}>
+    <Modal open={open} onClose={onClose} title={`Notes - ${item?.name}`} width={380}>
       <textarea value={notes} onChange={e => setNotes(e.target.value)}
-        placeholder="e.g. No onions, extra spicy, medium-well…"
+        placeholder="e.g. No onions, extra spicy, medium-well..."
         style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical', minHeight: 80, marginBottom: 12 }} />
       <Btn onClick={() => { onSave(notes); onClose(); }} style={{ width: '100%' }}>Save Notes</Btn>
     </Modal>
@@ -38,11 +89,42 @@ function ItemNotesModal({ item, open, onClose, onSave }) {
 
 export default function POS() {
   useT();
-  const { hasPermission } = useAuth();
-  const [menu,         setMenu]         = useState({ categories: [], items: [] });
+  const { mode } = useTheme();
+  const light = mode === 'light';
+  const S = {
+    panel: {
+      background: light ? '#fff' : 'rgba(15,23,42,0.82)',
+      border: `1px solid ${light ? '#e2e8f0' : T.border}`,
+      boxShadow: light ? '0 1px 2px rgba(15,23,42,0.05)' : 'none',
+    },
+    active: {
+      background: light ? '#0f172a' : '#fbbf24',
+      border: `1px solid ${light ? '#0f172a' : '#fbbf24'}`,
+      color: light ? '#fff' : '#020617',
+    },
+    inactive: {
+      background: light ? '#fff' : 'rgba(255,255,255,0.06)',
+      border: `1px solid ${light ? '#e2e8f0' : 'rgba(255,255,255,0.10)'}`,
+      color: light ? '#475569' : '#cbd5e1',
+    },
+    card: {
+      background: light ? '#fff' : 'rgba(15,23,42,0.92)',
+      border: `1px solid ${light ? '#e2e8f0' : T.border}`,
+      boxShadow: light ? '0 1px 2px rgba(15,23,42,0.05)' : '0 18px 42px rgba(0,0,0,0.20)',
+    },
+    cardSelected: {
+      background: light ? '#f8fafc' : 'rgba(251,191,36,0.10)',
+      border: `1px solid ${light ? '#0f172a' : T.accent + '88'}`,
+      boxShadow: light ? '0 8px 20px rgba(15,23,42,0.08)' : '0 18px 42px rgba(0,0,0,0.20)',
+    },
+    image: {
+      background: light ? '#f1f5f9' : '#020617',
+    },
+  };
+  const [menu,         setMenu]         = useState({ categories: [], items: [], settings: {} });
   const [tables,       setTables]       = useState([]);
   const [onlineOrders, setOnlineOrders] = useState([]);
-  const [cat,          setCat]          = useState('All');
+  const [cat,          setCat]          = useState('all');
   const [search,       setSearch]       = useState('');
   const [cart,         setCart]         = useState([]);
   const [tableId,      setTableId]      = useState('');
@@ -72,6 +154,7 @@ export default function POS() {
   const [currentShift,    setCurrentShift]    = useState(null);   // { shift, allowed, reason }
   const [shiftEndModal,   setShiftEndModal]   = useState(false);
   const [cashSummary,     setCashSummary]     = useState(null);
+  const [cashierCollection, setCashierCollection] = useState('');
   const shiftEndAlerted = useRef(false);
   const { on, off } = useSocket();
   const { user } = useAuth();
@@ -102,7 +185,7 @@ export default function POS() {
     return () => off('new_order', load);
   }, [load, loadShift, on, off]);
 
-  // Detect shift end while on POS — prompt user to close or continue
+  // POS section
   useEffect(() => {
     const check = () => {
       if (!currentShift?.shift) return;
@@ -112,6 +195,7 @@ export default function POS() {
       const end = currentShift.shift.end_time?.slice(0, 5);
       if (end && now > end) {
         shiftEndAlerted.current = true;
+        setCashierCollection('');
         setShiftEndModal(true);
         // Load cash summary for the shift-end modal
         getShiftCashSummary(currentShift.shift.id).then(r => setCashSummary(r.data)).catch(() => {});
@@ -122,29 +206,94 @@ export default function POS() {
     return () => clearInterval(timer);
   }, [currentShift]);
 
-  const cats = ['All', ...menu.categories.map(c => c.name)];
+  const cats = [{ id: 'all', name: 'All' }, ...menu.categories];
+  const categoryCounts = menu.items.reduce((acc, item) => {
+    if (item.is_available === false) return acc;
+    acc[item.category_id || 'uncategorized'] = (acc[item.category_id || 'uncategorized'] || 0) + 1;
+    return acc;
+  }, {});
 
+  const smartMenuSortEnabled = menu.settings?.pos_smart_menu_sort_enabled === true;
   const filtered = menu.items.filter(item => {
-    const matchCat    = cat === 'All' || item.category_name === cat;
+    const matchCat    = cat === 'all' || item.category_id === cat;
     const matchSearch = !search || item.name.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch && item.is_available !== false;
+  }).sort((a, b) => {
+    if (smartMenuSortEnabled) {
+      const scoreA = (Number(a.total_sold || 0) * 1000) + Number(a.gross_sales || 0) + (a.is_popular ? 500 : 0);
+      const scoreB = (Number(b.total_sold || 0) * 1000) + Number(b.gross_sales || 0) + (b.is_popular ? 500 : 0);
+      if (scoreA !== scoreB) return scoreB - scoreA;
+    }
+    const orderA = Number.isFinite(Number(a.sort_order)) ? Number(a.sort_order) : 0;
+    const orderB = Number.isFinite(Number(b.sort_order)) ? Number(b.sort_order) : 0;
+    if (orderA !== orderB) return orderA - orderB;
+    return String(a.name || '').localeCompare(String(b.name || ''));
   });
 
-  const addToCart = (item) => setCart(prev => {
-    const ex = prev.find(c => c.id === item.id);
-    if (ex) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c);
-    return [...prev, { ...item, qty: 1, notes: '' }];
+  const canUseOpenPrice = (item) => {
+    if (!item?.allow_open_price) return false;
+    if (user?.isSuperAdmin) return true;
+    const required = String(item.open_price_role || item.price_override_role || 'manager').toLowerCase();
+    const role = String(user?.role || '').toLowerCase();
+    if (required === 'cashier') return true;
+    if (required === 'admin') return role.includes('admin') || (user?.permissions || []).includes('settings');
+    return role.includes('manager') || role.includes('admin') || (user?.permissions || []).includes('settings');
+  };
+
+  const getEffectiveVariantPrice = (item, variant) => {
+    const basePrice = Number(variant.price ?? item.price ?? 0);
+    if (!item.weekend_price_rule) return basePrice;
+    const weekendDays = Array.isArray(item.weekend_days) && item.weekend_days.length ? item.weekend_days : ['FRI', 'SAT'];
+    if (!weekendDays.includes(todayDayKey())) return basePrice;
+    const weekendPrice = variant.weekend_price ?? item.weekend_price;
+    return weekendPrice == null || weekendPrice === '' ? basePrice : Number(weekendPrice);
+  };
+
+  const getItemVariants = (item) => (item.variants?.length ? item.variants : [{ name: 'Regular', price: item.price }])
+    .filter(v => v.is_active !== false)
+    .map((v, index) => ({
+      ...v,
+      id: v.id || `${item.id}-${index}`,
+      name: v.name || 'Regular',
+      base_price: Number(v.price ?? item.price ?? 0),
+      price: getEffectiveVariantPrice(item, v),
+      weekend_applied: item.weekend_price_rule && (Array.isArray(item.weekend_days) ? item.weekend_days : ['FRI', 'SAT']).includes(todayDayKey()) && (v.weekend_price != null || item.weekend_price != null),
+    }));
+
+  const addToCart = (item, variant = getItemVariants(item)[0]) => setCart(prev => {
+    const cartKey = `${item.id}:${variant.id || variant.name}`;
+    const displayName = variant.name === 'Regular' ? item.name : `${item.name} - ${variant.name}`;
+    const ex = prev.find(c => c.cart_key === cartKey);
+    if (ex) return prev.map(c => c.cart_key === cartKey ? { ...c, qty: c.qty + 1 } : c);
+    return [...prev, {
+      ...item,
+      cart_key: cartKey,
+      variant_id: variant.id,
+      variant_name: variant.name,
+      name: displayName,
+      base_name: item.name,
+      price: variant.price,
+      base_price: variant.base_price ?? variant.price,
+      open_price_allowed: canUseOpenPrice(item),
+      weekend_applied: variant.weekend_applied,
+      qty: 1,
+      notes: '',
+    }];
   });
 
-  const changeQty = (id, delta) => setCart(prev =>
-    prev.map(c => c.id === id ? { ...c, qty: Math.max(1, c.qty + delta) } : c)
+  const setCartItemPrice = (cartKey, price) => setCart(prev =>
+    prev.map(c => c.cart_key === cartKey ? { ...c, price: Math.max(0, Number(price || 0)) } : c)
+  );
+
+  const changeQty = (cartKey, delta) => setCart(prev =>
+    prev.map(c => c.cart_key === cartKey ? { ...c, qty: Math.max(1, c.qty + delta) } : c)
         .filter(c => c.qty > 0)
   );
 
-  const removeItem = (id) => setCart(prev => prev.filter(c => c.id !== id));
+  const removeItem = (cartKey) => setCart(prev => prev.filter(c => c.cart_key !== cartKey));
 
-  const setItemNotes = (id, notes) => setCart(prev =>
-    prev.map(c => c.id === id ? { ...c, notes } : c)
+  const setItemNotes = (cartKey, notes) => setCart(prev =>
+    prev.map(c => c.cart_key === cartKey ? { ...c, notes } : c)
   );
 
   const subtotal     = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -164,6 +313,7 @@ export default function POS() {
         order_type:        orderType,
         guest_count:       parseInt(guestCount) || 1,
         shift_id:          currentShift?.shift?.id || undefined,
+        shift_session_id:  currentShift?.shift?.session_id || undefined,
         customer_name:     custName  || undefined,
         customer_phone:    custPhone || undefined,
         customer_address:  orderType === 'delivery' ? custAddr || undefined : undefined,
@@ -198,7 +348,7 @@ export default function POS() {
         setTakePrintRdy(false);
         setShowPayModal(true);
       } else {
-        toast.success('Order sent to kitchen! 🍳');
+        toast.success('Order sent to kitchen!');
         setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); setGuestCount(1);
       }
     } catch (err) {
@@ -208,7 +358,7 @@ export default function POS() {
 
   const handleTakeawayPay = async () => {
     if (!createdOrder) return;
-    // COD: order already in kitchen, payment collected by rider — skip status update
+    // POS section
     if (takePayMethod === 'cod') {
       setTakePrintRdy(true);
       return;
@@ -216,14 +366,14 @@ export default function POS() {
     setTakePaying(true);
     try {
       await updateOrderStatus(createdOrder.id, 'paid', takePayMethod);
-      toast.success('✅ Payment confirmed!');
+      toast.success('Payment confirmed!');
       setTakePrintRdy(true);
     } catch {
-      toast.error('Payment failed — please try again');
+      toast.error('Payment failed - please try again');
     } finally { setTakePaying(false); }
   };
 
-  // ── Kitchen Order Ticket (KOT) ──────────────────────────────────────────────
+  // POS section
   const printKOT = (order, cartItems) => {
     const items = (order.items && order.items.length
       ? order.items
@@ -235,31 +385,46 @@ export default function POS() {
     const timeStr = new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
 
     const w = window.open('', '_blank', 'width=360,height=600');
-    if (!w) { toast.error('Pop-up blocked — please allow pop-ups for KOT printing'); return; }
+    if (!w) { toast.error('Pop-up blocked - please allow pop-ups for KOT printing'); return; }
     w.document.write(`
-      <!DOCTYPE html><html><head><title>KOT — ${order.order_number}</title>
+      <!DOCTYPE html><html><head><title>KOT - ${order.order_number}</title>
       <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier New', monospace; font-size: 14px; padding: 16px 12px; color: #000; }
+        @page { size: 80mm auto; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
+        html, body { background: #fff; width: 80mm; }
+        body {
+          font-family: Consolas, 'Courier New', monospace;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.25;
+          padding: 2mm 3mm;
+          color: #000;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
         .center { text-align: center; }
-        .bold { font-weight: bold; }
-        .kot-header { font-size: 15px; font-weight: 900; text-align: center; letter-spacing: 1px; }
-        .order-num { font-size: 34px; font-weight: 900; text-align: center; letter-spacing: 4px; margin: 8px 0; }
+        .bold { font-weight: 900; }
+        .kot-header { font-size: 15px; font-weight: 900; text-align: center; letter-spacing: 0; }
+        .order-num { font-size: 28px; font-weight: 900; text-align: center; letter-spacing: 1px; margin: 5px 0; }
         .line { border-top: 2px solid #000; margin: 8px 0; }
-        .dline { border-top: 1px dashed #aaa; margin: 5px 0; }
-        .row { display: flex; justify-content: space-between; padding: 2px 0; font-size: 13px; }
+        .dline { border-top: 1px dashed #000; margin: 5px 0; }
+        .row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 12px; }
+        .row span:last-child { text-align: right; max-width: 62%; overflow-wrap: anywhere; }
         .item-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; }
-        .item-name { font-size: 16px; font-weight: 800; flex: 1; }
-        .item-qty { font-size: 24px; font-weight: 900; min-width: 48px; text-align: right; }
-        .notes { font-size: 12px; color: #555; padding: 2px 0 4px 8px; font-style: italic; }
-        @media print { body { padding: 0 4px; } }
+        .item-name { font-size: 15px; font-weight: 900; flex: 1; padding-right: 8px; overflow-wrap: anywhere; }
+        .item-qty { font-size: 22px; font-weight: 900; min-width: 40px; text-align: right; }
+        .notes { font-size: 12px; padding: 2px 0 4px 8px; font-style: italic; overflow-wrap: anywhere; }
+        @media print {
+          html, body { width: 80mm; }
+          body { padding: 2mm 3mm; }
+        }
       </style></head>
       <body>
-        <div class="kot-header">⬛ KITCHEN ORDER</div>
+        <div class="kot-header">KITCHEN ORDER</div>
         <div class="order-num">#${order.order_number}</div>
         <div class="line"></div>
         <div class="row"><span class="bold">Type:</span><span>${typeLabel}</span></div>
-        ${tbl ? `<div class="row"><span class="bold">Table:</span><span>${tbl.section ? tbl.section + ' · ' : ''}${tbl.label}</span></div>` : ''}
+        ${tbl ? `<div class="row"><span class="bold">Table:</span><span>${tbl.section ? tbl.section + ' - ' : ''}${tbl.label}</span></div>` : ''}
         ${(custName || order.customer_name) ? `<div class="row"><span class="bold">Customer:</span><span>${custName || order.customer_name}</span></div>` : ''}
         ${waiterId ? `<div class="row"><span class="bold">Waiter:</span><span>${employees.find(e => e.id === waiterId)?.full_name || ''}</span></div>` : (order.waiter_name ? `<div class="row"><span class="bold">Waiter:</span><span>${order.waiter_name}</span></div>` : '')}
         <div class="row"><span class="bold">Time:</span><span>${timeStr}</span></div>
@@ -267,12 +432,12 @@ export default function POS() {
         ${items.map(i => `
           <div class="item-row">
             <span class="item-name">${i.name}</span>
-            <span class="item-qty">×${i.quantity ?? i.qty}</span>
+            <span class="item-qty">x${i.quantity ?? i.qty}</span>
           </div>
-          ${i.notes ? `<div class="notes">📝 ${i.notes}</div>` : ''}
+          ${i.notes ? `<div class="notes">Note: ${i.notes}</div>` : ''}
           <div class="dline"></div>
         `).join('')}
-        ${orderNotes ? `<div style="margin-top:8px;padding:6px;border:1px solid #000;border-radius:4px"><span class="bold">⚠ Order Notes:</span><br><span style="font-size:13px">${orderNotes}</span></div>` : ''}
+        ${orderNotes ? `<div style="margin-top:8px;padding:6px;border:1px solid #000;border-radius:4px"><span class="bold">Order Notes:</span><br><span style="font-size:13px">${orderNotes}</span></div>` : ''}
       </body></html>
     `);
     w.document.close();
@@ -294,34 +459,50 @@ export default function POS() {
     const ttl  = Number(o.total_amount   || o._total);
     const w = window.open('', '_blank', 'width=420,height=720');
     w.document.write(`
-      <!DOCTYPE html><html><head><title>Receipt — ${o.order_number}</title>
+      <!DOCTYPE html><html><head><title>Receipt - ${o.order_number}</title>
       <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier New', monospace; font-size: 13px; padding: 24px 20px; color: #111; }
+        @page { size: 80mm auto; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
+        html, body { background: #fff; width: 80mm; }
+        body {
+          font-family: Consolas, 'Courier New', monospace;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.25;
+          padding: 2mm 3mm;
+          color: #000;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
         .center { text-align: center; }
-        .bold   { font-weight: bold; }
-        .row    { display: flex; justify-content: space-between; padding: 3px 0; }
-        .grid4  { display: grid; grid-template-columns: 1fr 40px 90px 90px; gap: 4px; padding: 5px 0; border-bottom: 1px dashed #ccc; }
-        .line   { border-top: 1px dashed #999; margin: 10px 0; }
-        .big    { font-size: 16px; font-weight: bold; }
-        .small  { font-size: 11px; color: #666; }
-        .paid-stamp { border: 3px solid #000; border-radius: 6px; padding: 6px 16px; display: inline-block; font-size: 18px; font-weight: bold; letter-spacing: 3px; margin-top: 14px; }
-        .cod-stamp  { border: 3px solid #e67e22; border-radius: 6px; padding: 6px 16px; display: inline-block; font-size: 15px; font-weight: bold; letter-spacing: 2px; margin-top: 14px; color: #e67e22; }
-        @media print { body { padding: 0 4px; } }
+        .bold   { font-weight: 900; }
+        .row    { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+        .row span:last-child { text-align: right; max-width: 62%; overflow-wrap: anywhere; }
+        .grid4  { display: grid; grid-template-columns: minmax(0,1fr) 24px 52px 58px; gap: 3px; padding: 4px 0; border-bottom: 1px dashed #000; align-items: start; }
+        .grid4 span:first-child { overflow-wrap: anywhere; }
+        .line   { border-top: 1px dashed #000; margin: 8px 0; }
+        .big    { font-size: 15px; font-weight: 900; }
+        .small  { font-size: 10px; font-weight: 700; }
+        .paid-stamp { border: 2px solid #000; border-radius: 4px; padding: 5px 14px; display: inline-block; font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 12px; }
+        .cod-stamp  { border: 2px solid #000; border-radius: 4px; padding: 5px 12px; display: inline-block; font-size: 13px; font-weight: 900; letter-spacing: 1px; margin-top: 12px; }
+        @media print {
+          html, body { width: 80mm; }
+          body { padding: 2mm 3mm; }
+        }
       </style></head>
       <body>
         <div class="center bold" style="font-size:20px; margin-bottom:4px">The Golden Fork</div>
-        <div class="center small" style="margin-bottom:16px">Fine dining at its best · Karachi</div>
+        <div class="center small" style="margin-bottom:16px">Fine dining at its best - Karachi</div>
         <div class="line"></div>
         <div class="row"><span>Order:</span><span class="bold">${o.order_number}</span></div>
         <div class="row"><span>Type:</span><span>${(o.order_type || orderType).replace('_',' ').toUpperCase()}</span></div>
-        <div class="row"><span>Customer:</span><span class="bold">${o.customer_name || o._custName || '—'}</span></div>
+        <div class="row"><span>Customer:</span><span class="bold">${o.customer_name || o._custName || '-'}</span></div>
         ${(o.customer_phone || o._custPhone) ? `<div class="row"><span>Phone:</span><span>${o.customer_phone || o._custPhone}</span></div>` : ''}
         ${isCOD && (o.delivery_address?.address || custAddr) ? `<div class="row"><span>Address:</span><span>${o.delivery_address?.address || custAddr}</span></div>` : ''}
         <div class="row"><span>Date:</span><span>${fmtD(o.created_at || new Date())}</span></div>
-        <div class="row"><span>Cashier:</span><span class="bold">${user?.full_name || user?.name || '—'}</span></div>
-        ${waiterId ? `<div class="row"><span>Waiter:</span><span class="bold">${employees.find(e => e.id === waiterId)?.full_name || '—'}</span></div>` : (o.waiter_name ? `<div class="row"><span>Waiter:</span><span class="bold">${o.waiter_name}</span></div>` : '')}
-        ${currentShift?.shift ? `<div class="row"><span>Shift:</span><span class="bold">#${currentShift.shift.shift_number || '—'} ${currentShift.shift.shift_name} (${currentShift.shift.start_time?.slice(0,5)}–${currentShift.shift.end_time?.slice(0,5)})</span></div>` : ''}
+        <div class="row"><span>Cashier:</span><span class="bold">${user?.full_name || user?.name || '-'}</span></div>
+        ${waiterId ? `<div class="row"><span>Waiter:</span><span class="bold">${employees.find(e => e.id === waiterId)?.full_name || '-'}</span></div>` : (o.waiter_name ? `<div class="row"><span>Waiter:</span><span class="bold">${o.waiter_name}</span></div>` : '')}
+        ${currentShift?.shift ? `<div class="row"><span>Shift:</span><span class="bold">#${currentShift.shift.shift_number || '-'} ${currentShift.shift.shift_name} (${currentShift.shift.start_time?.slice(0,5)}-${currentShift.shift.end_time?.slice(0,5)})</span></div>` : ''}
         <div class="line"></div>
         <div class="grid4">
           <span class="small">ITEM</span>
@@ -351,11 +532,11 @@ export default function POS() {
         ` : ''}
         <div class="center" style="margin-top:12px">
           ${isCOD
-            ? `<span class="cod-stamp">🏍 CASH ON DELIVERY</span>`
-            : `<span class="paid-stamp">★ PAID ★</span>`}
+            ? `<span class="cod-stamp">CASH ON DELIVERY</span>`
+            : `<span class="paid-stamp">PAID</span>`}
         </div>
         <div class="center small" style="margin-top:20px; line-height:1.8">
-          Thank you for your order!<br>Please come again soon.<br>★★★★★
+          Thank you for your order!<br>Please come again soon.
         </div>
       </body></html>
     `);
@@ -378,21 +559,54 @@ export default function POS() {
   const isClockedIn   = currentShift?.attendance?.is_clocked_in;
   const attendColor   = isClockedIn ? T.green : T.red;
   const attendBg      = isClockedIn ? T.greenDim : T.redDim;
+  const activeShift = currentShift?.shift && ['active', 'in_process'].includes(currentShift.shift.status)
+    ? currentShift.shift
+    : null;
+  const cashierCollectionAmount = cashierCollection === '' ? null : Number(cashierCollection);
+  const closeVariance = cashSummary && Number.isFinite(cashierCollectionAmount)
+    ? cashierCollectionAmount - Number(cashSummary.expected_closing || 0)
+    : null;
+  const isActiveShiftStillScheduled = activeShift ? isShiftOpenableNow(activeShift) : false;
+  const dismissShiftEndModal = () => {
+    setShiftEndModal(false);
+    setCashSummary(null);
+    setCashierCollection('');
+  };
+
+  const openShiftCloseModal = async () => {
+    if (!activeShift) return;
+    setCashierCollection('');
+    try {
+      const r = await getShiftCashSummary(activeShift.id);
+      setCashSummary(r.data);
+    } catch {
+      setCashSummary(null);
+    }
+    setShiftEndModal(true);
+  };
 
   return (
     <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 56px)', position: 'relative' }}>
 
-      {/* ── Shift/Attendance gate modal ── */}
-      {shiftBlocked && <POSGateModal currentShift={currentShift} onUnlocked={() => loadShift()} />}
+      {/* POS section */}
+      {shiftBlocked && <CleanPOSGateModal currentShift={currentShift} onUnlocked={() => loadShift()} />}
 
-      {/* ── Shift-end confirmation modal ── */}
+      {/* POS section */}
       {shiftEndModal && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', textAlign: 'center' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>⏰</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 8 }}>Shift Ended</div>
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', textAlign: 'center', position: 'relative' }}>
+            <button
+              type="button"
+              onClick={dismissShiftEndModal}
+              aria-label="Close"
+              style={{ position: 'absolute', right: 14, top: 14, width: 30, height: 30, borderRadius: 10, border: `1px solid ${T.border}`, background: T.surface, color: T.textMid, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}
+            >
+              x
+            </button>
+            <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 1, color: T.accent, marginBottom: 12 }}>SHIFT</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 8 }}>{isActiveShiftStillScheduled ? 'Shift Active' : 'Shift Ended'}</div>
             <div style={{ fontSize: 14, color: T.textMid, marginBottom: 8 }}>
-              Your shift ended at <b style={{ color: T.text }}>{currentShift?.shift?.end_time?.slice(0,5)}</b>
+              {isActiveShiftStillScheduled ? 'Your shift is still within the scheduled time.' : <>Your shift ended at <b style={{ color: T.text }}>{currentShift?.shift?.end_time?.slice(0,5)}</b></>}
             </div>
 
             {/* Cash summary */}
@@ -403,6 +617,7 @@ export default function POS() {
                   ['Opening Balance', cashSummary.opening_balance],
                   ['Cash Sales', cashSummary.cash_sales],
                   ['Expected Closing', cashSummary.expected_closing],
+                  ['System Closing', cashSummary.closing_cash],
                 ].map(([label, val]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 13 }}>
                     <span style={{ color: T.textMid }}>{label}</span>
@@ -411,85 +626,120 @@ export default function POS() {
                     </span>
                   </div>
                 ))}
+                <label style={{ display: 'block', marginTop: 12 }}>
+                  <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: T.textDim, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Cashier Collection</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={cashierCollection}
+                    onChange={e => setCashierCollection(e.target.value)}
+                    placeholder="Enter collected cash"
+                    style={{ width: '100%', background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 10px', color: T.text, fontSize: 13, fontFamily: 'monospace', outline: 'none', textAlign: 'right' }}
+                  />
+                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0 0', fontSize: 13 }}>
+                  <span style={{ color: T.textMid }}>Variance</span>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 800, color: closeVariance == null ? T.textDim : Math.abs(closeVariance) > 0.01 ? T.red : T.green }}>
+                    {closeVariance == null ? '-' : `PKR ${Number(closeVariance).toLocaleString()}`}
+                  </span>
+                </div>
               </div>
             )}
 
             <div style={{ fontSize: 13, color: T.textDim, marginBottom: 20 }}>
-              Would you like to close your shift or continue working?
+              {isActiveShiftStillScheduled
+                ? 'You can close this window and continue the active shift, or close the shift if needed.'
+                : 'Would you like to close your shift or continue working?'}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 onClick={async () => {
+                  if (isActiveShiftStillScheduled) {
+                    dismissShiftEndModal();
+                    toast.success('Shift remains active');
+                    loadShift();
+                    return;
+                  }
                   try {
-                    await continueMyShift(currentShift.shift.id);
-                    setShiftEndModal(false);
-                    setCashSummary(null);
+                    await continueMyShift(currentShift.shift.id, { shift_date: apiDate(currentShift.shift.date) });
+                    dismissShiftEndModal();
                     toast.success('Continuing in overtime');
                     loadShift();
                   } catch (e) { toast.error(e.response?.data?.error || 'Failed to continue shift'); }
                 }}
-                style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
-                ⏩ Continue Working
+                style={{ flex: 1, background: T.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
+                Continue Working
               </button>
               <button
                 onClick={async () => {
                   try {
-                    const r = await closeMyShift(currentShift.shift.id);
-                    setShiftEndModal(false);
-                    setCashSummary(null);
+                    if (!Number.isFinite(cashierCollectionAmount) || cashierCollectionAmount < 0) {
+                      toast.error('Enter cashier collection amount');
+                      return;
+                    }
+                    const r = await closeMyShift(currentShift.shift.id, {
+                      shift_date: apiDate(currentShift.shift.date),
+                      cashier_collection: cashierCollectionAmount,
+                    });
+                    dismissShiftEndModal();
                     const closingCash = r.data?.closing_cash;
-                    toast.success(closingCash != null ? `Shift closed · Closing cash: PKR ${Number(closingCash).toLocaleString()}` : 'Shift closed');
+                    const collected = r.data?.cashier_collection;
+                    toast.success(closingCash != null ? `Shift closed - System: PKR ${Number(closingCash).toLocaleString()} / Collected: PKR ${Number(collected || 0).toLocaleString()}` : 'Shift closed');
                     loadShift();
                   } catch (e) { toast.error(e.response?.data?.error || 'Failed to close shift'); }
                 }}
                 style={{ flex: 1, background: T.red, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 0', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
-                ⏹ Close Shift
+                Close Shift
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Menu panel ── */}
+      {/* POS section */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
 
         {/* Top bar */}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>📲 POS</h1>
+          <h1 style={{ fontSize: 18, fontWeight: 800, color: T.text, margin: 0 }}>POS</h1>
           {currentShift?.shift && (() => {
             const s = currentShift.shift;
             const isOT = s.status === 'in_process';
             const bg = isOT ? T.accentGlow : currentShift.allowed ? T.greenDim : T.redDim;
             const clr = isOT ? T.accent : currentShift.allowed ? T.green : T.red;
-            const ico = isOT ? '🟡' : currentShift.allowed ? '🟢' : '🔴';
             return (
               <div style={{ background: bg, border: `1px solid ${clr}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: clr }}>
-                {ico} Shift #{s.shift_number} · {s.shift_name} · {s.start_time?.slice(0,5)}–{s.end_time?.slice(0,5)}
+                Shift #{s.shift_number} - {s.shift_name} - {s.start_time?.slice(0,5)}-{s.end_time?.slice(0,5)}
                 {isOT && <span style={{ marginLeft: 6, fontSize: 10 }}>OVERTIME</span>}
               </div>
             );
           })()}
+          {activeShift && (
+            <button onClick={openShiftCloseModal} style={{ background: T.red, color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
+                Close Shift
+            </button>
+          )}
           {currentShift && !currentShift.shift && (
             <div style={{ background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: T.red }}>
-              🔴 No shift today
+              No shift today
             </div>
           )}
           {currentShift && (
             <div style={{ background: attendBg, border: `1px solid ${attendColor}44`, borderRadius: 8, padding: '4px 12px', fontSize: 11, fontWeight: 700, color: attendColor }}>
-              {isClockedIn ? '✅ Clocked In' : '⛔ Not Clocked In'}
+              {isClockedIn ? 'Clocked In' : 'Not Clocked In'}
             </div>
           )}
 
           {/* Order type */}
           <div style={{ display: 'flex', gap: 6 }}>
-            {[['dine_in','🪑','Dine In'],['takeaway','🛍','Takeaway'],['delivery','🛵','Delivery'],['online','📲','Online']]
-              .map(([v,ico,lbl]) => (
+            {[['dine_in','Dine In'],['takeaway','Takeaway'],['delivery','Delivery'],['online','Online']]
+              .map(([v,lbl]) => (
               <button key={v} onClick={() => setOrderType(v)} style={{
-                background: orderType === v ? T.accent : T.card, color: orderType === v ? '#000' : T.textMid,
-                border: `1px solid ${orderType === v ? T.accent : T.border}`,
+                ...(orderType === v ? S.active : S.inactive),
                 borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 600,
                 cursor: 'pointer', fontFamily: "'Inter', sans-serif",
-              }}>{ico} {lbl}</button>
+              }}>{lbl}</button>
             ))}
           </div>
 
@@ -498,48 +748,90 @@ export default function POS() {
             <select value={tableId} onChange={e => setTableId(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
               <option value="">Select Table</option>
               {tables.filter(t => t.status !== 'cleaning').map(t => (
-                <option key={t.id} value={t.id}>{t.label} — {t.section} ({t.status})</option>
+                <option key={t.id} value={t.id}>{t.label} - {t.section} ({t.status})</option>
               ))}
             </select>
           )}
 
           {/* Search */}
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu…"
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu..."
             style={{ marginLeft: 'auto', background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', width: 160 }} />
+          <Badge color={smartMenuSortEnabled ? T.accent : T.textDim} small>
+            {smartMenuSortEnabled ? 'Smart order' : 'Manual order'}
+          </Badge>
         </div>
 
         {/* Category pills */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {cats.map(c => <Pill key={c} active={cat === c} onClick={() => setCat(c)}>{c}</Pill>)}
+        <div style={{ borderRadius: 16, padding: 12, ...S.panel }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {cats.map(c => {
+              const active = cat === c.id;
+              const count = c.id === 'all' ? menu.items.filter(i => i.is_available !== false).length : (categoryCounts[c.id] || 0);
+              return (
+                <button key={c.id} onClick={() => setCat(c.id)} style={{
+                  borderRadius: 999,
+                  ...(active ? S.active : S.inactive),
+                  padding: '9px 14px', fontWeight: active ? 800 : 600, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span>{c.name}</span><span style={{ opacity: 0.7, fontSize: 11 }}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Menu grid */}
-        <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px,1fr))', gap: 10, alignContent: 'start' }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px,1fr))', gridAutoRows: 'max-content', alignItems: 'start', gap: 14, alignContent: 'start', paddingBottom: 10 }}>
           {filtered.map(item => {
-            const inCart = cart.find(c => c.id === item.id);
+            const variants = getItemVariants(item);
+            const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
+            const inCart = itemCartQty ? { qty: itemCartQty } : null;
             return (
-              <div key={item.id} onClick={() => addToCart(item)} style={{
-                background: inCart ? T.accentGlow : T.card,
-                border: `1px solid ${inCart ? T.accent + '88' : T.border}`,
-                borderRadius: 14, overflow: 'hidden', cursor: 'pointer', transition: 'all 0.15s',
+              <div key={item.id} style={{
+                ...(itemCartQty ? S.cardSelected : S.card),
+                borderRadius: 16, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 0,
               }}>
                 {/* Image */}
-                <div style={{ height: 90, background: T.surface, overflow: 'hidden', position: 'relative' }}>
+                <div onClick={() => addToCart(item, variants[0])} style={{ height: 104, minHeight: 104, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
                   {item.image_url ? (
                     <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
                       alt={item.name} onError={e => e.target.style.display='none'}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, opacity: 0.3 }}>🍽</div>
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, opacity: 0.45, fontWeight: 800 }}>IMG</div>
                   )}
-                  {item.is_popular && <div style={{ position: 'absolute', top: 6, right: 6 }}><Badge color={T.accent} small>★</Badge></div>}
-                  {inCart && <div style={{ position: 'absolute', top: 6, left: 6, background: T.accent, color: '#000', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 800 }}>×{inCart.qty}</div>}
+                  {item.is_popular && <div style={{ position: 'absolute', top: 6, right: 6 }}><Badge color={T.accent} small>Popular</Badge></div>}
+                  {inCart && <div style={{ position: 'absolute', top: 6, left: 6, background: T.accent, color: '#fff', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 800 }}>x{inCart.qty}</div>}
                 </div>
-                <div style={{ padding: '10px 12px' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.text, lineHeight: 1.3, marginBottom: 4 }}>{item.name}</div>
+                <div style={{ padding: 12, display: 'block', background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
+                  <div title={item.name} style={{ fontSize: 14, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.2, marginBottom: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 800, color: T.accent, fontFamily: 'monospace', fontSize: 12 }}>PKR {Number(item.price).toLocaleString()}</span>
-                    <span style={{ fontSize: 10, color: T.textDim }}>⏱{item.prep_time_min}m</span>
+                    <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 12 }}>From PKR {Number(item.price).toLocaleString()}</span>
+                    <span style={{ fontSize: 10, color: T.textDim }}>~{item.prep_time_min}m</span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
+                    {variants.map(variant => {
+                      const cartKey = `${item.id}:${variant.id || variant.name}`;
+                      const selected = cart.find(c => c.cart_key === cartKey);
+                      return (
+                        <button key={cartKey} onClick={() => addToCart(item, variant)} style={{
+                          borderRadius: 12,
+                          ...(selected ? S.active : S.inactive),
+                          padding: '8px 10px',
+                          minHeight: 36,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          fontWeight: 800,
+                          width: '100%',
+                        }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{variant.name}</span>
+                          <span>PKR {Number(variant.price).toLocaleString()}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -547,33 +839,33 @@ export default function POS() {
           })}
           {filtered.length === 0 && (
             <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 60, color: T.textDim }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>🔍</div>
+              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 8 }}>No matches</div>
               <div>No items found</div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Order panel ── */}
+      {/* POS section */}
       <div style={{ width: 300, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
         <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
-            Order — {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
+            Order - {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
           </div>
           <div style={{ fontSize: 11, color: T.textMid, marginBottom: 12 }}>
-            {cart.length} item{cart.length !== 1 ? 's' : ''} · tap to add
+            {cart.length} item{cart.length !== 1 ? 's' : ''} - tap to add
           </div>
 
           {/* Customer info for takeaway/delivery */}
           {needCustomer && (
             <div style={{ marginBottom: 10, background: T.surface, borderRadius: 10, padding: '10px 12px' }}>
-              {/* Name + Phone — always shown for takeaway & delivery */}
+              {/* POS section */}
               <input value={custName} onChange={e => setCustName(e.target.value)}
                 placeholder="Customer name *" style={{ width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${T.border}`, color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', paddingBottom: 6, marginBottom: 6 }} />
               <input value={custPhone} onChange={e => setCustPhone(e.target.value)}
                 placeholder="Phone number" style={{ width: '100%', background: 'none', border: 'none', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
 
-              {/* Extra fields — delivery only */}
+              {/* POS section */}
               {orderType === 'delivery' && (
                 <>
                   <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 8 }}>
@@ -589,13 +881,13 @@ export default function POS() {
                     </div>
                     {custLat && custLng && (
                       <a href={`https://www.google.com/maps?q=${custLat},${custLng}`} target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: 10, color: T.accent, display: 'inline-block', marginTop: 4 }}>📍 View on Map</a>
+                        style={{ fontSize: 10, color: T.accent, display: 'inline-block', marginTop: 4 }}>View on Map</a>
                     )}
                   </div>
                   <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 8, paddingTop: 8 }}>
                     <select value={delivRiderId} onChange={e => setDelivRiderId(e.target.value)}
                       style={{ width: '100%', background: 'none', border: 'none', color: delivRiderId ? T.text : T.textDim, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
-                      <option value="">🏍 Assign rider (optional)</option>
+                      <option value="">Assign rider (optional)</option>
                       {riders.map(r => (
                         <option key={r.id} value={r.id}>{r.full_name} ({r.active_orders} active)</option>
                       ))}
@@ -611,15 +903,15 @@ export default function POS() {
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Guests</span>
-                <button onClick={() => setGuestCount(g => Math.max(1, g-1))} style={{ width: 24, height: 24, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>−</button>
+                <button onClick={() => setGuestCount(g => Math.max(1, g-1))} style={{ width: 24, height: 24, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>-</button>
                 <span style={{ fontWeight: 800, fontFamily: 'monospace', minWidth: 20, textAlign: 'center', color: T.text }}>{guestCount}</span>
-                <button onClick={() => setGuestCount(g => g+1)} style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>+</button>
+                <button onClick={() => setGuestCount(g => g+1)} style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>+</button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Waiter</span>
                 <select value={waiterId} onChange={e => setWaiterId(e.target.value)}
                   style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: waiterId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
-                  <option value="">— Assign waiter —</option>
+                  <option value="">Assign waiter</option>
                   {employees.filter(e => ['server','waiter'].includes((e.role_name||'').toLowerCase())).map(e => (
                     <option key={e.id} value={e.id}>{e.full_name}</option>
                   ))}
@@ -632,23 +924,41 @@ export default function POS() {
           <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {cart.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 0', color: T.textDim }}>
-                <div style={{ fontSize: 28 }}>🛒</div>
+                <div style={{ fontSize: 12, fontWeight: 800 }}>Empty</div>
                 <div style={{ fontSize: 12, marginTop: 6 }}>Cart is empty</div>
               </div>
             )}
             {cart.map(item => (
-              <div key={item.id} style={{ marginBottom: 4, background: T.surface, borderRadius: 8, padding: '6px 8px' }}>
+              <div key={item.cart_key} style={{ marginBottom: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 14, padding: '8px 10px' }}>
                 {/* Main row: name + price + qty controls + remove */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                    <div style={{ fontSize: 10, color: T.textMid }}>PKR {Number(item.price).toLocaleString()} {item.notes && <span style={{ color: T.accent }}>· 📝</span>}</div>
+                    <div style={{ fontSize: 10, color: T.textMid }}>
+                      {item.open_price_allowed ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          PKR
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.price}
+                            onChange={e => setCartItemPrice(item.cart_key, e.target.value)}
+                            style={{ width: 72, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, color: T.accent, fontSize: 10, fontFamily: 'monospace', padding: '2px 5px', outline: 'none' }}
+                          />
+                        </span>
+                      ) : (
+                        <>PKR {Number(item.price).toLocaleString()}</>
+                      )}
+                      {item.weekend_applied && <span style={{ color: T.accent }}> - weekend</span>}
+                      {item.open_price_allowed && <span style={{ color: T.accent }}> - open</span>}
+                      {item.notes && <span style={{ color: T.accent }}> - note</span>}
+                    </div>
                   </div>
-                  <button onClick={() => changeQty(item.id,-1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>−</button>
-                  <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 12, color: T.text, minWidth: 16, textAlign: 'center', flexShrink: 0 }}>{item.qty}</span>
-                  <button onClick={() => addToCart(item)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</button>
-                  <button onClick={() => setNotesItem(item)} title="Add notes" style={{ width: 20, height: 20, borderRadius: '50%', background: 'none', border: `1px solid ${T.border}`, color: T.textMid, cursor: 'pointer', fontSize: 10, lineHeight: 1, flexShrink: 0 }}>📝</button>
-                  <button onClick={() => removeItem(item.id)} title="Remove" style={{ width: 20, height: 20, borderRadius: '50%', background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, cursor: 'pointer', fontSize: 11, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                  <button onClick={() => changeQty(item.cart_key,-1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>-</button>
+                    <div style={{ textAlign: 'center', fontSize: 13, color: T.textMid, fontFamily: 'monospace' }}>x{item.qty}</div>
+                  <button onClick={() => addToCart(item, { id: item.variant_id, name: item.variant_name, price: item.price })} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</button>
+                  <button onClick={() => setNotesItem(item)} title="Add notes" style={{ width: 28, height: 20, borderRadius: 10, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, cursor: 'pointer', fontSize: 9, lineHeight: 1, flexShrink: 0 }}>Note</button>
+                  <button onClick={() => removeItem(item.cart_key)} title="Remove" style={{ width: 20, height: 20, borderRadius: '50%', background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, cursor: 'pointer', fontSize: 11, lineHeight: 1, flexShrink: 0 }}>x</button>
                 </div>
               </div>
             ))}
@@ -657,7 +967,7 @@ export default function POS() {
           {/* Order notes */}
           {cart.length > 0 && (
             <input value={orderNotes} onChange={e => setOrderNotes(e.target.value)}
-              placeholder="Order notes (optional)…"
+              placeholder="Order notes (optional)..."
               style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', width: '100%', marginTop: 8 }} />
           )}
 
@@ -681,7 +991,7 @@ export default function POS() {
                     );
                   })}
                   {parseFloat(discount) > 0 && (
-                    <button onClick={() => setDiscount('')} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>✕</button>
+                    <button onClick={() => setDiscount('')} style={{ background: T.redDim, color: T.red, border: `1px solid ${T.red}44`, borderRadius: 6, padding: '2px 6px', fontSize: 10, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>x</button>
                   )}
                 </div>
               )}
@@ -695,7 +1005,7 @@ export default function POS() {
               {discountAmt > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ fontSize: 12, color: T.green }}>Discount applied</span>
-                  <span style={{ fontSize: 12, color: T.green, fontFamily: 'monospace' }}>− PKR {discountAmt.toLocaleString()}</span>
+                  <span style={{ fontSize: 12, color: T.green, fontFamily: 'monospace' }}>- PKR {discountAmt.toLocaleString()}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -707,7 +1017,7 @@ export default function POS() {
                 <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.accent }}>PKR {total.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
               </div>
               <Btn onClick={sendToKitchen} disabled={sending} style={{ width: '100%', padding: '13px' }}>
-                {sending ? '⏳ Sending…' : orderType === 'delivery' ? '🏍 Place Delivery Order' : '🍳 Send to Kitchen'}
+                {sending ? 'Sending...' : orderType === 'delivery' ? 'Place Delivery Order' : 'Send to Kitchen'}
               </Btn>
               <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); }} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
             </div>
@@ -717,7 +1027,7 @@ export default function POS() {
         {/* Online Orders Queue */}
         <Card>
           <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 10 }}>
-            📲 Online Queue ({onlineOrders.length})
+            Online Queue ({onlineOrders.length})
           </div>
           {onlineOrders.length === 0 && <div style={{ fontSize: 12, color: T.textDim }}>No pending online orders</div>}
           {onlineOrders.slice(0, 3).map(o => (
@@ -738,10 +1048,10 @@ export default function POS() {
         item={notesItem}
         open={!!notesItem}
         onClose={() => setNotesItem(null)}
-        onSave={(notes) => notesItem && setItemNotes(notesItem.id, notes)}
+        onSave={(notes) => notesItem && setItemNotes(notesItem.cart_key, notes)}
       />
 
-      {/* ── Takeaway / Delivery payment modal ── */}
+      {/* POS section */}
       {showPayModal && createdOrder && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', sans-serif" }}>
           <div onClick={!takePrintRdy ? undefined : closeTakeawayModal} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(6px)' }} />
@@ -751,17 +1061,17 @@ export default function POS() {
             <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 800, color: T.text }}>
-                  🧾 {(createdOrder.order_type || orderType).replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())} — {createdOrder.order_number}
+                  {(createdOrder.order_type || orderType).replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())} - {createdOrder.order_number}
                 </div>
                 <div style={{ fontSize: 12, color: T.textMid, marginTop: 3 }}>
                   {createdOrder.customer_name || createdOrder._custName}
-                  {(createdOrder.customer_phone || createdOrder._custPhone) && ` · ${createdOrder.customer_phone || createdOrder._custPhone}`}
+                  {(createdOrder.customer_phone || createdOrder._custPhone) && ` - ${createdOrder.customer_phone || createdOrder._custPhone}`}
                 </div>
               </div>
-              {!takePaying && <button onClick={closeTakeawayModal} style={{ background: 'none', border: 'none', color: T.textMid, fontSize: 24, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>}
+              {!takePaying && <button onClick={closeTakeawayModal} style={{ background: 'none', border: 'none', color: T.textMid, fontSize: 24, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>x</button>}
             </div>
 
-            {/* Body — order summary */}
+            {/* POS section */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               {/* Items */}
               <div style={{ marginBottom: 4 }}>
@@ -775,7 +1085,7 @@ export default function POS() {
                       <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{item.name}</div>
                       {item.notes && <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{item.notes}</div>}
                     </div>
-                    <div style={{ textAlign: 'center', fontSize: 13, color: T.textMid, fontFamily: 'monospace' }}>×{item.qty}</div>
+                    <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: T.text, fontFamily: 'monospace' }}>{Number(item.price * item.qty).toLocaleString()}</div>
                     <div style={{ textAlign: 'right', fontSize: 12, color: T.textMid, fontFamily: 'monospace' }}>{Number(item.price).toLocaleString()}</div>
                     <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: T.text, fontFamily: 'monospace' }}>{Number(item.price * item.qty).toLocaleString()}</div>
                   </div>
@@ -787,7 +1097,7 @@ export default function POS() {
                 {[
                   ['Subtotal', `PKR ${Number(createdOrder._subtotal).toLocaleString()}`],
                   ['Tax (8%)', `PKR ${Number(createdOrder._tax).toLocaleString()}`],
-                  ...(createdOrder._discountAmt > 0 ? [['Discount', `− PKR ${Number(createdOrder._discountAmt).toLocaleString()}`, true]] : []),
+                  ...(createdOrder._discountAmt > 0 ? [['Discount', `- PKR ${Number(createdOrder._discountAmt).toLocaleString()}`, true]] : []),
                 ].map(([label, value, accent]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, color: accent ? T.accent : T.textMid }}>
                     <span>{label}</span><span style={{ fontFamily: 'monospace' }}>{value}</span>
@@ -799,7 +1109,7 @@ export default function POS() {
                   <span style={{ fontFamily: 'monospace', color: T.accent }}>PKR {Number(createdOrder._total).toLocaleString()}</span>
                 </div>
 
-                {/* Tendered amount + change — cash only */}
+                {/* POS section */}
                 {takePayMethod === 'cash' && !takePrintRdy && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${T.border}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -833,23 +1143,23 @@ export default function POS() {
               {!takePrintRdy && (
                 <div style={{ marginTop: 16, background: T.surface, borderRadius: 12, padding: '14px 16px', border: `1px solid ${T.accent}44` }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Payment Method</div>
-                  {/* COD — delivery only, shown full-width first */}
+                  {/* POS section */}
                   {(createdOrder.order_type || orderType) === 'delivery' && (
                     <div onClick={() => setTakePayMethod('cod')} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 10, cursor: 'pointer', marginBottom: 8, background: takePayMethod === 'cod' ? '#E67E2222' : T.card, border: `2px solid ${takePayMethod === 'cod' ? '#E67E22' : T.border}`, transition: 'all 0.15s' }}>
-                      <span style={{ fontSize: 20 }}>🏍</span>
+                      <span style={{ fontSize: 12, fontWeight: 800 }}>COD</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: takePayMethod === 'cod' ? 700 : 500, color: takePayMethod === 'cod' ? '#E67E22' : T.text }}>Cash on Delivery</div>
                         <div style={{ fontSize: 11, color: T.textDim }}>Rider collects payment at door</div>
                       </div>
-                      {takePayMethod === 'cod' && <span style={{ color: '#E67E22', fontWeight: 800 }}>✓</span>}
+                      {takePayMethod === 'cod' && <span style={{ color: '#E67E22', fontWeight: 800 }}>Selected</span>}
                     </div>
                   )}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {[['cash','💵','Cash'],['card','💳','Card'],['jazzcash','📱','JazzCash'],['easypaisa','📲','Easypaisa']].map(([id, icon, label]) => (
+                    {[['cash','Cash'],['card','Card'],['jazzcash','JazzCash'],['easypaisa','Easypaisa']].map(([id, label]) => (
                       <div key={id} onClick={() => setTakePayMethod(id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, cursor: 'pointer', background: takePayMethod === id ? T.accentGlow : T.card, border: `1px solid ${takePayMethod === id ? T.accent + '88' : T.border}`, transition: 'all 0.15s' }}>
-                        <span style={{ fontSize: 18 }}>{icon}</span>
+
                         <span style={{ fontSize: 13, fontWeight: takePayMethod === id ? 700 : 500, color: takePayMethod === id ? T.accent : T.text }}>{label}</span>
-                        {takePayMethod === id && <span style={{ marginLeft: 'auto', color: T.accent, fontWeight: 800 }}>✓</span>}
+                        {takePayMethod === id && <span style={{ marginLeft: 'auto', color: T.accent, fontWeight: 800 }}>Selected</span>}
                       </div>
                     ))}
                   </div>
@@ -861,7 +1171,7 @@ export default function POS() {
             {takePrintRdy ? (
               <div style={{ padding: '20px 24px', borderTop: `1px solid ${T.border}`, background: T.surface, flexShrink: 0 }}>
                 <div style={{ textAlign: 'center', marginBottom: 14 }}>
-                  <div style={{ fontSize: 32, marginBottom: 6 }}>{takePayMethod === 'cod' ? '🏍' : '🖨'}</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 6 }}>{takePayMethod === 'cod' ? 'COD' : 'Paid'}</div>
                   <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 4 }}>
                     {takePayMethod === 'cod' ? 'Order Sent to Kitchen!' : 'Payment Confirmed!'}
                   </div>
@@ -870,8 +1180,8 @@ export default function POS() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={() => { printTakeawayReceipt(); closeTakeawayModal(); }} style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
-                    🖨 Yes, Print Receipt
+                  <button onClick={() => { printTakeawayReceipt(); closeTakeawayModal(); }} style={{ flex: 1, background: T.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
+                    Yes, Print Receipt
                   </button>
                   <button onClick={closeTakeawayModal} style={{ background: T.surface, color: T.textMid, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                     Skip
@@ -884,7 +1194,7 @@ export default function POS() {
                   Cancel
                 </button>
                 <button onClick={handleTakeawayPay} disabled={takePaying} style={{ flex: 1, background: takePaying ? T.border : T.green, color: takePaying ? T.textMid : '#fff', border: 'none', borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 800, cursor: takePaying ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.2s' }}>
-                  {takePaying ? '⏳ Processing…' : takePayMethod === 'cod' ? '🏍 Confirm Cash on Delivery' : `✓ Confirm ${takePayMethod.charAt(0).toUpperCase() + takePayMethod.slice(1)} Payment`}
+                  {takePaying ? 'Processing...' : takePayMethod === 'cod' ? 'Confirm Cash on Delivery' : `Confirm ${takePayMethod.charAt(0).toUpperCase() + takePayMethod.slice(1)} Payment`}
                 </button>
               </div>
             )}
@@ -895,26 +1205,34 @@ export default function POS() {
   );
 }
 
-// ── POS Gate Modal — shown when shift or attendance is missing ─────────────────
-function POSGateModal({ currentShift, onUnlocked }) {
-  const [acting, setActing] = useState(null); // 'shift' | 'clock'
+// POS section
+function CleanPOSGateModal({ currentShift, onUnlocked }) {
+  const [acting, setActing] = useState(null);
   const [showBalanceInput, setShowBalanceInput] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('');
 
-  const hasShift     = !!currentShift?.shift && ['active','in_process'].includes(currentShift.shift.status);
-  const isClockedIn  = currentShift?.attendance?.is_clocked_in;
-  const scheduledShift = currentShift?.shifts?.find(s => s.status === 'scheduled');
+  const hasShift = !!currentShift?.shift && ['active', 'in_process'].includes(currentShift.shift.status);
+  const isClockedIn = currentShift?.attendance?.is_clocked_in;
+  const scheduledShift = selectOpenableScheduledShift(currentShift);
+  const displayScheduledShift = scheduledShift || selectDisplayScheduledShift(currentShift);
 
-  const row = (ok, label, detail, btn) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
-      <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, background: ok ? '#27AE6033' : '#E74C3C33' }}>
-        {ok ? '✓' : '✗'}
+  const btnStyle = (bg, col = '#000') => ({
+    background: bg, color: col, border: 'none', borderRadius: 8,
+    padding: '8px 16px', fontSize: 12, fontWeight: 700,
+    cursor: acting ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif",
+    whiteSpace: 'nowrap', opacity: acting ? 0.65 : 1,
+  });
+
+  const row = (ok, label, detail, action) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0, background: ok ? '#27AE6033' : '#E74C3C33', color: ok ? '#27AE60' : '#f87171', fontWeight: 900 }}>
+        {ok ? 'OK' : 'X'}
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: ok ? '#27AE60' : '#f87171' }}>{label}</div>
         {detail && <div style={{ fontSize: 12, color: '#aaa', marginTop: 2 }}>{detail}</div>}
       </div>
-      {!ok && btn}
+      {!ok && action}
     </div>
   );
 
@@ -923,11 +1241,10 @@ function POSGateModal({ currentShift, onUnlocked }) {
     if (!showBalanceInput) { setShowBalanceInput(true); return; }
     setActing('shift');
     try {
-      await startMyShift(scheduledShift.id, { opening_balance: parseFloat(openingBalance) || 0 });
+      await startMyShift(scheduledShift.id, { shift_date: apiDate(scheduledShift.date), opening_balance: parseFloat(openingBalance) || 0 });
       onUnlocked();
     } catch (e) {
-      const msg = e.response?.data?.error || 'Failed to start shift';
-      alert(msg);
+      alert(e.response?.data?.error || 'Failed to start shift');
     } finally { setActing(null); }
   };
 
@@ -937,62 +1254,75 @@ function POSGateModal({ currentShift, onUnlocked }) {
       await attClockIn({ source: 'web' });
       onUnlocked();
     } catch (e) {
-      const msg = e.response?.data?.error || 'Failed to clock in';
-      alert(msg);
+      alert(e.response?.data?.error || 'Failed to clock in');
     } finally { setActing(null); }
   };
 
-  const btnStyle = (bg, col = '#000') => ({
-    background: bg, color: col, border: 'none', borderRadius: 8,
-    padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-    fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap', opacity: acting ? 0.6 : 1,
-  });
+  const handleCloseShift = async () => {
+    if (!currentShift?.shift) return;
+    const collected = window.prompt('Enter cashier collection amount (PKR)');
+    if (collected === null) return;
+    const cashierCollectionAmount = Number(collected);
+    if (!Number.isFinite(cashierCollectionAmount) || cashierCollectionAmount < 0) {
+      alert('Enter a valid cashier collection amount');
+      return;
+    }
+    setActing('close');
+    try {
+      await closeMyShift(currentShift.shift.id, {
+        shift_date: apiDate(currentShift.shift.date),
+        cashier_collection: cashierCollectionAmount,
+      });
+      toast.success('Shift closed');
+      onUnlocked();
+    } catch (e) {
+      alert(e.response?.data?.error || 'Failed to close shift');
+    } finally { setActing(null); }
+  };
 
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, backdropFilter: 'blur(4px)' }}>
       <div style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: 20, padding: '32px 36px', maxWidth: 440, width: '90%', boxShadow: '0 24px 64px rgba(0,0,0,0.8)' }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ fontSize: 48, marginBottom: 10 }}>🔐</div>
+          <div style={{ fontSize: 34, fontWeight: 900, color: '#f59e0b', marginBottom: 10 }}>LOCK</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 6 }}>POS Access Required</div>
           <div style={{ fontSize: 13, color: '#888' }}>Complete the steps below to unlock the POS</div>
         </div>
-
         {row(
           hasShift,
-          hasShift ? `Shift Active — ${currentShift.shift.shift_name}` : 'Shift Not Started',
-          hasShift
-            ? `${currentShift.shift.start_time?.slice(0,5)} – ${currentShift.shift.end_time?.slice(0,5)}`
-            : scheduledShift
-              ? `Scheduled: ${scheduledShift.shift_name} · ${scheduledShift.start_time?.slice(0,5)}–${scheduledShift.end_time?.slice(0,5)}`
-              : 'No shift scheduled for today — ask your manager',
-          scheduledShift
-            ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                {showBalanceInput && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap' }}>Opening cash (PKR)</span>
-                    <input type="number" min="0" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)}
-                      placeholder="0" autoFocus
-                      style={{ width: 90, background: '#2a2a2a', border: '1px solid #f59e0b88', borderRadius: 6, padding: '4px 8px', color: '#fff', fontSize: 13, fontFamily: 'monospace', outline: 'none', textAlign: 'right' }} />
-                  </div>
-                )}
-                <button style={btnStyle('#f59e0b')} onClick={handleStartShift} disabled={!!acting}>
-                  {acting === 'shift' ? '…' : showBalanceInput ? '✓ Confirm & Start' : '▶ Start Shift'}
-                </button>
-              </div>
-            : <a href="/my-shift" style={{ ...btnStyle('#444', '#fff'), textDecoration: 'none', display: 'inline-block' }}>My Shift ↗</a>
+          hasShift ? `Shift Active - ${currentShift.shift.shift_name}` : 'Shift Not Started',
+          hasShift ? `${currentShift.shift.start_time?.slice(0, 5)} - ${currentShift.shift.end_time?.slice(0, 5)}`
+            : displayScheduledShift ? `Scheduled: ${displayScheduledShift.shift_name} - ${displayScheduledShift.start_time?.slice(0, 5)}-${displayScheduledShift.end_time?.slice(0, 5)}`
+              : 'No shift scheduled for today - ask your manager',
+          scheduledShift ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+              {showBalanceInput && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, color: '#aaa', whiteSpace: 'nowrap' }}>Opening cash (PKR)</span>
+                  <input type="number" min="0" value={openingBalance} onChange={e => setOpeningBalance(e.target.value)} placeholder="0" autoFocus style={{ width: 90, background: '#2a2a2a', border: '1px solid #f59e0b88', borderRadius: 6, padding: '4px 8px', color: '#fff', fontSize: 13, fontFamily: 'monospace', outline: 'none', textAlign: 'right' }} />
+                </div>
+              )}
+              <button style={btnStyle('#f59e0b')} onClick={handleStartShift} disabled={!!acting}>{acting === 'shift' ? 'Starting...' : showBalanceInput ? 'Confirm & Start' : 'Start Shift'}</button>
+            </div>
+          ) : <a href="/my-shift" style={{ ...btnStyle('#444', '#fff'), textDecoration: 'none', display: 'inline-block' }}>My Shift</a>
         )}
-
         {row(
           isClockedIn,
-          isClockedIn ? 'Attendance — Clocked In' : 'Not Clocked In',
-          isClockedIn ? `Since ${currentShift?.attendance?.clocked_in_at ? new Date(currentShift.attendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}` : 'You must clock in before placing orders',
-          <button style={btnStyle('#27AE60', '#fff')} onClick={handleClockIn} disabled={!!acting}>
-            {acting === 'clock' ? '…' : '▶ Clock In'}
+          isClockedIn ? 'Clocked In' : 'Not Clocked In',
+          isClockedIn ? `Since ${currentShift?.attendance?.clocked_in_at ? new Date(currentShift.attendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}` : 'You must clock in before placing orders',
+          <button style={btnStyle('#27AE60', '#fff')} onClick={handleClockIn} disabled={!!acting}>{acting === 'clock' ? 'Clocking in...' : 'Clock In'}</button>
+        )}
+        {hasShift && (
+          <button
+            onClick={handleCloseShift}
+            disabled={!!acting}
+            style={{ ...btnStyle('#E74C3C', '#fff'), width: '100%', marginTop: 18 }}
+          >
+            {acting === 'close' ? 'Closing...' : 'Close Shift'}
           </button>
         )}
-
         <div style={{ marginTop: 20, textAlign: 'center' }}>
-          <a href="/attendance" style={{ fontSize: 12, color: '#666', textDecoration: 'none' }}>Go to Attendance ↗</a>
+          <a href="/attendance" style={{ fontSize: 12, color: '#aaa', textDecoration: 'none' }}>Go to Attendance</a>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import toast from 'react-hot-toast';
 
 // API — one level up from components/
@@ -6,6 +6,9 @@ import {
   getOrders,
   updateOrderStatus,
   getTables as apiGetTables,
+  createTable,
+  updateTable,
+  deleteTable,
   updateTableStatus,
   createOvertimeAlert,
   getRestaurantSettings,
@@ -31,10 +34,12 @@ import {
   StatCard,
   Table as UITable,
   T,
+  useT,
 } from './shared/UI';
 
 // Socket context — one level up
 import { useSocket } from '../context/SocketContext';
+import { useTheme } from '../context/ThemeContext';
 import TableBill from './tables/TableBill';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,13 +169,40 @@ export function Kitchen() {
 // ─────────────────────────────────────────────────────────────────────────────
 // TABLE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
-const STATUS_COLOR = { occupied: T.accent, vacant: T.green, reserved: T.blue, cleaning: T.textMid };
+const STATUS_COLOR = { occupied: T.red, vacant: T.green, reserved: T.blue, cleaning: T.textMid };
 const STATUS_BG    = {
-  occupied: 'rgba(245,166,35,0.12)', vacant: 'rgba(46,204,113,0.12)',
+  occupied: 'rgba(239,68,68,0.14)', vacant: 'rgba(46,204,113,0.12)',
   reserved: 'rgba(52,152,219,0.12)', cleaning: 'rgba(74,85,104,0.2)',
 };
 
 // Kitchen order_status → display config
+const TABLE_SETUP_PRESETS = [
+  {
+    label: 'Small cafe (6)',
+    tables: Array.from({ length: 6 }, (_, i) => ({
+      label: `T-0${i + 1}`,
+      section: 'Main Hall',
+      capacity: i < 2 ? 2 : 4,
+    })),
+  },
+  {
+    label: 'Mid-size (12)',
+    tables: [
+      ...Array.from({ length: 6 }, (_, i) => ({ label: `T-0${i + 1}`, section: 'Main Hall', capacity: 4 })),
+      ...Array.from({ length: 4 }, (_, i) => ({ label: `T-${i + 7}`, section: 'Terrace', capacity: 4 })),
+      ...Array.from({ length: 2 }, (_, i) => ({ label: `T-V${i + 1}`, section: 'VIP', capacity: 6 })),
+    ],
+  },
+  {
+    label: 'Large (20)',
+    tables: [
+      ...Array.from({ length: 10 }, (_, i) => ({ label: `T-${String(i + 1).padStart(2, '0')}`, section: 'Main Hall', capacity: 4 })),
+      ...Array.from({ length: 6 }, (_, i) => ({ label: `T-${String(i + 11).padStart(2, '0')}`, section: 'Terrace', capacity: 4 })),
+      ...Array.from({ length: 4 }, (_, i) => ({ label: `T-V${i + 1}`, section: 'VIP', capacity: 6 })),
+    ],
+  },
+];
+
 const KITCHEN_PHASE = {
   pending:    { label: 'Waiting',    color: '#6B7280', icon: '⏳' },
   confirmed:  { label: 'Confirmed',  color: '#6B7280', icon: '✓'  },
@@ -193,7 +225,8 @@ const fmtElapsed = (mins) => {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 };
 
-export function Tables() {
+// eslint-disable-next-line no-unused-vars
+function TablesLegacy() {
   const [tables,        setTables]        = useState([]);
   const [selected,      setSelected]      = useState(null);
   const [loading,       setLoading]       = useState(true);
@@ -456,8 +489,621 @@ export function Tables() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INVENTORY
+// TABLE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
+export function Tables() {
+  useT();
+  const { mode } = useTheme();
+  const light = mode === 'light';
+  const [tables,        setTables]        = useState([]);
+  const [selected,      setSelected]      = useState(null);
+  const [loading,       setLoading]       = useState(true);
+  const [billTable,     setBillTable]     = useState(null);
+  const [overtimeHours, setOvertimeHours] = useState(2);
+  const [statusFilter,  setStatusFilter]  = useState('all');
+  const [sectionFilter, setSectionFilter] = useState('All');
+  const [search,        setSearch]        = useState('');
+  const [setupOpen,     setSetupOpen]     = useState(false);
+  const [setupSaving,   setSetupSaving]   = useState(false);
+  const [setupTables,   setSetupTables]   = useState([]);
+  const [setupTable,    setSetupTable]    = useState({ label: '', section: 'Main Hall', capacity: 4 });
+  const [editTableOpen, setEditTableOpen] = useState(false);
+  const [editSaving,    setEditSaving]    = useState(false);
+  const [editTableForm, setEditTableForm] = useState({ id: '', label: '', section: 'Main Hall', capacity: 4 });
+  const overtimeAlerted = useRef(new Set());
+  const tablesRef       = useRef([]);
+  const { on, off } = useSocket();
+
+  const load = useCallback(() => {
+    apiGetTables().then(r => {
+      setTables(r.data);
+      tablesRef.current = r.data;
+    }).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+    getRestaurantSettings().then(r => {
+      if (r.data?.table_overtime_hours) setOvertimeHours(Number(r.data.table_overtime_hours));
+    }).catch(() => {});
+    on('table_updated', load);
+    on('overtime_alert', load);
+    return () => { off('table_updated', load); off('overtime_alert', load); };
+  }, [load, on, off]);
+
+  useEffect(() => {
+    overtimeAlerted.current.clear();
+    const check = () => {
+      tablesRef.current.forEach(t => {
+        if (t.status !== 'occupied' || !t.order_started) return;
+        const elapsed = getElapsedMinutes(t);
+        if (elapsed < overtimeHours * 60) return;
+        if (overtimeAlerted.current.has(t.id)) return;
+        overtimeAlerted.current.add(t.id);
+        toast.error(`Table ${t.label} has been occupied for ${fmtElapsed(elapsed)}!`, { duration: 10000, id: `ot-${t.id}` });
+        createOvertimeAlert(t.id, { tableLabel: t.label, elapsedMinutes: elapsed, thresholdHours: overtimeHours }).catch(() => {});
+      });
+    };
+    check();
+    const timer = setInterval(check, 60000);
+    return () => clearInterval(timer);
+  }, [overtimeHours]);
+
+  const statusColor = { occupied: T.red, vacant: T.green, reserved: T.blue, cleaning: T.textMid };
+  const statusBg = {
+    occupied: light ? 'rgba(185,28,28,0.12)' : 'rgba(239,68,68,0.16)',
+    vacant: T.greenDim,
+    reserved: T.blueDim,
+    cleaning: light ? T.surface : 'rgba(148,163,184,0.10)',
+  };
+  const summary = (status) => tables.filter(t => t.status === status).length;
+  const sectionNamesAll = useMemo(() => ['All', ...new Set(tables.map(t => t.section || 'Main Floor'))], [tables]);
+  const overtimeCount = tables.filter(t => t.status === 'occupied' && getElapsedMinutes(t) >= overtimeHours * 60).length;
+  const noShowCount = tables.filter(t => t.status === 'reserved' && isReservationExpired(t)).length;
+  const foodReadyCount = tables.filter(t => t.order_status === 'ready').length;
+  const runningBills = tables.reduce((sum, t) => sum + Number(t.total_amount || 0), 0);
+  const salesTarget = Math.max(1, runningBills, 150000);
+  const pct = (value) => tables.length ? Math.round((value / tables.length) * 100) : 0;
+  const salesPct = Math.min(100, Math.round((runningBills / salesTarget) * 100));
+  const selectedTable = selected ? tables.find(t => t.id === selected.id) || selected : null;
+
+  const filteredTables = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return tables.filter(t => {
+      const statusMatch = statusFilter === 'all' || t.status === statusFilter;
+      const sectionMatch = sectionFilter === 'All' || (t.section || 'Main Floor') === sectionFilter;
+      const searchMatch = !q || [t.label, t.section, t.reservation_guest, t.order_number, t.server_name, t.waiter_name]
+        .filter(Boolean)
+        .some(v => String(v).toLowerCase().includes(q));
+      return statusMatch && sectionMatch && searchMatch;
+    });
+  }, [tables, statusFilter, sectionFilter, search]);
+
+  const groupedTables = useMemo(() => filteredTables.reduce((acc, table) => {
+    const section = table.section || 'Main Floor';
+    if (!acc[section]) acc[section] = [];
+    acc[section].push(table);
+    return acc;
+  }, {}), [filteredTables]);
+
+  const visibleSections = sectionFilter === 'All'
+    ? sectionNamesAll.filter(section => section !== 'All' && groupedTables[section])
+    : [sectionFilter].filter(section => groupedTables[section]);
+
+  const statusFilters = [
+    ['all', 'All'],
+    ['occupied', 'Occupied'],
+    ['vacant', 'Vacant'],
+    ['reserved', 'Reserved'],
+    ['cleaning', 'Cleaning'],
+  ];
+
+  const FilterButton = ({ active, onClick, children }) => (
+    <button onClick={onClick} style={{
+      background: active ? T.accent : T.card,
+      color: active ? (light ? '#fff' : '#020617') : T.textMid,
+      border: `1px solid ${active ? T.accent : T.border}`,
+      borderRadius: 12,
+      padding: '9px 13px',
+      fontSize: 12,
+      fontWeight: active ? 900 : 700,
+      cursor: 'pointer',
+      fontFamily: "'Inter', sans-serif",
+      whiteSpace: 'nowrap',
+    }}>{children}</button>
+  );
+
+  const formatReservationTime = (value) => value
+    ? new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '--';
+
+  const displayStatus = (status) => status === 'vacant' ? 'available' : status;
+  const tableGuest = (table) => {
+    if (table.reservation_guest) return table.reservation_guest;
+    if (table.status === 'occupied' && table.guest_count) return `${table.guest_count} guest${Number(table.guest_count) === 1 ? '' : 's'}`;
+    return 'No guest';
+  };
+  const tableTime = (table) => {
+    if (table.status === 'occupied') return table.order_started ? `${fmtElapsed(getElapsedMinutes(table))} seated` : '-';
+    if (table.status === 'reserved') return formatReservationTime(table.reserved_at);
+    if (table.status === 'cleaning') return 'Resetting';
+    return '-';
+  };
+
+  const runTableAction = async (action) => {
+    try {
+      await action();
+      load();
+      setSelected(null);
+    } catch {
+      toast.error('Failed to update table');
+    }
+  };
+
+  const applySetupPreset = (preset) => {
+    const existing = new Set(tables.map(t => String(t.label || '').trim().toLowerCase()));
+    const freshTables = preset.tables.filter(t => !existing.has(String(t.label).toLowerCase()));
+    if (!freshTables.length) return toast.error('Those table labels already exist');
+    setSetupTables(freshTables);
+  };
+
+  const addSetupTable = () => {
+    const label = setupTable.label.trim();
+    if (!label) return toast.error('Enter a table label');
+    const exists = [...tables, ...setupTables].some(t => String(t.label || '').trim().toLowerCase() === label.toLowerCase());
+    if (exists) return toast.error('Table label already exists');
+    setSetupTables(current => [...current, { ...setupTable, label, capacity: Math.max(1, Number(setupTable.capacity) || 4) }]);
+    setSetupTable(current => ({ ...current, label: '', capacity: 4 }));
+  };
+
+  const saveSetupTables = async () => {
+    if (!setupTables.length) return toast.error('Add at least one table');
+    setSetupSaving(true);
+    try {
+      for (const table of setupTables) {
+        await createTable({
+          label: table.label,
+          section: table.section || 'Main Hall',
+          capacity: Math.max(1, Number(table.capacity) || 4),
+        });
+      }
+      toast.success(`${setupTables.length} table${setupTables.length === 1 ? '' : 's'} added`);
+      setSetupTables([]);
+      setSetupOpen(false);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not create tables');
+    } finally {
+      setSetupSaving(false);
+    }
+  };
+
+  const openEditTable = (table) => {
+    setEditTableForm({
+      id: table.id,
+      label: table.label || '',
+      section: table.section || 'Main Hall',
+      capacity: table.capacity || 4,
+    });
+    setEditTableOpen(true);
+  };
+
+  const saveEditedTable = async () => {
+    const label = editTableForm.label.trim();
+    if (!label) return toast.error('Enter a table label');
+    const duplicate = tables.some(t =>
+      t.id !== editTableForm.id
+      && String(t.label || '').trim().toLowerCase() === label.toLowerCase()
+    );
+    if (duplicate) return toast.error('Table label already exists');
+    setEditSaving(true);
+    try {
+      const res = await updateTable(editTableForm.id, {
+        label,
+        section: editTableForm.section || 'Main Hall',
+        capacity: Math.max(1, Number(editTableForm.capacity) || 4),
+      });
+      toast.success('Table updated');
+      setSelected(res.data);
+      setEditTableOpen(false);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not update table');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const removeSelectedTable = async (table) => {
+    if (table.order_id) return toast.error('Pay or clear the active order before deleting this table');
+    if (table.reservation_id) return toast.error('Clear the active reservation before deleting this table');
+    if (!window.confirm(`Delete table ${table.label}?`)) return;
+    try {
+      await deleteTable(table.id);
+      toast.success('Table deleted');
+      setSelected(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not delete table');
+    }
+  };
+
+  if (loading) return <Spinner />;
+
+  return (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <PageHeader
+          title="Table Management"
+          subtitle="Live floor view with status filters, table bills and service alerts"
+          action={
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search table, guest, order"
+                style={{
+                  width: 280,
+                  maxWidth: '100%',
+                  background: T.card,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 12,
+                  color: T.text,
+                  fontSize: 13,
+                  outline: 'none',
+                  padding: '11px 14px',
+                  fontFamily: "'Inter', sans-serif",
+                }}
+              />
+              <Btn onClick={() => setSetupOpen(true)} style={{ whiteSpace: 'nowrap' }}>
+                Table Setup
+              </Btn>
+            </div>
+          }
+        />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          {[
+            ['Available', summary('vacant'), pct(summary('vacant')), 'Ready tables', T.green],
+            ['Occupied', summary('occupied'), pct(summary('occupied')), 'Serving guests', T.red],
+            ['Reserved', summary('reserved'), pct(summary('reserved')), 'Upcoming bookings', T.blue],
+            ['Cleaning', summary('cleaning'), pct(summary('cleaning')), 'Reset in progress', T.textMid],
+            ['Sales', `PKR ${runningBills.toLocaleString()}`, salesPct, 'Open table value', T.purple],
+          ].map(([label, value, percent, sub, color]) => (
+            <Card key={label} hover style={{ padding: 16, minHeight: 112, borderTop: `3px solid ${color}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: T.textDim, textTransform: 'uppercase', fontWeight: 800 }}>{label}</div>
+                  <div style={{ color, fontSize: 24, fontWeight: 900, marginTop: 8, fontFamily: label === 'Sales' ? "'Inter', sans-serif" : 'monospace' }}>{value}</div>
+                  <div style={{ color: T.textMid, fontSize: 12, marginTop: 6 }}>{sub}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 38, opacity: 0.85 }}>
+                  <div style={{ width: 6, height: 18, borderRadius: 999, background: `${color}66` }} />
+                  <div style={{ width: 6, height: 28, borderRadius: 999, background: `${color}99` }} />
+                  <div style={{ width: 6, height: 36, borderRadius: 999, background: color }} />
+                </div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <div style={{ height: 7, borderRadius: 999, background: T.border, overflow: 'hidden' }}>
+                  <div style={{ width: `${percent}%`, height: '100%', borderRadius: 999, background: color }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 7, fontSize: 11, color: T.textDim }}>
+                  <span>{percent}% of total</span>
+                  <span>{label === 'Sales' ? 'Live' : 'Current'}</span>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {(foodReadyCount > 0 || overtimeCount > 0 || noShowCount > 0) && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {foodReadyCount > 0 && <Badge color={T.green}>{foodReadyCount} food ready</Badge>}
+            {overtimeCount > 0 && <Badge color={T.red}>{overtimeCount} overtime</Badge>}
+            {noShowCount > 0 && <Badge color={T.red}>{noShowCount} no-show</Badge>}
+          </div>
+        )}
+
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: 18, borderBottom: `1px solid ${T.border}`, display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', background: T.surface }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {statusFilters.map(([key, label]) => (
+                <FilterButton key={key} active={statusFilter === key} onClick={() => setStatusFilter(key)}>{label}</FilterButton>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {sectionNamesAll.map(section => (
+                <FilterButton key={section} active={sectionFilter === section} onClick={() => setSectionFilter(section)}>{section}</FilterButton>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ padding: 18 }}>
+            <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 620px', minWidth: 0 }}>
+                {visibleSections.map(section => (
+                  <div key={section} style={{ marginBottom: 22 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: T.textMid, fontWeight: 800 }}>{section}</div>
+                      <div style={{ color: T.textDim, fontSize: 12 }}>{groupedTables[section].length} tables</div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 12 }}>
+                      {groupedTables[section].map(table => {
+                        const elapsed = table.status === 'occupied' ? getElapsedMinutes(table) : 0;
+                        const overdue = table.status === 'occupied' && elapsed >= overtimeHours * 60;
+                        const expired = table.status === 'reserved' && isReservationExpired(table);
+                        const kPhase = table.order_status ? KITCHEN_PHASE[table.order_status] : null;
+                        const color = overdue || expired ? T.red : statusColor[table.status] || T.textMid;
+                        const bg = overdue || expired ? T.redDim : statusBg[table.status] || T.surface;
+                        const isActive = selectedTable && selectedTable.id === table.id;
+                        return (
+                          <div key={table.id} onClick={() => setSelected(isActive ? null : table)} style={{ background: bg, border: `1px solid ${isActive ? color : color + '55'}`, borderRadius: 16, padding: 16, cursor: 'pointer', transition: 'all 0.2s', transform: isActive ? 'translateY(-3px)' : 'none', boxShadow: isActive ? `0 18px 38px ${color}22` : 'none' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: color, boxShadow: `0 0 0 3px ${color}22`, flexShrink: 0 }} />
+                                <span style={{ color: T.textMid, fontSize: 13, fontWeight: 800, textTransform: 'capitalize' }}>
+                                  {overdue ? 'overtime' : expired ? 'no-show' : displayStatus(table.status)}
+                                </span>
+                              </div>
+                              <Badge color={color} small style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{table.section || 'Main Floor'}</Badge>
+                            </div>
+
+                            <div style={{ marginTop: 16 }}>
+                              <div style={{ fontWeight: 900, color: T.text, fontFamily: 'monospace', fontSize: 28, lineHeight: 1 }}>{table.label}</div>
+                            </div>
+
+                            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 9, color: T.textMid, fontSize: 13 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                                <span>Seats</span>
+                                <span style={{ color: T.text, fontWeight: 800 }}>{table.capacity}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                                <span>Time</span>
+                                <span style={{ color: overdue ? T.red : T.text, fontWeight: 800 }}>{tableTime(table)}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                                <span>Guest</span>
+                                <span title={tableGuest(table)} style={{ color: T.text, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{tableGuest(table)}</span>
+                              </div>
+                            </div>
+
+                            {kPhase && <div style={{ marginTop: 12, fontSize: 11, fontWeight: 900, color: kPhase.color }}>{kPhase.label}</div>}
+
+                            <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                              <span style={{ fontSize: 13, color: T.textDim, fontWeight: 700 }}>Bill</span>
+                              <span style={{ color: table.total_amount > 0 ? T.accent : T.textMid, fontSize: 18, fontWeight: 900, fontFamily: 'monospace' }}>
+                                PKR {Number(table.total_amount || 0).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {filteredTables.length === 0 && <div style={{ border: `1px dashed ${T.borderLight}`, borderRadius: 16, padding: 48, textAlign: 'center', color: T.textMid, background: T.surface }}>No tables match this view.</div>}
+              </div>
+
+              {selectedTable && (() => {
+                const elapsed = selectedTable.status === 'occupied' ? getElapsedMinutes(selectedTable) : 0;
+                const overdue = selectedTable.status === 'occupied' && elapsed >= overtimeHours * 60;
+                const expired = selectedTable.status === 'reserved' && isReservationExpired(selectedTable);
+                const kPhase = selectedTable.order_status ? KITCHEN_PHASE[selectedTable.order_status] : null;
+                const color = overdue || expired ? T.red : statusColor[selectedTable.status] || T.textMid;
+                return (
+                  <Card style={{ flex: '1 1 280px', maxWidth: 340, alignSelf: 'flex-start', position: 'sticky', top: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: T.textDim, fontWeight: 800, textTransform: 'uppercase' }}>Selected table</div>
+                        <div style={{ fontWeight: 900, fontSize: 28, color, fontFamily: 'monospace', marginTop: 4 }}>{selectedTable.label}</div>
+                      </div>
+                      <button onClick={() => setSelected(null)} style={{ background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 10, color: T.textMid, cursor: 'pointer', width: 34, height: 34, fontSize: 18 }}>x</button>
+                    </div>
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color={color}>{selectedTable.status}</Badge>
+                      {kPhase && <Badge color={kPhase.color}>{kPhase.label}</Badge>}
+                      {overdue && <Badge color={T.red}>Overtime</Badge>}
+                      {expired && <Badge color={T.red}>No-show</Badge>}
+                    </div>
+
+                    <div style={{ marginTop: 16 }}>
+                      {[
+                        ['Section', selectedTable.section || 'Main Floor'],
+                        ['Capacity', `${selectedTable.capacity} seats`],
+                        ['Order', selectedTable.order_number || '---'],
+                        ['Cashier', selectedTable.server_name || '---'],
+                        ['Waiter', selectedTable.waiter_name || '---'],
+                        ['Seated', selectedTable.status === 'occupied' ? fmtElapsed(elapsed) : '---'],
+                        ['Bill', selectedTable.total_amount > 0 ? `PKR ${Number(selectedTable.total_amount).toLocaleString()}` : '---'],
+                      ].map(([key, value]) => (
+                        <div key={key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
+                          <span style={{ fontSize: 12, color: T.textMid }}>{key}</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: key === 'Seated' && overdue ? T.red : T.text, textAlign: 'right' }}>{value}</span>
+                        </div>
+                      ))}
+                      {selectedTable.reservation_guest && (
+                        <div style={{ padding: '8px 0', borderBottom: `1px solid ${T.border}` }}>
+                          <div style={{ fontSize: 11, color: T.textMid, marginBottom: 2 }}>Reservation</div>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: expired ? T.red : T.blue }}>{selectedTable.reservation_guest}</div>
+                          <div style={{ fontSize: 11, color: T.textMid }}>{formatReservationTime(selectedTable.reserved_at)} - {selectedTable.reservation_duration_min}min</div>
+                          {expired && <div style={{ fontSize: 10, fontWeight: 800, color: T.red, marginTop: 2 }}>Guest did not arrive</div>}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <Btn variant="secondary" onClick={() => openEditTable(selectedTable)}>Edit</Btn>
+                        <Btn
+                          variant="danger"
+                          disabled={!!selectedTable.order_id || !!selectedTable.reservation_id}
+                          onClick={() => removeSelectedTable(selectedTable)}
+                          style={{
+                            opacity: selectedTable.order_id || selectedTable.reservation_id ? 0.45 : 1,
+                            cursor: selectedTable.order_id || selectedTable.reservation_id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          Delete
+                        </Btn>
+                      </div>
+                      {selectedTable.status === 'vacant' && <Btn onClick={() => runTableAction(() => updateTableStatus(selectedTable.id, 'occupied'))}>Assign Table</Btn>}
+                      {selectedTable.status === 'occupied' && (
+                        <>
+                          {selectedTable.order_status === 'ready' && <Btn style={{ background: T.blue, color: '#fff', border: 'none' }} onClick={() => runTableAction(() => updateOrderStatus(selectedTable.order_id, 'served'))}>Mark Served</Btn>}
+                          <Btn style={{ background: T.accent, color: light ? '#fff' : '#020617', border: 'none' }} onClick={() => setBillTable(selectedTable)}>View Bill</Btn>
+                          <Btn variant="ghost" disabled={!!selectedTable.order_id} onClick={() => runTableAction(() => updateTableStatus(selectedTable.id, 'cleaning'))} style={{ opacity: selectedTable.order_id ? 0.4 : 1, cursor: selectedTable.order_id ? 'not-allowed' : 'pointer' }}>
+                            {selectedTable.order_id ? 'Mark Cleaning (pay first)' : 'Mark Cleaning'}
+                          </Btn>
+                        </>
+                      )}
+                      {selectedTable.status === 'reserved' && expired && <Btn style={{ background: T.red, color: '#fff', border: 'none' }} onClick={() => runTableAction(() => import('../services/api').then(api => api.updateReservation(selectedTable.reservation_id, { status: 'no_show' })))}>Clear Reservation</Btn>}
+                      {selectedTable.status === 'cleaning' && <Btn style={{ background: T.green, color: '#fff', border: 'none' }} onClick={() => runTableAction(() => updateTableStatus(selectedTable.id, 'vacant'))}>Mark Vacant</Btn>}
+                    </div>
+                  </Card>
+                );
+              })()}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Modal open={setupOpen} onClose={() => !setupSaving && setSetupOpen(false)} title="Table Setup" width={720}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 11, color: T.textDim, fontWeight: 900, textTransform: 'uppercase', marginBottom: 8 }}>Quick presets</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {TABLE_SETUP_PRESETS.map(preset => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => applySetupPreset(preset)}
+                  style={{
+                    background: T.surface,
+                    color: T.text,
+                    border: `1px solid ${T.border}`,
+                    borderRadius: 10,
+                    padding: '9px 12px',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ border: `1px solid ${T.border}`, borderRadius: 14, padding: 14, background: T.surface }}>
+            <div style={{ fontSize: 11, color: T.textDim, fontWeight: 900, textTransform: 'uppercase', marginBottom: 12 }}>Custom table</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) minmax(140px,1fr) 110px auto', gap: 10, alignItems: 'end' }}>
+              <Input
+                label="Label"
+                value={setupTable.label}
+                onChange={e => setSetupTable(current => ({ ...current, label: e.target.value }))}
+                placeholder="T-01"
+                style={{ marginBottom: 0 }}
+              />
+              <Select
+                label="Section"
+                value={setupTable.section}
+                onChange={e => setSetupTable(current => ({ ...current, section: e.target.value }))}
+                style={{ marginBottom: 0 }}
+              >
+                {['Main Hall', 'Terrace', 'VIP', 'Bar', 'Private'].map(section => <option key={section}>{section}</option>)}
+              </Select>
+              <Input
+                label="Seats"
+                type="number"
+                min="1"
+                max="50"
+                value={setupTable.capacity}
+                onChange={e => setSetupTable(current => ({ ...current, capacity: e.target.value }))}
+                style={{ marginBottom: 0 }}
+              />
+              <Btn onClick={addSetupTable}>Add</Btn>
+            </div>
+          </div>
+
+          <div style={{ border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 42px', gap: 10, padding: '10px 12px', background: T.surface, color: T.textDim, fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }}>
+              <span>Table</span>
+              <span>Section</span>
+              <span>Seats</span>
+              <span />
+            </div>
+            <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+              {setupTables.map((table, index) => (
+                <div key={`${table.label}-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 42px', gap: 10, alignItems: 'center', padding: '10px 12px', borderTop: `1px solid ${T.border}` }}>
+                  <span style={{ color: T.text, fontWeight: 900 }}>{table.label}</span>
+                  <span style={{ color: T.textMid }}>{table.section || 'Main Hall'}</span>
+                  <span style={{ color: T.text, fontWeight: 800, fontFamily: 'monospace' }}>{table.capacity || 4}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSetupTables(current => current.filter((_, i) => i !== index))}
+                    style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.border}`, background: T.card, color: T.red, cursor: 'pointer', fontWeight: 900 }}
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+              {!setupTables.length && (
+                <div style={{ padding: 22, color: T.textDim, textAlign: 'center', fontSize: 13 }}>No tables added yet.</div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ color: T.textMid, fontSize: 12 }}>
+              {setupTables.length} ready to create
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Btn variant="ghost" disabled={setupSaving} onClick={() => setSetupTables([])}>Clear</Btn>
+              <Btn disabled={setupSaving || !setupTables.length} onClick={saveSetupTables}>
+                {setupSaving ? 'Saving...' : 'Save Tables'}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={editTableOpen} onClose={() => !editSaving && setEditTableOpen(false)} title="Edit Table" width={460}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Input
+            label="Label"
+            value={editTableForm.label}
+            onChange={e => setEditTableForm(current => ({ ...current, label: e.target.value }))}
+            placeholder="T-01"
+          />
+          <Select
+            label="Section"
+            value={editTableForm.section}
+            onChange={e => setEditTableForm(current => ({ ...current, section: e.target.value }))}
+          >
+            {['Main Hall', 'Terrace', 'VIP', 'Bar', 'Private'].map(section => <option key={section}>{section}</option>)}
+          </Select>
+          <Input
+            label="Seats"
+            type="number"
+            min="1"
+            max="50"
+            value={editTableForm.capacity}
+            onChange={e => setEditTableForm(current => ({ ...current, capacity: e.target.value }))}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            <Btn variant="ghost" disabled={editSaving} onClick={() => setEditTableOpen(false)}>Cancel</Btn>
+            <Btn disabled={editSaving} onClick={saveEditedTable}>{editSaving ? 'Saving...' : 'Save Changes'}</Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {billTable && <TableBill table={billTable} onClose={() => setBillTable(null)} onPaid={() => { load(); setSelected(null); }} />}
+    </>
+  );
+}
+
+// INVENTORY
 const alertLevel = (item) => {
   if (item.stock_quantity <= item.min_quantity * 0.5) return 'critical';
   if (item.stock_quantity <= item.min_quantity)       return 'low';

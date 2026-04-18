@@ -21,7 +21,7 @@ API.interceptors.response.use(
       original._retry = true;
       try {
         const refreshToken = localStorage.getItem('refreshToken');
-        const { data } = await axios.post('/api/auth/refresh', { refreshToken });
+        const { data } = await API.post('/auth/refresh', { refreshToken });
         localStorage.setItem('accessToken', data.accessToken);
         original.headers.Authorization = `Bearer ${data.accessToken}`;
         return API(original);
@@ -39,6 +39,8 @@ export const register    = (data) => API.post('/auth/register', data);
 export const login       = (data) => API.post('/auth/login', data);
 export const superLogin  = (data) => API.post('/auth/super-login', data);
 export const logout      = (data) => API.post('/auth/logout', data);
+export const forgotPassword = (data) => API.post('/auth/forgot-password', data);
+export const resetPassword  = (data) => API.post('/auth/reset-password', data);
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export const getDashboardStats = () => API.get('/dashboard/stats');
@@ -52,6 +54,8 @@ export const updateOrderStatus = (id, status, paymentMethod) =>
 // ── Tables ────────────────────────────────────────────────────────────────────
 export const getTables           = ()           => API.get('/tables');
 export const createTable         = (data)       => API.post('/tables', data);
+export const updateTable         = (id, data)   => API.patch(`/tables/${id}`, data);
+export const deleteTable         = (id)         => API.delete(`/tables/${id}`);
 export const updateTableStatus   = (id, status) => API.patch(`/tables/${id}/status`, { status });
 export const createOvertimeAlert = (id, data)   => API.post(`/tables/${id}/overtime-alert`, data);
 
@@ -68,6 +72,7 @@ export const uploadRestaurantLogo     = (file) => {
 export const getMenu             = ()          => API.get('/menu');
 export const createMenuItem      = (data)      => API.post('/menu/items', data);
 export const updateMenuItem      = (id, d)     => API.put(`/menu/items/${id}`, d);
+export const deleteMenuItem      = (id)        => API.delete(`/menu/items/${id}`);
 export const uploadMenuItemImage = (id, file)  => {
   const form = new FormData();
   form.append('image', file);
@@ -109,8 +114,8 @@ export const uploadEmployeePhoto = (id, file) => {
 export const getCurrentShift  = ()        => API.get('/shifts/current');
 export const getMyShifts      = ()        => API.get('/shifts/my');
 export const startMyShift        = (id, body) => API.patch(`/shifts/${id}/start`, body || {});
-export const continueMyShift     = (id)       => API.patch(`/shifts/${id}/continue`);
-export const closeMyShift        = (id)       => API.patch(`/shifts/${id}/close-my`);
+export const continueMyShift     = (id, body) => API.patch(`/shifts/${id}/continue`, body || {});
+export const closeMyShift        = (id, body) => API.patch(`/shifts/${id}/close-my`, body || {});
 export const getShiftCashSummary = (id)       => API.get(`/shifts/${id}/cash-summary`);
 export const getOpenShifts       = ()         => API.get('/shifts/open');
 export const autoCloseShifts  = ()        => API.post('/shifts/auto-close');

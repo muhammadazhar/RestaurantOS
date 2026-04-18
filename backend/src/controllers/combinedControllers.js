@@ -67,7 +67,6 @@ exports.getTables = async (req, res) => {
     res.json(result.rows);
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
-
 exports.updateTableStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -85,12 +84,73 @@ exports.updateTableStatus = async (req, res) => {
 exports.createTable = async (req, res) => {
   try {
     const { label, section, capacity } = req.body;
+    if (!label || !String(label).trim()) return res.status(400).json({ error: 'Table label is required' });
     const result = await db.query(
       `INSERT INTO dining_tables(restaurant_id,label,section,capacity) VALUES($1,$2,$3,$4) RETURNING *`,
-      [req.user.restaurantId, label, section||'Main', capacity||4]
+      [req.user.restaurantId, String(label).trim(), section||'Main', capacity||4]
     );
+    req.app.get('io')?.to(req.user.restaurantId).emit('table_updated', result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.updateTable = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { label, section, capacity } = req.body;
+    if (label != null && !String(label).trim()) return res.status(400).json({ error: 'Table label is required' });
+    const result = await db.query(
+      `UPDATE dining_tables
+       SET label=COALESCE($1, label),
+           section=COALESCE($2, section),
+           capacity=COALESCE($3, capacity)
+       WHERE id=$4 AND restaurant_id=$5
+       RETURNING *`,
+      [
+        label == null ? null : String(label).trim(),
+        section || null,
+        capacity ? Math.max(1, Number(capacity) || 4) : null,
+        id,
+        req.user.restaurantId,
+      ]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Table not found' });
+    req.app.get('io')?.to(req.user.restaurantId).emit('table_updated', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch { res.status(500).json({ error: 'Server error' }); }
+};
+
+exports.deleteTable = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const active = await db.query(
+      `SELECT
+         EXISTS (
+           SELECT 1 FROM orders
+           WHERE table_id=$1 AND restaurant_id=$2 AND status NOT IN ('paid','cancelled')
+         ) AS has_order,
+         EXISTS (
+           SELECT 1 FROM reservations
+           WHERE table_id=$1 AND restaurant_id=$2
+             AND status IN ('confirmed','pending')
+             AND reserved_at + (duration_min * interval '1 minute') > NOW()
+         ) AS has_reservation`,
+      [id, req.user.restaurantId]
+    );
+    if (active.rows[0]?.has_order) return res.status(400).json({ error: 'Clear or pay the active order before deleting this table' });
+    if (active.rows[0]?.has_reservation) return res.status(400).json({ error: 'Clear active reservations before deleting this table' });
+
+    const result = await db.query(
+      `DELETE FROM dining_tables WHERE id=$1 AND restaurant_id=$2 RETURNING *`,
+      [id, req.user.restaurantId]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Table not found' });
+    req.app.get('io')?.to(req.user.restaurantId).emit('table_updated', result.rows[0]);
+    res.json({ deleted: true, table: result.rows[0] });
+  } catch (err) {
+    if (err.code === '23503') return res.status(400).json({ error: 'This table has history and cannot be deleted' });
+    res.status(500).json({ error: 'Server error' });
+  }
 };
 
 // ── employees.js ──────────────────────────────────────────────────────────────
@@ -174,33 +234,245 @@ exports.updateEmployee = async (req, res) => {
 };
 
 // ── menu.js ───────────────────────────────────────────────────────────────────
+const normalizeMenuVariants = (variants, fallbackPrice) => {
+  const source = Array.isArray(variants) && variants.length
+    ? variants
+    : [{ name: 'Regular', price: fallbackPrice || 0, badge: '' }];
+
+  const normalized = source
+    .map((v, index) => ({
+      name: String(v.name || `Option ${index + 1}`).trim(),
+      price: Number(v.price || 0),
+      weekend_price: v.weekend_price === '' || v.weekend_price == null ? null : Number(v.weekend_price || 0),
+      badge: v.badge ? String(v.badge).trim() : null,
+      value_label: v.value_label ? String(v.value_label).trim() : null,
+      cost: Number(v.cost || 0),
+      sort_order: Number.isFinite(Number(v.sort_order)) ? Number(v.sort_order) : index,
+      is_active: v.is_active !== false,
+      is_default: v.is_default === true,
+    }))
+    .filter(v => v.name && v.price >= 0);
+
+  if (normalized.length && !normalized.some(v => v.is_default)) {
+    normalized[0].is_default = true;
+  }
+  return normalized;
+};
+
+const insertMenuVariants = async (client, menuItemId, variants) => {
+  for (const variant of variants) {
+    await client.query(
+      `INSERT INTO menu_item_variants(menu_item_id, name, price, badge, sort_order, is_active, value_label, cost, is_default, weekend_price)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        menuItemId, variant.name, variant.price, variant.badge, variant.sort_order,
+        variant.is_active, variant.value_label, variant.cost, variant.is_default, variant.weekend_price,
+      ]
+    );
+  }
+};
+
+const normalizeAddOnGroups = (groups) => {
+  if (!Array.isArray(groups)) return null;
+  return groups
+    .map((group, groupIndex) => ({
+      name: String(group.name || `Add-on Group ${groupIndex + 1}`).trim(),
+      min_select: Math.max(0, Number(group.min_select || 0)),
+      max_select: Math.max(0, Number(group.max_select || 0)),
+      sort_order: Number.isFinite(Number(group.sort_order)) ? Number(group.sort_order) : groupIndex,
+      is_active: group.is_active !== false,
+      addons: (Array.isArray(group.addons) ? group.addons : [])
+        .map((addon, addonIndex) => ({
+          name: String(addon.name || '').trim(),
+          price: Number(addon.price || 0),
+          cost: Number(addon.cost || 0),
+          sort_order: Number.isFinite(Number(addon.sort_order)) ? Number(addon.sort_order) : addonIndex,
+          is_active: addon.is_active !== false,
+        }))
+        .filter(addon => addon.name && addon.price >= 0),
+    }))
+    .filter(group => group.name && group.addons.length);
+};
+
+const insertMenuAddOnGroups = async (client, menuItemId, groups) => {
+  for (const group of groups) {
+    const groupResult = await client.query(
+      `INSERT INTO menu_item_addon_groups(menu_item_id, name, min_select, max_select, sort_order, is_active)
+       VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [menuItemId, group.name, group.min_select, group.max_select, group.sort_order, group.is_active]
+    );
+    for (const addon of group.addons) {
+      await client.query(
+        `INSERT INTO menu_item_addons(addon_group_id, name, price, sort_order, is_active, cost)
+         VALUES($1,$2,$3,$4,$5,$6)`,
+        [groupResult.rows[0].id, addon.name, addon.price, addon.sort_order, addon.is_active, addon.cost]
+      );
+    }
+  }
+};
+
 exports.getMenu = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT mi.*, c.name as category_name
+      `SELECT mi.*, c.name as category_name,
+              COALESCE(sales.total_sold, 0)::int AS total_sold,
+              COALESCE(sales.gross_sales, 0)::numeric AS gross_sales,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'id', mv.id,
+                    'name', mv.name,
+                    'price', mv.price,
+                    'weekend_price', mv.weekend_price,
+                    'badge', mv.badge,
+                    'value_label', mv.value_label,
+                    'cost', mv.cost,
+                    'sort_order', mv.sort_order,
+                    'is_active', mv.is_active,
+                    'is_default', mv.is_default
+                  )
+                  ORDER BY mv.sort_order, mv.name
+                ) FILTER (WHERE mv.id IS NOT NULL),
+                '[]'
+              ) AS variants
        FROM menu_items mi
        LEFT JOIN categories c ON mi.category_id = c.id
+       LEFT JOIN menu_item_variants mv ON mv.menu_item_id = mi.id
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(SUM(oi.quantity), 0) AS total_sold,
+                COALESCE(SUM(oi.total_price), 0) AS gross_sales
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE oi.menu_item_id = mi.id
+           AND o.restaurant_id = mi.restaurant_id
+           AND o.status <> 'cancelled'
+           AND o.created_at >= NOW() - INTERVAL '90 days'
+       ) sales ON TRUE
        WHERE mi.restaurant_id=$1
+         AND COALESCE(mi.is_deleted, FALSE)=FALSE
+       GROUP BY mi.id, c.name, c.sort_order, sales.total_sold, sales.gross_sales
        ORDER BY c.sort_order, mi.sort_order, mi.name`,
       [req.user.restaurantId]
     );
     const cats = await db.query(
       `SELECT * FROM categories WHERE restaurant_id=$1 ORDER BY sort_order`, [req.user.restaurantId]
     );
-    res.json({ categories: cats.rows, items: result.rows });
-  } catch { res.status(500).json({ error: 'Server error' }); }
+    const itemIds = result.rows.map(item => item.id);
+    let addonGroups = [];
+    if (itemIds.length) {
+      const addons = await db.query(
+        `SELECT g.menu_item_id,
+                json_build_object(
+                  'id', g.id,
+                  'name', g.name,
+                  'min_select', g.min_select,
+                  'max_select', g.max_select,
+                  'sort_order', g.sort_order,
+                  'is_active', g.is_active,
+                  'addons', COALESCE(
+                    json_agg(
+                      json_build_object(
+                        'id', a.id,
+                        'name', a.name,
+                        'price', a.price,
+                        'cost', a.cost,
+                        'sort_order', a.sort_order,
+                        'is_active', a.is_active
+                      )
+                      ORDER BY a.sort_order, a.name
+                    ) FILTER (WHERE a.id IS NOT NULL),
+                    '[]'
+                  )
+                ) AS addon_group
+         FROM menu_item_addon_groups g
+         LEFT JOIN menu_item_addons a ON a.addon_group_id = g.id
+         WHERE g.menu_item_id = ANY($1::uuid[])
+         GROUP BY g.id
+         ORDER BY g.sort_order, g.name`,
+        [itemIds]
+      );
+      addonGroups = addons.rows;
+    }
+    const groupsByItem = addonGroups.reduce((acc, row) => {
+      acc[row.menu_item_id] = acc[row.menu_item_id] || [];
+      acc[row.menu_item_id].push(row.addon_group);
+      return acc;
+    }, {});
+    const settingsRes = await db.query(
+      `SELECT settings FROM restaurants WHERE id=$1`, [req.user.restaurantId]
+    );
+    const settings = settingsRes.rows[0]?.settings || {};
+    res.json({
+      categories: cats.rows,
+      items: result.rows.map(item => ({ ...item, addon_groups: groupsByItem[item.id] || [] })),
+      settings: {
+        pos_smart_menu_sort_enabled: settings.pos_smart_menu_sort_enabled === true,
+      },
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
 
 exports.createMenuItem = async (req, res) => {
+  const client = await db.getClient();
   try {
-    const { name, description, price, cost, category_id, prep_time_min, is_popular, tags, allergens } = req.body;
-    const result = await db.query(
-      `INSERT INTO menu_items(restaurant_id,category_id,name,description,price,cost,prep_time_min,is_popular,tags,allergens)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [req.user.restaurantId, category_id||null, name, description||null, price, cost||0, prep_time_min||10, is_popular||false, tags||[], allergens||[]]
+    await client.query('BEGIN');
+    const {
+      name, description, price, cost, category_id, prep_time_min, is_popular,
+      tags, allergens, variants, status, visible_pos, visible_web, visible_delivery,
+      pricing_mode, kitchen_route, tax_included, tax_applicable, discount_eligible,
+      min_qty, max_qty, step_qty, round_off_rule, service_charge_percent,
+      price_override_role, allow_open_price, hide_cost_on_pos, combo_eligible,
+      weekend_price_rule, weekend_price, weekend_days, open_price_role, promotion_label,
+      addon_groups, sort_order,
+    } = req.body;
+    const normalizedVariants = normalizeMenuVariants(variants, price);
+    const normalizedAddOnGroups = normalizeAddOnGroups(addon_groups) || [];
+    if (!name?.trim()) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Item name required' });
+    }
+    if (!normalizedVariants.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'At least one valid variant is required' });
+    }
+    const activePrices = normalizedVariants.filter(v => v.is_active).map(v => v.price);
+    const basePrice = Math.min(...(activePrices.length ? activePrices : [normalizedVariants[0].price]));
+    const itemStatus = status || (req.body.is_available === false ? 'inactive' : 'active');
+    const result = await client.query(
+      `INSERT INTO menu_items(
+         restaurant_id,category_id,name,description,price,cost,prep_time_min,is_popular,tags,allergens,
+         status,visible_pos,visible_web,visible_delivery,is_available,
+         pricing_mode,kitchen_route,tax_included,tax_applicable,discount_eligible,
+         min_qty,max_qty,step_qty,round_off_rule,service_charge_percent,
+         price_override_role,allow_open_price,hide_cost_on_pos,combo_eligible,
+         weekend_price_rule,weekend_price,weekend_days,open_price_role,promotion_label,sort_order
+       )
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35) RETURNING *`,
+      [
+        req.user.restaurantId, category_id || null, name.trim(), description || null,
+        basePrice, cost || 0, prep_time_min || 10, is_popular || false, tags || [], allergens || [],
+        itemStatus, visible_pos !== false, visible_web !== false, visible_delivery !== false,
+        itemStatus === 'active',
+        pricing_mode || 'variant', kitchen_route || null, tax_included !== false,
+        tax_applicable === true, discount_eligible !== false,
+        min_qty || 1, max_qty || 10, step_qty || 1, round_off_rule || 'nearest_0_50',
+        service_charge_percent || 0, price_override_role || 'manager_only',
+        allow_open_price === true, hide_cost_on_pos !== false, combo_eligible !== false,
+        weekend_price_rule === true, weekend_price || null,
+        Array.isArray(weekend_days) && weekend_days.length ? weekend_days : ['FRI', 'SAT'],
+        open_price_role || 'manager', promotion_label || null,
+        Number.isFinite(Number(sort_order)) ? Number(sort_order) : 0,
+      ]
     );
-    res.status(201).json(result.rows[0]);
-  } catch { res.status(500).json({ error: 'Server error' }); }
+    await insertMenuVariants(client, result.rows[0].id, normalizedVariants);
+    await insertMenuAddOnGroups(client, result.rows[0].id, normalizedAddOnGroups);
+    await client.query('COMMIT');
+    res.status(201).json({ ...result.rows[0], variants: normalizedVariants, addon_groups: normalizedAddOnGroups });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally { client.release(); }
 };
 
 exports.uploadMenuImage = async (req, res) => {
@@ -209,7 +481,10 @@ exports.uploadMenuImage = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const imageUrl = req.file.path?.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     const result = await db.query(
-      `UPDATE menu_items SET image_url=$1 WHERE id=$2 AND restaurant_id=$3 RETURNING *`,
+      `UPDATE menu_items
+       SET image_url=$1
+       WHERE id=$2 AND restaurant_id=$3 AND COALESCE(is_deleted, FALSE)=FALSE
+       RETURNING *`,
       [imageUrl, id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item not found' });
@@ -218,23 +493,116 @@ exports.uploadMenuImage = async (req, res) => {
 };
 
 exports.updateMenuItem = async (req, res) => {
+  const client = await db.getClient();
   try {
+    await client.query('BEGIN');
     const { id } = req.params;
-    const { name, description, price, cost, is_available, is_popular, category_id, image_url } = req.body;
+    const {
+      name, description, price, cost, is_available, is_popular, category_id, image_url,
+      variants, status, visible_pos, visible_web, visible_delivery, prep_time_min, tags, allergens,
+      pricing_mode, kitchen_route, tax_included, tax_applicable, discount_eligible,
+      min_qty, max_qty, step_qty, round_off_rule, service_charge_percent,
+      price_override_role, allow_open_price, hide_cost_on_pos, combo_eligible,
+      weekend_price_rule, weekend_price, weekend_days, open_price_role, promotion_label,
+      addon_groups, sort_order,
+    } = req.body;
     // Only persist image_url if it is a real server path or Cloudinary URL.
     // Ignore blob: URLs (local preview) and empty strings.
     const safeImageUrl = (image_url && (image_url.startsWith('/uploads/') || image_url.startsWith('http'))) ? image_url : null;
-    const result = await db.query(
+    const normalizedVariants = Array.isArray(variants) ? normalizeMenuVariants(variants, price) : null;
+    const normalizedAddOnGroups = Array.isArray(addon_groups) ? normalizeAddOnGroups(addon_groups) : null;
+    const activePrices = normalizedVariants?.filter(v => v.is_active).map(v => v.price) || [];
+    const basePrice = normalizedVariants?.length
+      ? Math.min(...(activePrices.length ? activePrices : [normalizedVariants[0].price]))
+      : price;
+    const resolvedStatus = status || (is_available === false ? 'inactive' : (is_available === true ? 'active' : null));
+    const result = await client.query(
       `UPDATE menu_items SET name=COALESCE($1,name), description=COALESCE($2,description),
        price=COALESCE($3,price), cost=COALESCE($4,cost), is_available=COALESCE($5,is_available),
        is_popular=COALESCE($6,is_popular), category_id=COALESCE($7,category_id),
-       image_url=COALESCE($10,image_url)
-       WHERE id=$8 AND restaurant_id=$9 RETURNING *`,
-      [name, description, price, cost, is_available, is_popular, category_id, id, req.user.restaurantId, safeImageUrl]
+       image_url=COALESCE($10,image_url),
+       status=COALESCE($11,status),
+       visible_pos=COALESCE($12,visible_pos),
+       visible_web=COALESCE($13,visible_web),
+       visible_delivery=COALESCE($14,visible_delivery),
+       prep_time_min=COALESCE($15,prep_time_min),
+       tags=COALESCE($16,tags),
+       allergens=COALESCE($17,allergens),
+       pricing_mode=COALESCE($18,pricing_mode),
+       kitchen_route=COALESCE($19,kitchen_route),
+       tax_included=COALESCE($20,tax_included),
+       tax_applicable=COALESCE($21,tax_applicable),
+       discount_eligible=COALESCE($22,discount_eligible),
+       min_qty=COALESCE($23,min_qty),
+       max_qty=COALESCE($24,max_qty),
+       step_qty=COALESCE($25,step_qty),
+       round_off_rule=COALESCE($26,round_off_rule),
+       service_charge_percent=COALESCE($27,service_charge_percent),
+       price_override_role=COALESCE($28,price_override_role),
+       allow_open_price=COALESCE($29,allow_open_price),
+       hide_cost_on_pos=COALESCE($30,hide_cost_on_pos),
+       combo_eligible=COALESCE($31,combo_eligible),
+       weekend_price_rule=COALESCE($32,weekend_price_rule),
+       weekend_price=COALESCE($33,weekend_price),
+       weekend_days=COALESCE($34,weekend_days),
+       open_price_role=COALESCE($35,open_price_role),
+       promotion_label=COALESCE($36,promotion_label),
+       sort_order=COALESCE($37,sort_order)
+       WHERE id=$8 AND restaurant_id=$9 AND COALESCE(is_deleted, FALSE)=FALSE RETURNING *`,
+      [
+        name, description, basePrice, cost, is_available, is_popular, category_id || null,
+        id, req.user.restaurantId, safeImageUrl, resolvedStatus, visible_pos, visible_web,
+        visible_delivery, prep_time_min, tags, allergens, pricing_mode, kitchen_route,
+        tax_included, tax_applicable, discount_eligible,
+        min_qty, max_qty, step_qty, round_off_rule, service_charge_percent,
+        price_override_role, allow_open_price, hide_cost_on_pos, combo_eligible,
+        weekend_price_rule, weekend_price,
+        Array.isArray(weekend_days) && weekend_days.length ? weekend_days : null,
+        open_price_role, promotion_label,
+        sort_order === undefined || sort_order === null || sort_order === '' ? null : Number(sort_order),
+      ]
+    );
+    if (!result.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    if (normalizedVariants) {
+      await client.query(`DELETE FROM menu_item_variants WHERE menu_item_id=$1`, [id]);
+      await insertMenuVariants(client, id, normalizedVariants);
+    }
+    if (normalizedAddOnGroups) {
+      await client.query(`DELETE FROM menu_item_addon_groups WHERE menu_item_id=$1`, [id]);
+      await insertMenuAddOnGroups(client, id, normalizedAddOnGroups);
+    }
+    await client.query('COMMIT');
+    res.json({
+      ...result.rows[0],
+      variants: normalizedVariants || undefined,
+      addon_groups: normalizedAddOnGroups || undefined,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally { client.release(); }
+};
+
+exports.deleteMenuItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(
+      `UPDATE menu_items
+       SET is_deleted=TRUE, deleted_at=NOW(), is_available=FALSE, status='inactive'
+       WHERE id=$1 AND restaurant_id=$2 AND COALESCE(is_deleted, FALSE)=FALSE
+       RETURNING id`,
+      [id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item not found' });
-    res.json(result.rows[0]);
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 };
 
 // ── menu image upload ─────────────────────────────────────────────────────────
@@ -244,7 +612,10 @@ exports.uploadMenuItemImage = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const imageUrl = req.file.path && req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     const result = await db.query(
-      `UPDATE menu_items SET image_url=$1 WHERE id=$2 AND restaurant_id=$3 RETURNING id, name, image_url`,
+      `UPDATE menu_items
+       SET image_url=$1
+       WHERE id=$2 AND restaurant_id=$3 AND COALESCE(is_deleted, FALSE)=FALSE
+       RETURNING id, name, image_url`,
       [imageUrl, id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item not found' });
@@ -757,7 +1128,7 @@ exports.registerRestaurant = async (req, res) => {
     );
 
     const role = await client.query(
-      `INSERT INTO roles(restaurant_id,name,permissions,is_system) VALUES($1,'Manager','["dashboard","pos","kitchen","tables","inventory","recipes","employees","gl","alerts","settings"]',TRUE) RETURNING id`,
+      `INSERT INTO roles(restaurant_id,name,permissions,is_system) VALUES($1,'Manager','["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","shift_management","gl","alerts","settings"]',TRUE) RETURNING id`,
       [rest.rows[0].id]
     );
 
@@ -875,32 +1246,163 @@ exports.updateRole = async (req, res) => {
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
 
+const dayNamesToIso = {
+  sunday: 7, sun: 7,
+  monday: 1, mon: 1,
+  tuesday: 2, tue: 2,
+  wednesday: 3, wed: 3,
+  thursday: 4, thu: 4,
+  friday: 5, fri: 5,
+  saturday: 6, sat: 6,
+};
+
+const normalizeWorkingDays = (days, skipWeekends = false) => {
+  if (Array.isArray(days) && days.length) {
+    const normalized = days
+      .map(d => typeof d === 'number' ? d : dayNamesToIso[String(d).toLowerCase()])
+      .filter(d => Number.isInteger(d) && d >= 1 && d <= 7);
+    if (normalized.length) return [...new Set(normalized)].sort((a, b) => a - b);
+  }
+  return skipWeekends ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6, 7];
+};
+
+const dateWindowSql = (alias = 's') => `
+  COALESCE(${alias}.date_from, ${alias}.date) <= $DATE::date
+  AND COALESCE(${alias}.date_to, ${alias}.date) >= $DATE::date
+  AND EXTRACT(ISODOW FROM $DATE::date)::INT = ANY(COALESCE(${alias}.working_days, ARRAY[EXTRACT(ISODOW FROM COALESCE(${alias}.date_from, ${alias}.date))::INT]))
+`;
+
+const localDateString = (date = new Date()) => {
+  const d = date instanceof Date ? date : new Date(date);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
+
+const localTimeString = (date = new Date()) => {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toTimeString().slice(0, 5);
+};
+
+const timeToMinutes = value => {
+  const [hours, minutes] = String(value || '00:00').slice(0, 5).split(':').map(Number);
+  return (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0);
+};
+
+const isTimeWithinShiftWindow = (nowTime, startTime, endTime) => {
+  const now = timeToMinutes(nowTime);
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  if (start === end) return true;
+  if (start < end) return now >= start && now <= end;
+  return now >= start || now <= end;
+};
+
+const isShiftOpenableNow = ({ shiftDate, currentDate, nowTime, startTime, endTime }) => {
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  const now = timeToMinutes(nowTime);
+  if (start === end) return shiftDate === currentDate;
+  if (start < end) return shiftDate === currentDate && now >= start && now <= end;
+
+  const yesterday = localDateString(new Date(new Date(`${currentDate}T00:00:00`).getTime() - 86400000));
+  return (shiftDate === currentDate && (now >= start || now <= end)) || (shiftDate === yesterday && now <= end);
+};
+
+const shiftSelect = `
+  SELECT s.*,
+         COALESCE(sess.status, s.status) AS status,
+         COALESCE(sess.opening_balance, s.opening_balance) AS opening_balance,
+         COALESCE(sess.closing_cash, s.closing_cash) AS closing_cash,
+         sess.cashier_collection,
+         sess.id AS session_id,
+         sess.opened_at,
+         sess.closed_at,
+         TO_CHAR(d.shift_date, 'YYYY-MM-DD') AS date,
+         e.full_name as employee_name,
+         e.avatar_url,
+         r.name as role_name
+  FROM shifts s
+  JOIN employees e ON s.employee_id = e.id
+  LEFT JOIN roles r ON e.role_id = r.id
+`;
+
 exports.getShifts = async (req, res) => {
   try {
-    const { date, employee_id, month } = req.query;
+    const { date, employee_id, month, schedule_view, raw } = req.query;
     let where = ['s.restaurant_id=$1'];
     const params = [req.user.restaurantId];
     let idx = 2;
-    if (date)        { where.push(`s.date=$${idx++}`);                            params.push(date); }
-    if (month)       { where.push(`TO_CHAR(s.date,'YYYY-MM')=$${idx++}`);         params.push(month); }
+
+    if (schedule_view === '1' || schedule_view === 'true' || raw === '1' || raw === 'true') {
+      if (employee_id) { where.push(`s.employee_id=$${idx++}`); params.push(employee_id); }
+      if (month) {
+        where.push(`COALESCE(s.date_from, s.date) <= (($${idx} || '-01')::date + INTERVAL '1 month - 1 day')::date`);
+        where.push(`COALESCE(s.date_to, s.date) >= ($${idx} || '-01')::date`);
+        params.push(month);
+        idx++;
+      }
+
+      const result = await db.query(
+        `SELECT s.*,
+                COALESCE(s.date_from, s.date) AS date_from,
+                COALESCE(s.date_to, s.date) AS date_to,
+                COALESCE(s.date_from, s.date) AS date,
+                e.full_name as employee_name,
+                e.avatar_url,
+                r.name as role_name,
+                COALESCE(active_sessions.active_count, 0)::int AS active_session_count
+         FROM shifts s
+         JOIN employees e ON s.employee_id = e.id
+         LEFT JOIN roles r ON e.role_id = r.id
+         LEFT JOIN LATERAL (
+           SELECT COUNT(*) AS active_count
+           FROM shift_sessions ss
+           WHERE ss.shift_id=s.id AND ss.status IN ('active','in_process')
+         ) active_sessions ON TRUE
+         WHERE ${where.join(' AND ')}
+         ORDER BY COALESCE(s.date_from, s.date) DESC, s.start_time`,
+        params
+      );
+      return res.json(result.rows);
+    }
+
+    let dayJoin;
+    if (date) {
+      dayJoin = `JOIN LATERAL (SELECT $${idx++}::date AS shift_date) d ON TRUE`;
+      params.push(date);
+      where.push(dateWindowSql('s').replaceAll('$DATE', `$${idx - 1}`));
+    } else if (month) {
+      dayJoin = `JOIN LATERAL (
+        SELECT gs::date AS shift_date
+        FROM generate_series(($${idx} || '-01')::date, (($${idx} || '-01')::date + INTERVAL '1 month - 1 day')::date, INTERVAL '1 day') gs
+        WHERE gs::date BETWEEN COALESCE(s.date_from, s.date) AND COALESCE(s.date_to, s.date)
+          AND EXTRACT(ISODOW FROM gs)::INT = ANY(COALESCE(s.working_days, ARRAY[EXTRACT(ISODOW FROM COALESCE(s.date_from, s.date))::INT]))
+      ) d ON TRUE`;
+      params.push(month); idx++;
+    } else {
+      dayJoin = `JOIN LATERAL (SELECT COALESCE(s.date_from, s.date) AS shift_date) d ON TRUE`;
+    }
     if (employee_id) { where.push(`s.employee_id=$${idx++}`);                     params.push(employee_id); }
 
     const result = await db.query(
-      `SELECT s.*, e.full_name as employee_name, e.avatar_url, r.name as role_name
-       FROM shifts s
-       JOIN employees e ON s.employee_id = e.id
-       LEFT JOIN roles r ON e.role_id = r.id
+      `${shiftSelect}
+       ${dayJoin}
+       LEFT JOIN shift_sessions sess ON sess.shift_id=s.id AND sess.shift_date=d.shift_date
        WHERE ${where.join(' AND ')}
-       ORDER BY s.date DESC, s.start_time`,
+       ORDER BY d.shift_date DESC, s.start_time`,
       params
     );
     res.json(result.rows);
-  } catch { res.status(500).json({ error: 'Server error' }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
 
 exports.bulkCreateShifts = async (req, res) => {
   try {
-    const { employee_id, shift_name, start_time, end_time, date_from, date_to, notes, skip_weekends } = req.body;
+    const {
+      employee_id, shift_name, start_time, end_time, date_from, date_to, notes,
+      skip_weekends, working_days, allow_multiple_per_day, require_balance,
+    } = req.body;
     if (!employee_id || !shift_name || !start_time || !end_time || !date_from || !date_to)
       return res.status(400).json({ error: 'employee_id, shift_name, start_time, end_time, date_from, date_to required' });
 
@@ -911,35 +1413,35 @@ exports.bulkCreateShifts = async (req, res) => {
     const days = Math.round((to - from) / 86400000) + 1;
     if (days > 366) return res.status(400).json({ error: 'Date range cannot exceed 366 days' });
 
-    const dates = [];
-    for (let i = 0; i < days; i++) {
-      const d = new Date(from);
-      d.setDate(from.getDate() + i);
-      if (skip_weekends && (d.getDay() === 0 || d.getDay() === 6)) continue;
-      dates.push(d.toISOString().slice(0, 10));
-    }
+    const daysOfWeek = normalizeWorkingDays(working_days, skip_weekends);
+    const exists = await db.query(
+      `SELECT 1 FROM shifts
+       WHERE restaurant_id=$1 AND employee_id=$2 AND start_time=$3 AND end_time=$4
+         AND COALESCE(date_from,date)=$5 AND COALESCE(date_to,date)=$6
+       LIMIT 1`,
+      [req.user.restaurantId, employee_id, start_time, end_time, date_from, date_to]
+    );
+    if (exists.rows.length) return res.status(200).json({ created: 0, total: 1, skipped: 1 });
 
-    // Insert all, skip if exact same shift (same employee + date + start_time + end_time) already exists
-    let created = 0;
-    for (const date of dates) {
-      const exists = await db.query(
-        `SELECT 1 FROM shifts WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3 AND start_time=$4 AND end_time=$5 LIMIT 1`,
-        [req.user.restaurantId, employee_id, date, start_time, end_time]
-      );
-      if (exists.rows.length > 0) continue;
-      const numRes = await db.query(
-        `SELECT COALESCE(MAX(shift_number), 0) + 1 AS next_num FROM shifts WHERE restaurant_id=$1 AND date=$2`,
-        [req.user.restaurantId, date]
-      );
-      await db.query(
-        `INSERT INTO shifts(restaurant_id, employee_id, shift_name, start_time, end_time, date, status, notes, shift_number)
-         VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7,$8)`,
-        [req.user.restaurantId, employee_id, shift_name, start_time, end_time, date, notes || null, numRes.rows[0].next_num]
-      );
-      created++;
-    }
+    const numRes = await db.query(
+      `SELECT COALESCE(MAX(shift_number), 0) + 1 AS next_num FROM shifts WHERE restaurant_id=$1`,
+      [req.user.restaurantId]
+    );
+    const result = await db.query(
+      `INSERT INTO shifts(
+         restaurant_id, employee_id, shift_name, start_time, end_time, date, date_from, date_to,
+         working_days, allow_multiple_per_day, require_balance, schedule_type, status, notes, shift_number
+       )
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'range','scheduled',$12,$13)
+       RETURNING *`,
+      [
+        req.user.restaurantId, employee_id, shift_name, start_time, end_time, date_from, date_from, date_to,
+        daysOfWeek, allow_multiple_per_day !== false, require_balance !== false, notes || null,
+        numRes.rows[0].next_num,
+      ]
+    );
 
-    res.status(201).json({ created, total: dates.length, skipped: dates.length - created });
+    res.status(201).json({ created: 1, total: 1, skipped: 0, schedule: result.rows[0] });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Server error' });
@@ -948,15 +1450,40 @@ exports.bulkCreateShifts = async (req, res) => {
 
 exports.getCurrentShift = async (req, res) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const now   = new Date().toTimeString().slice(0, 5); // HH:MM
+    const today = localDateString();
+    const now   = localTimeString();
 
     const [shiftResult, attendResult] = await Promise.all([
       db.query(
-        `SELECT s.*, e.full_name as employee_name
+        `SELECT s.*,
+                CASE
+                  WHEN sess.id IS NOT NULL THEN sess.status
+                  WHEN s.status <> 'absent' THEN 'scheduled'
+                  ELSE s.status
+                END AS status,
+                COALESCE(sess.opening_balance, s.opening_balance) AS opening_balance,
+                COALESCE(sess.closing_cash, s.closing_cash) AS closing_cash,
+                sess.cashier_collection,
+                sess.id AS session_id,
+                sess.opened_at,
+                sess.closed_at,
+                $3::text AS date,
+                e.full_name as employee_name
          FROM shifts s
          JOIN employees e ON s.employee_id = e.id
-         WHERE s.restaurant_id=$1 AND s.employee_id=$2 AND DATE(s.date)=DATE($3::date)
+         LEFT JOIN LATERAL (
+           SELECT ss.*
+           FROM shift_sessions ss
+           WHERE ss.shift_id=s.id
+             AND ss.shift_date=$3::date
+             AND ss.status IN ('active','in_process')
+           ORDER BY ss.opened_at DESC NULLS LAST, ss.created_at DESC
+           LIMIT 1
+         ) sess ON TRUE
+         WHERE s.restaurant_id=$1 AND s.employee_id=$2
+           AND COALESCE(s.date_from, s.date) <= $3::date
+           AND COALESCE(s.date_to, s.date) >= $3::date
+           AND EXTRACT(ISODOW FROM $3::date)::INT = ANY(COALESCE(s.working_days, ARRAY[EXTRACT(ISODOW FROM COALESCE(s.date_from, s.date))::INT]))
          ORDER BY s.start_time`,
         [req.user.restaurantId, req.user.id, today]
       ),
@@ -975,7 +1502,7 @@ exports.getCurrentShift = async (req, res) => {
     const isClockedIn = lastPunch?.log_type === 'clock_in';
     const attendance  = { is_clocked_in: isClockedIn, clocked_in_at: isClockedIn ? lastPunch.punched_at : null };
 
-    const todayShifts = shiftResult.rows;
+    let todayShifts = shiftResult.rows;
 
     if (!todayShifts.length)
       return res.json({ shift: null, shifts: [], allowed: false, reason: 'No shift scheduled for today', attendance });
@@ -991,9 +1518,11 @@ exports.getCurrentShift = async (req, res) => {
     }
 
     // No active shift — find why
-    const scheduledNow = todayShifts.find(s => s.status === 'scheduled' && now >= s.start_time.slice(0,5) && now <= s.end_time.slice(0,5));
-    if (scheduledNow)
+    const scheduledNow = todayShifts.find(s => s.status === 'scheduled' && isTimeWithinShiftWindow(now, s.start_time, s.end_time));
+    if (scheduledNow) {
+      todayShifts = [scheduledNow, ...todayShifts.filter(s => s.id !== scheduledNow.id)];
       return res.json({ shift: scheduledNow, shifts: todayShifts, allowed: false, reason: 'Start your shift before placing orders', attendance });
+    }
 
     const absentShift = todayShifts.find(s => s.status === 'absent');
     if (absentShift && todayShifts.every(s => s.status === 'absent'))
@@ -1004,7 +1533,7 @@ exports.getCurrentShift = async (req, res) => {
       return res.json({ shift: todayShifts[todayShifts.length - 1], shifts: todayShifts, allowed: false, reason: 'All your shifts have ended for today', attendance });
 
     // Scheduled but outside hours
-    const upcoming = todayShifts.find(s => s.status === 'scheduled' && now < s.start_time.slice(0,5));
+    const upcoming = todayShifts.find(s => s.status === 'scheduled' && timeToMinutes(now) < timeToMinutes(s.start_time));
     if (upcoming)
       return res.json({ shift: upcoming, shifts: todayShifts, allowed: false, reason: `Next shift starts at ${upcoming.start_time.slice(0,5)}`, attendance });
 
@@ -1014,20 +1543,34 @@ exports.getCurrentShift = async (req, res) => {
 
 exports.createShift = async (req, res) => {
   try {
-    const { employee_id, shift_name, start_time, end_time, date, notes } = req.body;
-    if (!employee_id || !shift_name || !start_time || !end_time || !date)
-      return res.status(400).json({ error: 'employee_id, shift_name, start_time, end_time, date required' });
+    const {
+      employee_id, shift_name, start_time, end_time, date, date_from, date_to, notes,
+      working_days, allow_multiple_per_day, require_balance, status,
+    } = req.body;
+    const fromDate = date_from || date;
+    const toDate = date_to || date || date_from;
+    if (!employee_id || !shift_name || !start_time || !end_time || !fromDate)
+      return res.status(400).json({ error: 'employee_id, shift_name, start_time, end_time, date/date_from required' });
 
     const numRes = await db.query(
-      `SELECT COALESCE(MAX(shift_number), 0) + 1 AS next_num FROM shifts WHERE restaurant_id=$1 AND date=$2`,
-      [req.user.restaurantId, date]
+      `SELECT COALESCE(MAX(shift_number), 0) + 1 AS next_num FROM shifts WHERE restaurant_id=$1`,
+      [req.user.restaurantId]
     );
     const shiftNumber = numRes.rows[0].next_num;
+    const daysOfWeek = normalizeWorkingDays(working_days, false);
 
     const result = await db.query(
-      `INSERT INTO shifts(restaurant_id, employee_id, shift_name, start_time, end_time, date, status, notes, shift_number)
-       VALUES($1,$2,$3,$4,$5,$6,'scheduled',$7,$8) RETURNING *`,
-      [req.user.restaurantId, employee_id, shift_name, start_time, end_time, date, notes||null, shiftNumber]
+      `INSERT INTO shifts(
+         restaurant_id, employee_id, shift_name, start_time, end_time, date, date_from, date_to,
+       working_days, allow_multiple_per_day, require_balance, schedule_type, status, notes, shift_number
+       )
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      [
+        req.user.restaurantId, employee_id, shift_name, start_time, end_time, fromDate,
+        fromDate, toDate || fromDate, daysOfWeek, allow_multiple_per_day !== false,
+        require_balance !== false, (toDate && toDate !== fromDate) ? 'range' : 'single',
+        status || 'scheduled', notes || null, shiftNumber,
+      ]
     );
     res.status(201).json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }
@@ -1036,13 +1579,38 @@ exports.createShift = async (req, res) => {
 exports.updateShift = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, notes, shift_name, start_time, end_time } = req.body;
+    const {
+      status, notes, shift_name, start_time, end_time, employee_id,
+      date, date_from, date_to, working_days, allow_multiple_per_day, require_balance,
+    } = req.body;
+    const fromDate = date_from || date || null;
+    const toDate = date_to || fromDate;
+    const daysOfWeek = Array.isArray(working_days) ? normalizeWorkingDays(working_days, false) : null;
     const result = await db.query(
       `UPDATE shifts SET
          status=COALESCE($1,status), notes=COALESCE($2,notes),
-         shift_name=COALESCE($3,shift_name), start_time=COALESCE($4,start_time), end_time=COALESCE($5,end_time)
-       WHERE id=$6 AND restaurant_id=$7 RETURNING *`,
-      [status||null, notes||null, shift_name||null, start_time||null, end_time||null, id, req.user.restaurantId]
+         shift_name=COALESCE($3,shift_name), start_time=COALESCE($4,start_time), end_time=COALESCE($5,end_time),
+         employee_id=COALESCE($6,employee_id),
+         date=COALESCE($7,date),
+         date_from=COALESCE($8,date_from),
+         date_to=COALESCE($9,date_to),
+         working_days=COALESCE($10::int[],working_days),
+         allow_multiple_per_day=COALESCE($11,allow_multiple_per_day),
+         require_balance=COALESCE($12,require_balance),
+         schedule_type=CASE
+           WHEN COALESCE($9,date_to) IS NOT NULL AND COALESCE($8,date_from,date) IS NOT NULL
+             AND COALESCE($9,date_to) <> COALESCE($8,date_from,date)
+           THEN 'range'
+           ELSE schedule_type
+         END
+       WHERE id=$13 AND restaurant_id=$14 RETURNING *`,
+      [
+        status || null, notes ?? null, shift_name || null, start_time || null, end_time || null,
+        employee_id || null, fromDate, fromDate, toDate, daysOfWeek,
+        allow_multiple_per_day === undefined ? null : allow_multiple_per_day,
+        require_balance === undefined ? null : require_balance,
+        id, req.user.restaurantId,
+      ]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Shift not found' });
     res.json(result.rows[0]);
@@ -1409,9 +1977,9 @@ exports.createOvertimeAlert = async (req, res) => {
 /** Shared helper: close one shift and auto clock-out if the employee is still clocked in */
 async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = null) {
   // Normalise shift.date — pg returns DATE as string 'YYYY-MM-DD'; fall back to today
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const shiftDateStr = shift.date
-    ? (shift.date instanceof Date ? shift.date.toISOString().slice(0, 10) : String(shift.date).slice(0, 10))
+    ? (shift.date instanceof Date ? localDateString(shift.date) : String(shift.date).slice(0, 10))
     : today;
 
   // end_time is stored as HH:MM:SS by PostgreSQL — use first 8 chars to avoid double-seconds
@@ -1419,11 +1987,18 @@ async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = n
   const shiftEndTs = new Date(`${shiftDateStr}T${timeStr}`); // local time
   const clockOutTs = clockOutAt || (isNaN(shiftEndTs.getTime()) ? new Date() : shiftEndTs);
 
-  // Update shift status → completed
-  await client.query(
-    `UPDATE shifts SET status='completed', updated_at=NOW() WHERE id=$1 AND restaurant_id=$2`,
-    [shift.id, restaurantId]
-  );
+  if (shift.session_id) {
+    await client.query(
+      `UPDATE shift_sessions SET status='completed', closed_at=$3, updated_at=NOW()
+       WHERE id=$1 AND restaurant_id=$2`,
+      [shift.session_id, restaurantId, clockOutTs]
+    );
+  } else {
+    await client.query(
+      `UPDATE shifts SET status='completed', updated_at=NOW() WHERE id=$1 AND restaurant_id=$2`,
+      [shift.id, restaurantId]
+    );
+  }
 
   // Skip attendance auto-close if no employee is linked to this shift
   if (!shift.employee_id) return;
@@ -1444,7 +2019,7 @@ async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = n
 
   if (openLog.rows.length) {
     // Use the date from the open clock-in record as attendance_date (most reliable)
-    const clockInDate = new Date(openLog.rows[0].punched_at).toISOString().slice(0, 10);
+    const clockInDate = localDateString(openLog.rows[0].punched_at);
     await client.query(
       `INSERT INTO attendance_logs(restaurant_id, employee_id, shift_id, log_type,
          punched_at, attendance_date, source, notes, created_by)
@@ -1458,20 +2033,23 @@ async function _closeShift(client, restaurantId, shift, closedBy, clockOutAt = n
 exports.getOpenShifts = async (req, res) => {
   try {
     const rid = req.user.restaurantId;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
     const nowTime = new Date().toTimeString().slice(0, 5);
 
     const result = await db.query(
-      `SELECT s.*, e.full_name as employee_name, e.avatar_url, r.name as role_name
-       FROM shifts s
+      `SELECT s.*, sess.id AS session_id, sess.shift_date AS date, sess.status,
+              sess.opening_balance, sess.closing_cash,
+              e.full_name as employee_name, e.avatar_url, r.name as role_name
+       FROM shift_sessions sess
+       JOIN shifts s ON sess.shift_id=s.id
        JOIN employees e ON s.employee_id = e.id
        LEFT JOIN roles r ON e.role_id = r.id
-       WHERE s.restaurant_id=$1
+       WHERE sess.restaurant_id=$1
          AND (
-           (s.status IN ('scheduled','active') AND (s.date < $2 OR (s.date = $2 AND s.end_time < $3)))
-           OR s.status = 'in_process'
+           (sess.status='active' AND (sess.shift_date < $2 OR (sess.shift_date = $2 AND s.end_time < $3)))
+           OR sess.status = 'in_process'
          )
-       ORDER BY s.date DESC, s.end_time DESC`,
+       ORDER BY sess.shift_date DESC, s.end_time DESC`,
       [rid, today, nowTime]
     );
     res.json(result.rows);
@@ -1487,7 +2065,13 @@ exports.forceCloseShift = async (req, res) => {
     const { id } = req.params;
 
     const sr = await client.query(
-      `SELECT * FROM shifts WHERE id=$1 AND restaurant_id=$2 LIMIT 1`,
+      `SELECT s.*, sess.id AS session_id, sess.shift_date AS date, sess.status,
+              sess.opening_balance, sess.closing_cash
+       FROM shifts s
+       LEFT JOIN shift_sessions sess ON sess.shift_id=s.id AND sess.status IN ('active','in_process')
+       WHERE s.id=$1 AND s.restaurant_id=$2
+       ORDER BY sess.opened_at DESC NULLS LAST
+       LIMIT 1`,
       [id, rid]
     );
     if (!sr.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Shift not found' }); }
@@ -1516,13 +2100,16 @@ exports.autoCloseShifts = async (req, res) => {
   try {
     await client.query('BEGIN');
     const rid = req.user.restaurantId;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
     const nowTime = new Date().toTimeString().slice(0, 5);
 
     const expired = await client.query(
-      `SELECT * FROM shifts
-       WHERE restaurant_id=$1 AND status IN ('scheduled','active')
-         AND (date < $2 OR (date = $2 AND end_time < $3))`,
+      `SELECT s.*, sess.id AS session_id, sess.shift_date AS date, sess.status,
+              sess.opening_balance, sess.closing_cash
+       FROM shift_sessions sess
+       JOIN shifts s ON sess.shift_id=s.id
+       WHERE sess.restaurant_id=$1 AND sess.status='active'
+         AND (sess.shift_date < $2 OR (sess.shift_date = $2 AND s.end_time < $3))`,
       [rid, today, nowTime]
     );
 
@@ -1551,11 +2138,19 @@ exports.autoCloseShifts = async (req, res) => {
 exports.getMyShifts = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT s.*, e.full_name as employee_name
-       FROM shifts s
-       JOIN employees e ON s.employee_id = e.id
+      `${shiftSelect}
+       JOIN LATERAL (
+         SELECT gs::date AS shift_date
+         FROM generate_series(
+           GREATEST(COALESCE(s.date_from, s.date), CURRENT_DATE - INTERVAL '90 days'),
+           LEAST(COALESCE(s.date_to, s.date), CURRENT_DATE + INTERVAL '90 days'),
+           INTERVAL '1 day'
+         ) gs
+         WHERE EXTRACT(ISODOW FROM gs)::INT = ANY(COALESCE(s.working_days, ARRAY[EXTRACT(ISODOW FROM COALESCE(s.date_from, s.date))::INT]))
+       ) d ON TRUE
+       LEFT JOIN shift_sessions sess ON sess.shift_id=s.id AND sess.shift_date=d.shift_date
        WHERE s.restaurant_id=$1 AND s.employee_id=$2
-       ORDER BY s.date DESC, s.start_time DESC
+       ORDER BY d.shift_date DESC, s.start_time DESC
        LIMIT 60`,
       [req.user.restaurantId, req.user.id]
     );
@@ -1567,18 +2162,90 @@ exports.getMyShifts = async (req, res) => {
 exports.startMyShift = async (req, res) => {
   try {
     const { id } = req.params;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = (req.body.shift_date || localDateString()).slice(0, 10);
+    const currentDate = localDateString();
+    const now = localTimeString();
     const openingBalance = parseFloat(req.body.opening_balance) || 0;
-    const result = await db.query(
-      `UPDATE shifts SET status='active', opening_balance=$4
-       WHERE id=$1 AND restaurant_id=$2 AND employee_id=$3
-         AND date=$5 AND status='scheduled'
-       RETURNING *`,
-      [id, req.user.restaurantId, req.user.id, openingBalance, today]
+    const canManageShifts = (req.user.permissions || []).some(p => ['shift_management', 'settings'].includes(p));
+    const params = [id, req.user.restaurantId, today];
+    const employeeFilter = canManageShifts ? '' : 'AND employee_id=$4';
+    if (!canManageShifts) params.push(req.user.id);
+    const schedule = await db.query(
+      `SELECT * FROM shifts
+       WHERE id=$1 AND restaurant_id=$2 ${employeeFilter}
+         AND COALESCE(date_from, date) <= $3::date
+         AND COALESCE(date_to, date) >= $3::date
+         AND EXTRACT(ISODOW FROM $3::date)::INT = ANY(COALESCE(working_days, ARRAY[EXTRACT(ISODOW FROM COALESCE(date_from, date))::INT]))
+         AND status <> 'absent'
+       LIMIT 1`,
+      params
     );
-    if (!result.rows.length)
+    if (!schedule.rows.length)
       return res.status(400).json({ error: 'Shift not found or cannot be started' });
-    res.json(result.rows[0]);
+
+    const scheduledShift = schedule.rows[0];
+    if (!isShiftOpenableNow({
+      shiftDate: today,
+      currentDate,
+      nowTime: now,
+      startTime: scheduledShift.start_time,
+      endTime: scheduledShift.end_time,
+    })) {
+      return res.status(400).json({
+        error: `Shift can only be opened between ${String(scheduledShift.start_time).slice(0, 5)} and ${String(scheduledShift.end_time).slice(0, 5)}`,
+      });
+    }
+
+    const activeForEmployee = await db.query(
+      `SELECT sess.id, sess.shift_id, sess.shift_date, sess.status, s.shift_name
+       FROM shift_sessions sess
+       JOIN shifts s ON s.id=sess.shift_id
+       WHERE sess.restaurant_id=$1
+         AND sess.employee_id=$2
+         AND sess.status IN ('active','in_process')
+         AND sess.shift_id <> $3
+       ORDER BY sess.opened_at DESC
+       LIMIT 1`,
+      [req.user.restaurantId, scheduledShift.employee_id, id]
+    );
+    if (activeForEmployee.rows.length) {
+      const activeShift = activeForEmployee.rows[0];
+      return res.status(400).json({
+        error: `Close ${activeShift.shift_name || 'the active shift'} before opening another shift`,
+      });
+    }
+
+    const existing = await db.query(
+      `SELECT * FROM shift_sessions
+       WHERE shift_id=$1 AND shift_date=$2::date AND status IN ('active','in_process')
+       LIMIT 1`,
+      [id, today]
+    );
+    if (existing.rows.length) {
+      return res.json({
+        ...scheduledShift,
+        ...existing.rows[0],
+        id: scheduledShift.id,
+        date: today,
+        status: existing.rows[0].status,
+        session_id: existing.rows[0].id,
+      });
+    }
+
+    const result = await db.query(
+      `INSERT INTO shift_sessions(shift_id, restaurant_id, employee_id, shift_date, status, opening_balance, opened_at)
+       VALUES($1,$2,$3,$4::date,'active',$5,NOW())
+       RETURNING *`,
+      [id, req.user.restaurantId, scheduledShift.employee_id, today, openingBalance]
+    );
+    res.json({
+      ...scheduledShift,
+      ...result.rows[0],
+      id: scheduledShift.id,
+      date: today,
+      status: result.rows[0].status,
+      session_id: result.rows[0].id,
+    });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
 
@@ -1586,16 +2253,45 @@ exports.startMyShift = async (req, res) => {
 exports.continueMyShift = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query(
-      `UPDATE shifts SET status='in_process'
-       WHERE id=$1 AND restaurant_id=$2 AND employee_id=$3
-         AND status='active'
-       RETURNING *`,
-      [id, req.user.restaurantId, req.user.id]
+    const today = (req.body?.shift_date || localDateString()).slice(0, 10);
+    const currentDate = localDateString();
+    const now = localTimeString();
+    const canManageShifts = (req.user.permissions || []).some(p => ['shift_management', 'settings'].includes(p));
+    const params = [id, req.user.restaurantId, today];
+    const employeeFilter = canManageShifts ? '' : 'AND employee_id=$4';
+    if (!canManageShifts) params.push(req.user.id);
+    const shift = await db.query(
+      `SELECT s.*, sess.id AS session_id, sess.status AS session_status,
+              sess.opening_balance, sess.closing_cash, sess.shift_date AS date
+       FROM shifts s
+       JOIN shift_sessions sess ON sess.shift_id=s.id AND sess.shift_date=$3::date
+       WHERE s.id=$1 AND s.restaurant_id=$2 ${employeeFilter}
+         AND sess.status='active'
+       LIMIT 1`,
+      params
     );
-    if (!result.rows.length)
+    if (!shift.rows.length)
       return res.status(400).json({ error: 'Shift not found or not active' });
-    res.json(result.rows[0]);
+
+    const activeShift = shift.rows[0];
+    if (isShiftOpenableNow({
+      shiftDate: today,
+      currentDate,
+      nowTime: now,
+      startTime: activeShift.start_time,
+      endTime: activeShift.end_time,
+    })) {
+      return res.json({ ...activeShift, status: 'active', date: today, session_id: activeShift.session_id });
+    }
+
+    const result = await db.query(
+      `UPDATE shift_sessions SET status='in_process', updated_at=NOW()
+       WHERE shift_id=$1 AND restaurant_id=$2 ${employeeFilter}
+         AND shift_date=$3::date AND status='active'
+       RETURNING *`,
+      params
+    );
+    res.json({ ...result.rows[0], date: today, session_id: result.rows[0].id });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
 
@@ -1606,31 +2302,75 @@ exports.closeMyShift = async (req, res) => {
     await client.query('BEGIN');
     const rid = req.user.restaurantId;
     const { id } = req.params;
+    const requestedDate = req.body?.shift_date ? String(req.body.shift_date).slice(0, 10) : null;
+    const canManageShifts = (req.user.permissions || []).some(p => ['shift_management', 'settings'].includes(p));
+    const params = [id, rid];
+    const filters = [
+      `s.id=$1`,
+      `s.restaurant_id=$2`,
+      `sess.status IN ('active','in_process')`,
+    ];
+    let idx = 3;
+    if (!canManageShifts) {
+      filters.push(`s.employee_id=$${idx++}`);
+      params.push(req.user.id);
+    }
+    if (requestedDate) {
+      filters.push(`sess.shift_date=$${idx++}::date`);
+      params.push(requestedDate);
+    }
 
-    const sr = await client.query(
-      `SELECT * FROM shifts WHERE id=$1 AND restaurant_id=$2 AND employee_id=$3
-         AND status IN ('active','in_process') LIMIT 1`,
-      [id, rid, req.user.id]
+    let sr = await client.query(
+      `SELECT s.*, sess.id AS session_id, sess.status, sess.opening_balance, sess.closing_cash,
+              sess.cashier_collection, sess.shift_date AS date
+       FROM shifts s
+       JOIN shift_sessions sess ON sess.shift_id=s.id
+       WHERE ${filters.join(' AND ')}
+       ORDER BY sess.opened_at DESC NULLS LAST, sess.created_at DESC
+       LIMIT 1`,
+      params
     );
+    if (!sr.rows.length && requestedDate) {
+      const fallbackFilters = filters.filter(f => !f.includes('sess.shift_date='));
+      const fallbackParams = params.slice(0, -1);
+      sr = await client.query(
+        `SELECT s.*, sess.id AS session_id, sess.status, sess.opening_balance, sess.closing_cash,
+                sess.cashier_collection, sess.shift_date AS date
+         FROM shifts s
+         JOIN shift_sessions sess ON sess.shift_id=s.id
+         WHERE ${fallbackFilters.join(' AND ')}
+         ORDER BY sess.opened_at DESC NULLS LAST, sess.created_at DESC
+         LIMIT 1`,
+        fallbackParams
+      );
+    }
     if (!sr.rows.length) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Shift not found or already closed' });
     }
     const shift = sr.rows[0];
+    const hasCashierCollection = req.body?.cashier_collection !== undefined && req.body?.cashier_collection !== '';
+    const cashierCollection = hasCashierCollection ? Number(req.body.cashier_collection) : NaN;
+    if (!Number.isFinite(cashierCollection) || cashierCollection < 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cashier collection amount is required' });
+    }
 
     await _closeShift(client, rid, shift, req.user.id, new Date());
 
-    // Compute cash sales for this shift
+    // Compute cash sales for this opened shift session only.
     const cashResult = await client.query(
       `SELECT COALESCE(SUM(total_amount),0) AS cash_sales
        FROM orders
-       WHERE shift_id=$1 AND payment_method='cash' AND payment_status='paid'`,
-      [id]
+       WHERE shift_session_id=$1 AND payment_method='cash' AND payment_status='paid'`,
+      [shift.session_id]
     );
     const closingCash = parseFloat(cashResult.rows[0].cash_sales) + parseFloat(shift.opening_balance || 0);
     await client.query(
-      `UPDATE shifts SET closing_cash=$1 WHERE id=$2`,
-      [closingCash, id]
+      `UPDATE shift_sessions
+       SET closing_cash=$1, cashier_collection=$2, updated_at=NOW()
+       WHERE id=$3`,
+      [closingCash, cashierCollection, shift.session_id]
     );
 
     await client.query('COMMIT');
@@ -1640,7 +2380,13 @@ exports.closeMyShift = async (req, res) => {
       recomputeEmployee(rid, shift.employee_id, shift.date).catch(() => {});
     } catch (_) {}
 
-    res.json({ success: true, closing_cash: closingCash });
+    res.json({
+      success: true,
+      closing_cash: closingCash,
+      expected_closing: closingCash,
+      cashier_collection: cashierCollection,
+      variance: cashierCollection - closingCash,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error(err);
@@ -1653,23 +2399,40 @@ exports.getShiftCashSummary = async (req, res) => {
   try {
     const { id } = req.params;
     const shift = await db.query(
-      `SELECT id, opening_balance, closing_cash FROM shifts
-       WHERE id=$1 AND restaurant_id=$2`,
+      `SELECT s.id,
+              COALESCE(sess.opening_balance, s.opening_balance) AS opening_balance,
+              COALESCE(sess.closing_cash, s.closing_cash) AS closing_cash,
+              sess.cashier_collection,
+              sess.id AS session_id
+       FROM shifts s
+       LEFT JOIN shift_sessions sess ON sess.shift_id=s.id
+         AND sess.status IN ('active','in_process','completed')
+       WHERE s.id=$1 AND s.restaurant_id=$2
+       ORDER BY sess.opened_at DESC NULLS LAST
+       LIMIT 1`,
       [id, req.user.restaurantId]
     );
     if (!shift.rows.length) return res.status(404).json({ error: 'Shift not found' });
+    const sessionId = shift.rows[0].session_id;
     const cashResult = await db.query(
       `SELECT COALESCE(SUM(total_amount),0) AS cash_sales
-       FROM orders WHERE shift_id=$1 AND payment_method='cash' AND payment_status='paid'`,
-      [id]
+       FROM orders
+       WHERE shift_session_id=$1
+         AND payment_method='cash' AND payment_status='paid'`,
+      [sessionId]
     );
     const openingBalance = parseFloat(shift.rows[0].opening_balance || 0);
     const cashSales = parseFloat(cashResult.rows[0].cash_sales);
+    const expectedClosing = openingBalance + cashSales;
+    const closingCash = shift.rows[0].closing_cash == null ? expectedClosing : parseFloat(shift.rows[0].closing_cash);
+    const cashierCollection = shift.rows[0].cashier_collection == null ? null : parseFloat(shift.rows[0].cashier_collection);
     res.json({
       opening_balance: openingBalance,
       cash_sales: cashSales,
-      expected_closing: openingBalance + cashSales,
-      closing_cash: shift.rows[0].closing_cash,
+      expected_closing: expectedClosing,
+      closing_cash: closingCash,
+      cashier_collection: cashierCollection,
+      variance: cashierCollection == null ? null : cashierCollection - expectedClosing,
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };

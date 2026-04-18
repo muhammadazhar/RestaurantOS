@@ -1,5 +1,12 @@
 const db = require('../config/db');
 
+const localDateString = (date = new Date()) => {
+  const d = date instanceof Date ? date : new Date(date);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
+
 // ─── Auto-journalize a paid order ─────────────────────────────────────────────
 async function autoJournalizeOrder(restaurantId, order) {
   // Get order items with category info
@@ -85,6 +92,35 @@ async function autoJournalizeOrder(restaurantId, order) {
   } finally { client.release(); }
 }
 
+async function refreshShiftClosingCash(client, shiftSessionId) {
+  if (!shiftSessionId) return null;
+  const sessionRes = await client.query(
+    `SELECT id, opening_balance, shift_date
+     FROM shift_sessions
+     WHERE id=$1
+     LIMIT 1`,
+    [shiftSessionId]
+  );
+  if (!sessionRes.rows.length) return null;
+
+  const session = sessionRes.rows[0];
+  const cashRes = await client.query(
+    `SELECT COALESCE(SUM(total_amount),0) AS cash_sales
+     FROM orders
+     WHERE shift_session_id=$1
+       AND payment_method='cash'
+       AND payment_status='paid'`,
+    [session.id]
+  );
+  const cashSales = Number(cashRes.rows[0].cash_sales || 0);
+  const closingCash = Number(session.opening_balance || 0) + cashSales;
+  await client.query(
+    `UPDATE shift_sessions SET closing_cash=$1, updated_at=NOW() WHERE id=$2`,
+    [closingCash, session.id]
+  );
+  return { closing_cash: closingCash, cash_sales: cashSales, shift_date: session.shift_date };
+}
+
 // GET /api/orders?status=pending  OR  ?status=pending,preparing,ready
 exports.getOrders = async (req, res) => {
   try {
@@ -157,24 +193,35 @@ exports.createOrder = async (req, res) => {
 
     // ── Shift + Attendance validation (all POS users, no exceptions) ───────────
     let shiftId = null;
+    let shiftSessionId = null;
     if (source === 'pos') {
-      const today   = new Date().toISOString().slice(0, 10);
-      const nowTime = new Date().toTimeString().slice(0, 5);
-
-      // Find any active or in_process shift for today (employee may have multiple)
+      const today = localDateString();
+      // Find the employee's latest open session. A real open session can belong
+      // to an overnight/continued shift, so do not require shift_date = today.
       const shiftRes = await client.query(
-        `SELECT id, shift_number, shift_name, start_time, end_time, status
-         FROM shifts WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3
-           AND status IN ('active','in_process')
-         ORDER BY status DESC, start_time LIMIT 1`,
+        `SELECT s.id, s.shift_number, s.shift_name, s.start_time, s.end_time,
+                sess.status, sess.shift_date AS date, sess.id AS session_id
+         FROM shift_sessions sess
+         JOIN shifts s ON sess.shift_id=s.id
+         WHERE sess.restaurant_id=$1 AND sess.employee_id=$2
+           AND sess.status IN ('active','in_process')
+         ORDER BY CASE WHEN sess.shift_date=$3::date THEN 0 ELSE 1 END,
+                  sess.opened_at DESC NULLS LAST,
+                  sess.created_at DESC,
+                  s.start_time
+         LIMIT 1`,
         [restaurantId, employeeId, today]
       );
 
       if (!shiftRes.rows.length) {
         // Check why — give specific message
         const anyRes = await client.query(
-          `SELECT status, start_time, end_time FROM shifts
-           WHERE restaurant_id=$1 AND employee_id=$2 AND date=$3
+          `SELECT s.status, s.start_time, s.end_time
+           FROM shifts s
+           WHERE s.restaurant_id=$1 AND s.employee_id=$2
+             AND COALESCE(s.date_from, s.date) <= $3::date
+             AND COALESCE(s.date_to, s.date) >= $3::date
+             AND EXTRACT(ISODOW FROM $3::date)::INT = ANY(COALESCE(s.working_days, ARRAY[EXTRACT(ISODOW FROM COALESCE(s.date_from, s.date))::INT]))
            ORDER BY start_time`,
           [restaurantId, employeeId, today]
         );
@@ -182,8 +229,7 @@ exports.createOrder = async (req, res) => {
           await client.query('ROLLBACK');
           return res.status(403).json({ error: 'No shift scheduled for you today. Contact your manager.' });
         }
-        const scheduledNow = anyRes.rows.find(s => s.status === 'scheduled' && nowTime >= s.start_time.slice(0,5) && nowTime <= s.end_time.slice(0,5));
-        if (scheduledNow) {
+        if (anyRes.rows.some(s => s.status === 'scheduled')) {
           await client.query('ROLLBACK');
           return res.status(403).json({ error: 'Please start your shift before placing orders.' });
         }
@@ -213,6 +259,7 @@ exports.createOrder = async (req, res) => {
       }
 
       shiftId = shift.id;
+      shiftSessionId = shift.session_id;
     }
 
     // Generate order number — use MAX of ORD-* series to avoid duplicates after cancellations
@@ -232,12 +279,12 @@ exports.createOrder = async (req, res) => {
       : null;
 
     const orderRes = await client.query(
-      `INSERT INTO orders(restaurant_id, table_id, employee_id, shift_id, order_number, order_type,
+      `INSERT INTO orders(restaurant_id, table_id, employee_id, shift_id, shift_session_id, order_number, order_type,
                           status, source, guest_count, subtotal, discount_amount, tax_amount, total_amount,
                           customer_name, customer_phone, customer_lat, customer_lng,
                           delivery_address, rider_id, waiter_id, notes)
-       VALUES($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
-      [restaurantId, table_id || null, employeeId, shiftId, orderNumber, order_type, source,
+       VALUES($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
+      [restaurantId, table_id || null, employeeId, shiftId, shiftSessionId, orderNumber, order_type, source,
         guest_count, subtotal, discAmt, taxAmount, totalAmount,
         customer_name || null, customer_phone || null,
         customer_lat || null, customer_lng || null,
@@ -316,6 +363,14 @@ exports.updateOrderStatus = async (req, res) => {
         await autoJournalizeOrder(restaurantId, result.rows[0]);
       } catch (glErr) {
         console.warn('GL auto-journal skipped:', glErr.message);
+      }
+    }
+
+    if (status === 'paid' && result.rows[0].payment_method === 'cash' && result.rows[0].shift_session_id) {
+      try {
+        await refreshShiftClosingCash(db, result.rows[0].shift_session_id);
+      } catch (shiftErr) {
+        console.warn('Shift closing cash refresh skipped:', shiftErr.message);
       }
     }
 
@@ -757,11 +812,23 @@ exports.getShiftSalesReport = async (req, res) => {
     // Build parameterised conditions
     const params = [restaurantId, dateFrom, dateTo];
     let idx = 4;
-    const shiftConds = [`s.restaurant_id = $1`, `s.date >= $2::date`, `s.date <= $3::date`];
+    const shiftConds = [
+      `s.restaurant_id = $1`,
+      `COALESCE(sess.shift_date, s.date) >= $2::date`,
+      `COALESCE(sess.shift_date, s.date) <= $3::date`
+    ];
     const orderJoinConds = [
-      `o.employee_id = s.employee_id`,
       `o.restaurant_id = s.restaurant_id`,
-      `DATE(o.created_at) = s.date`
+      `o.employee_id = s.employee_id`,
+      `(
+        (sess.id IS NOT NULL AND o.shift_session_id = sess.id)
+        OR (
+          sess.id IS NULL
+          AND o.shift_session_id IS NULL
+          AND o.shift_id = s.id
+          AND DATE(o.created_at) = COALESCE(sess.shift_date, s.date)
+        )
+      )`
     ];
 
     if (resolvedEmpId) {
@@ -781,14 +848,18 @@ exports.getShiftSalesReport = async (req, res) => {
       db.query(`
         SELECT
           s.id                                    AS shift_id,
+          sess.id                                 AS shift_session_id,
           s.shift_name,
-          s.date                                  AS shift_date,
+          COALESCE(sess.shift_date, s.date)       AS shift_date,
           TO_CHAR(s.start_time, 'HH24:MI')        AS start_time,
           TO_CHAR(s.end_time,   'HH24:MI')        AS end_time,
-          s.status                                AS shift_status,
+          COALESCE(sess.status, s.status)         AS shift_status,
+          sess.opened_at,
+          sess.closed_at,
           e.id                                    AS employee_id,
           e.full_name                             AS employee_name,
           r.name                                  AS role_name,
+          COALESCE(sess.opening_balance, s.opening_balance, 0) AS opening_balance,
 
           COUNT(o.id)       FILTER (WHERE o.status NOT IN ('cancelled'))                         AS order_count,
           COALESCE(SUM(o.total_amount)    FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS revenue,
@@ -813,30 +884,47 @@ exports.getShiftSalesReport = async (req, res) => {
           COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method = 'card')  AS card_orders,
           COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method = 'card'),  0) AS card_revenue,
           COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method NOT IN ('cash','card') AND o.payment_method IS NOT NULL) AS other_pay_orders,
-          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method NOT IN ('cash','card') AND o.payment_method IS NOT NULL), 0) AS other_pay_revenue
+          COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_method NOT IN ('cash','card') AND o.payment_method IS NOT NULL), 0) AS other_pay_revenue,
+          COALESCE(sess.opening_balance, s.opening_balance, 0) + COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_status='paid' AND o.payment_method = 'cash'), 0) AS closing_balance,
+          COALESCE(sess.opening_balance, s.opening_balance, 0) + COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_status='paid' AND o.payment_method = 'cash'), 0) AS expected_closing,
+          sess.cashier_collection AS cashier_collection,
+          CASE
+            WHEN sess.cashier_collection IS NULL THEN NULL
+            ELSE sess.cashier_collection
+              - (COALESCE(sess.opening_balance, s.opening_balance, 0) + COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.payment_status='paid' AND o.payment_method = 'cash'), 0))
+          END AS variance
         FROM shifts s
         LEFT JOIN employees e ON e.id = s.employee_id AND e.restaurant_id = s.restaurant_id
         LEFT JOIN roles r ON r.id = e.role_id
+        LEFT JOIN shift_sessions sess ON sess.shift_id=s.id
         LEFT JOIN orders o ON ${orderJoinConds.join(' AND ')}
         WHERE ${shiftConds.join(' AND ')}
         GROUP BY s.id, s.shift_name, s.date, s.start_time, s.end_time, s.status,
+                 s.opening_balance, sess.id, sess.shift_date, sess.status, sess.opening_balance, sess.closing_cash, sess.cashier_collection, sess.opened_at, sess.closed_at,
                  e.id, e.full_name, r.name
-        ORDER BY s.date DESC, s.start_time, e.full_name
+        ORDER BY COALESCE(sess.shift_date, s.date) DESC,
+                 COALESCE(sess.opened_at, COALESCE(sess.shift_date, s.date)::timestamp) DESC,
+                 s.start_time,
+                 e.full_name
       `, params),
 
       db.query(`
         SELECT DISTINCT e.id, e.full_name, r.name AS role_name
         FROM shifts s
+        LEFT JOIN shift_sessions sess ON sess.shift_id=s.id
         JOIN employees e ON e.id = s.employee_id AND e.restaurant_id = $1
         LEFT JOIN roles r ON r.id = e.role_id
-        WHERE s.restaurant_id = $1 AND s.date >= $2::date AND s.date <= $3::date
+        WHERE s.restaurant_id = $1
+          AND COALESCE(sess.shift_date, s.date, s.date_from) >= $2::date
+          AND COALESCE(sess.shift_date, s.date, s.date_from) <= $3::date
         ORDER BY e.full_name
       `, [restaurantId, dateFrom, dateTo]),
 
       db.query(`
         SELECT DISTINCT shift_name FROM shifts
         WHERE restaurant_id = $1 AND shift_name IS NOT NULL
-          AND date >= $2::date AND date <= $3::date
+          AND COALESCE(date_from, date) <= $3::date
+          AND COALESCE(date_to, date) >= $2::date
         ORDER BY shift_name
       `, [restaurantId, dateFrom, dateTo]),
     ]);

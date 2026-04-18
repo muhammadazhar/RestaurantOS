@@ -90,18 +90,34 @@ export default function TableBill({ table, onClose, onPaid }) {
     w.document.write(`
       <!DOCTYPE html><html><head><title>Receipt — ${table.label}</title>
       <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier New', monospace; font-size: 13px; padding: 24px 20px; color: #111; }
+        @page { size: 80mm auto; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
+        html, body { background: #fff; width: 80mm; }
+        body {
+          font-family: Consolas, 'Courier New', monospace;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.25;
+          padding: 2mm 3mm;
+          color: #000;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
         .center { text-align: center; }
         .right  { text-align: right; }
-        .bold   { font-weight: bold; }
-        .row    { display: flex; justify-content: space-between; padding: 3px 0; }
-        .grid4  { display: grid; grid-template-columns: 1fr 40px 90px 90px; gap: 4px; padding: 5px 0; border-bottom: 1px dashed #ccc; }
-        .line   { border-top: 1px dashed #999; margin: 10px 0; }
-        .big    { font-size: 16px; font-weight: bold; }
-        .small  { font-size: 11px; color: #666; }
-        .paid-stamp { border: 3px solid #000; border-radius: 6px; padding: 6px 16px; display: inline-block; font-size: 18px; font-weight: bold; letter-spacing: 3px; margin-top: 14px; }
-        @media print { body { padding: 0 4px; } }
+        .bold   { font-weight: 900; }
+        .row    { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+        .row span:last-child { text-align: right; max-width: 62%; overflow-wrap: anywhere; }
+        .grid4  { display: grid; grid-template-columns: minmax(0,1fr) 24px 52px 58px; gap: 3px; padding: 4px 0; border-bottom: 1px dashed #000; align-items: start; }
+        .grid4 span:first-child { overflow-wrap: anywhere; }
+        .line   { border-top: 1px dashed #000; margin: 8px 0; }
+        .big    { font-size: 15px; font-weight: 900; }
+        .small  { font-size: 10px; font-weight: 700; }
+        .paid-stamp { border: 2px solid #000; border-radius: 4px; padding: 5px 14px; display: inline-block; font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 12px; }
+        @media print {
+          html, body { width: 80mm; }
+          body { padding: 2mm 3mm; }
+        }
       </style></head>
       <body>
         <div class="center bold" style="font-size:20px; margin-bottom:4px">The Golden Fork</div>
@@ -385,7 +401,7 @@ export default function TableBill({ table, onClose, onPaid }) {
               <button
                 onClick={() => { handlePrint(payMethod); onClose(); }}
                 style={{
-                  flex: 1, background: T.accent, color: '#000', border: 'none',
+                  flex: 1, background: T.accent, color: '#fff', border: 'none',
                   borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 800,
                   cursor: 'pointer', fontFamily: "'Inter', sans-serif",
                 }}
@@ -425,7 +441,7 @@ export default function TableBill({ table, onClose, onPaid }) {
 
             {!showPayPanel ? (
               <button onClick={() => setShowPayPanel(true)} style={{
-                flex: 1, background: T.accent, color: '#000', border: 'none',
+                flex: 1, background: T.accent, color: '#fff', border: 'none',
                 borderRadius: 10, padding: '11px', fontSize: 14, fontWeight: 800,
                 cursor: 'pointer', fontFamily: "'Inter', sans-serif",
               }}>
