@@ -158,7 +158,7 @@ function ItemModal({ open, onClose, onSaved, editItem, categories }) {
             {[['⭐ Popular', 'is_popular'], ['✅ Available', 'is_available']].map(([label, key]) => (
               <div key={key} onClick={() => setVal(key, !form[key])} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, cursor: 'pointer', background: form[key] ? T.accentGlow : T.surface, border: `1px solid ${form[key] ? T.accent + '66' : T.border}`, flex: 1 }}>
                 <div style={{ width: 16, height: 16, borderRadius: '50%', background: form[key] ? T.accent : T.border, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {form[key] && <span style={{ color: '#000', fontSize: 10, fontWeight: 800 }}>✓</span>}
+                  {form[key] && <span style={{ color: '#fff', fontSize: 10, fontWeight: 800 }}>✓</span>}
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 600, color: form[key] ? T.accent : T.textMid }}>{label}</span>
               </div>
@@ -221,7 +221,7 @@ function CategoryModal({ open, onClose, onSaved, editCat, categories }) {
       <Input label="Sort Order" type="number" value={form.sort_order} onChange={set('sort_order')} placeholder="0" />
       <div onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, cursor: 'pointer', background: form.is_active ? T.accentGlow : T.surface, border: `1px solid ${form.is_active ? T.accent + '66' : T.border}`, marginBottom: 16 }}>
         <div style={{ width: 16, height: 16, borderRadius: '50%', background: form.is_active ? T.accent : T.border, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {form.is_active && <span style={{ color: '#000', fontSize: 10, fontWeight: 800 }}>✓</span>}
+          {form.is_active && <span style={{ color: '#fff', fontSize: 10, fontWeight: 800 }}>✓</span>}
         </div>
         <span style={{ fontSize: 12, fontWeight: 600, color: form.is_active ? T.accent : T.textMid }}>Active</span>
       </div>

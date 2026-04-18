@@ -112,7 +112,7 @@ export default function Support() {
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}
+          style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}
         >
           + New Ticket
         </button>
@@ -246,7 +246,7 @@ export default function Support() {
                 <button
                   onClick={handleSendMessage}
                   disabled={sendingMsg || !msgInput.trim()}
-                  style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '0 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif", opacity: sendingMsg || !msgInput.trim() ? 0.6 : 1 }}
+                  style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '0 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif", opacity: sendingMsg || !msgInput.trim() ? 0.6 : 1 }}
                 >
                   Send
                 </button>
@@ -297,7 +297,7 @@ export default function Support() {
                 <button type="button" onClick={() => { setShowCreate(false); setForm({ title: '', description: '' }); setScreenshot(null); setPreview(null); }} style={{ flex: 1, background: T.surface, color: T.text, border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>
                   Cancel
                 </button>
-                <button type="submit" disabled={creating} style={{ flex: 1, background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: 12, fontSize: 13, fontWeight: 700, cursor: creating ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif", opacity: creating ? 0.7 : 1 }}>
+                <button type="submit" disabled={creating} style={{ flex: 1, background: T.accent, color: '#fff', border: 'none', borderRadius: 10, padding: 12, fontSize: 13, fontWeight: 700, cursor: creating ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif", opacity: creating ? 0.7 : 1 }}>
                   {creating ? 'Submitting…' : 'Submit Ticket'}
                 </button>
               </div>

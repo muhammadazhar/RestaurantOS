@@ -221,7 +221,7 @@ function SalesReport() {
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
           <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 
@@ -411,7 +411,7 @@ function MenuReport() {
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
           <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 
@@ -625,7 +625,7 @@ function EmployeeReport() {
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
           <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 
@@ -824,7 +824,7 @@ function PerformanceMatrix() {
         <div style={{ flex: 1 }}><DateRangePicker from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} /></div>
         {data && <>
           <button onClick={handlePrint}  style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+          <button onClick={handleExport} style={{ background: T.accent, border: 'none', color: '#fff', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
         </>}
       </div>
 

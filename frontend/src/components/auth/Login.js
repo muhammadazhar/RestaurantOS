@@ -58,10 +58,14 @@ export default function Login() {
           <input name="email" type="email" value={form.email} onChange={handle} placeholder="you@restaurant.com" style={inp} required />
           <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 10, letterSpacing: 0.5 }}>Password</label>
           <input name="password" type="password" value={form.password} onChange={handle} placeholder="••••••••" style={inp} required />
-          <button type="submit" disabled={loading} style={{ marginTop: 20, background: T.accent, color: '#000', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
+          <button type="submit" disabled={loading} style={{ marginTop: 20, background: T.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
+
+        <p style={{ marginTop: 14, fontSize: 12, color: T.textMid, textAlign: 'center' }}>
+          <Link to="/forgot-password" style={{ color: T.accent, fontWeight: 700 }}>Forgot password?</Link>
+        </p>
 
         <p style={{ marginTop: 20, fontSize: 12, color: T.textMid, textAlign: 'center' }}>
           Super Admin? <Link to="/super-login" style={{ color: T.accent }}>Login here</Link>

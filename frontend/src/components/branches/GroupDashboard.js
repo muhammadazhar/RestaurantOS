@@ -64,7 +64,7 @@ function BranchCard({ branch, view }) {
   return (
     <Card style={{ padding: 20, border: isOwner ? `2px solid ${T.accent}` : `1px solid ${T.border}`, position: 'relative' }}>
       {isOwner && (
-        <div style={{ position: 'absolute', top: 10, right: 10, background: T.accent, color: '#000', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 5 }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, background: T.accent, color: '#fff', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 5 }}>
           MAIN BRANCH
         </div>
       )}

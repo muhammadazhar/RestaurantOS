@@ -260,7 +260,7 @@ export default function ZoneMapEditor() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <button
                   onClick={() => { setDrawMode('zone'); setDrawPoints([]); setShowForm(false); setZoneForm(EMPTY_FORM); setSelectedZone(null); }}
-                  style={{ width: '100%', padding: '9px', borderRadius: 8, background: T.accent, color: '#000', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                  style={{ width: '100%', padding: '9px', borderRadius: 8, background: T.accent, color: '#fff', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                 >
                   ✏ Draw New Zone
                 </button>
@@ -336,7 +336,7 @@ export default function ZoneMapEditor() {
                     onClick={saveNewZone}
                     disabled={saving || !zoneForm.name.trim() || zoneForm.customer_fee === ''}
                     style={{
-                      flex: 2, padding: '7px', borderRadius: 8, background: T.accent, color: '#000', border: 'none',
+                      flex: 2, padding: '7px', borderRadius: 8, background: T.accent, color: '#fff', border: 'none',
                       fontSize: 12, cursor: 'pointer', fontWeight: 700,
                       opacity: (saving || !zoneForm.name.trim() || zoneForm.customer_fee === '') ? 0.5 : 1,
                     }}>

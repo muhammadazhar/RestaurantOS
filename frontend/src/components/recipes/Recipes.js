@@ -85,7 +85,7 @@ export default function Recipes() {
                 <div style={{ fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Instructions</div>
                 {(recipe.instructions || '').split('\n').filter(Boolean).map((step, i) => (
                   <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, color: '#000', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
+                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, color: '#fff', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</div>
                     <p style={{ fontSize: 13, lineHeight: 1.6, color: T.textMid, margin: 0 }}>{step.replace(/^\d+\.\s*/, '')}</p>
                   </div>
                 ))}

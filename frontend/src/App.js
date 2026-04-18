@@ -7,6 +7,8 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 import Login      from './components/auth/Login';
 import SuperLogin from './components/auth/SuperLogin';
+import ForgotPassword from './components/auth/ForgotPassword';
+import ResetPassword from './components/auth/ResetPassword';
 import Layout     from './components/shared/Layout';
 import Dashboard  from './components/dashboard/Dashboard';
 import POS        from './components/pos/POS';
@@ -20,7 +22,7 @@ import InventoryPage from './components/inventory/Inventory';
 
 import Settings          from './components/settings/Settings';
 import DiscountPresets   from './components/settings/DiscountPresets';
-import MenuManagement  from './components/menu/MenuManagement';
+import MenuManagement  from './components/menu/MenuManagementV2';
 import Orders          from './components/orders/Orders';
 import Reservations    from './components/reservations/Reservations';
 import Reports         from './components/reports/Reports';
@@ -31,6 +33,7 @@ import SystemPanel     from './components/system/SystemPanel';
 import Attendance      from './components/attendance/Attendance';
 import Delivery        from './components/delivery/Delivery';
 import MyShift from './components/shifts/MyShift';
+import ShiftManagement from './components/shifts/ShiftManagementMockup';
 import PhoneOrder        from './components/rider/PhoneOrder';
 import RiderDashboard    from './components/rider/RiderDashboard';
 import CollectionScreen  from './components/rider/CollectionScreen';
@@ -73,6 +76,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login"       element={user ? <Navigate to="/dashboard" /> : <Login />} />
       <Route path="/super-login" element={user ? <Navigate to="/dashboard" /> : <SuperLogin />} />
+      <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" /> : <ForgotPassword />} />
+      <Route path="/reset-password" element={user ? <Navigate to="/dashboard" /> : <ResetPassword />} />
       <Route path="/register"    element={user ? <Navigate to="/setup" />     : <Register />} />
       <Route path="/setup"       element={<PrivateRoute><SetupWizard /></PrivateRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -85,6 +90,7 @@ function AppRoutes() {
       <Route path="/employees"  element={<PrivateRoute><Layout><Employees /></Layout></PrivateRoute>} />
       <Route path="/attendance" element={<PrivateRoute><Layout><Attendance /></Layout></PrivateRoute>} />
       <Route path="/my-shift" element={<PrivateRoute><Layout><MyShift /></Layout></PrivateRoute>} />
+      <Route path="/shift-management" element={<PrivateRoute><Layout><ShiftManagement /></Layout></PrivateRoute>} />
       <Route path="/delivery"   element={<PrivateRoute><Layout><Delivery /></Layout></PrivateRoute>} />
       <Route path="/ledger"      element={<PrivateRoute><Layout><Ledger /></Layout></PrivateRoute>} />
       <Route path="/gl-setup"    element={<PrivateRoute><Layout><GLSetup /></Layout></PrivateRoute>} />

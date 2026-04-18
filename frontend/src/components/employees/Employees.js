@@ -231,7 +231,7 @@ function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
                 {editEmp?.avatar_url ? '🔄 Change Photo' : '📷 Upload Photo'}
               </button>
               {photoFile && (
-                <button onClick={handlePhotoUpload} disabled={photoUploading} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 800, cursor: photoUploading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
+                <button onClick={handlePhotoUpload} disabled={photoUploading} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 800, cursor: photoUploading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
                   {photoUploading ? '⏳ Uploading…' : '⬆ Save Photo'}
                 </button>
               )}

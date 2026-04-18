@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt    = (n, dec = 0) => Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 const fmtPKR = (n) => `PKR ${fmt(n)}`;
+const fmtMaybePKR = (n) => n == null ? '-' : fmtPKR(n);
 const today      = () => new Date().toISOString().slice(0, 10);
 const nDaysAgo   = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); };
@@ -187,6 +188,10 @@ export default function ShiftSalesReport() {
         <td class="right">${fmt(sh.order_count)}</td>
         <td class="right">${fmt(sh.cancelled_count)}</td>
         <td class="right">${fmtPKR(sh.revenue)}</td>
+        <td class="right">${fmtPKR(sh.expected_closing)}</td>
+        <td class="right">${fmtPKR(sh.closing_balance)}</td>
+        <td class="right">${fmtMaybePKR(sh.cashier_collection)}</td>
+        <td class="right">${fmtMaybePKR(sh.variance)}</td>
         <td class="right">${fmtPKR(sh.avg_order_value)}</td>
         <td class="right">${fmt(sh.guest_count)}</td>
         <td class="right">${fmtPKR(sh.discount)}</td>
@@ -208,7 +213,7 @@ export default function ShiftSalesReport() {
         <thead><tr>
           <th>Date</th><th>Employee</th><th>Role</th><th>Shift</th><th>Time</th><th class="center">Status</th>
           <th class="right">Orders</th><th class="right">Cancelled</th>
-          <th class="right">Revenue</th><th class="right">Avg Order</th>
+          <th class="right">Revenue</th><th class="right">Expected Closing</th><th class="right">System Closing</th><th class="right">Cashier Collection</th><th class="right">Variance</th><th class="right">Avg Order</th>
           <th class="right">Guests</th><th class="right">Discount</th><th class="right">Tax</th>
         </tr></thead>
         <tbody>${shiftRows}</tbody>
@@ -232,7 +237,7 @@ export default function ShiftSalesReport() {
       ]},
       { title: 'Shift-wise Sales', headers: [
           'Date', 'Employee', 'Role', 'Shift Name', 'Start', 'End', 'Status',
-          'Orders', 'Cancelled', 'Revenue (PKR)', 'Subtotal', 'Tax', 'Discount',
+          'Orders', 'Cancelled', 'Revenue (PKR)', 'Opening Balance', 'Expected Closing', 'System Closing', 'Cashier Collection', 'Variance', 'Subtotal', 'Tax', 'Discount',
           'Avg Order (PKR)', 'Guests',
           'Dine-In Orders', 'Dine-In Revenue',
           'Takeaway Orders', 'Takeaway Revenue',
@@ -252,6 +257,11 @@ export default function ShiftSalesReport() {
           Number(sh.order_count),
           Number(sh.cancelled_count),
           Number(sh.revenue).toFixed(2),
+          Number(sh.opening_balance || 0).toFixed(2),
+          Number(sh.expected_closing || 0).toFixed(2),
+          Number(sh.closing_balance || 0).toFixed(2),
+          sh.cashier_collection == null ? '' : Number(sh.cashier_collection).toFixed(2),
+          sh.variance == null ? '' : Number(sh.variance).toFixed(2),
           Number(sh.subtotal).toFixed(2),
           Number(sh.tax).toFixed(2),
           Number(sh.discount).toFixed(2),
@@ -311,7 +321,7 @@ export default function ShiftSalesReport() {
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             {data && <>
               <button onClick={handlePrint} style={{ ...selStyle, whiteSpace: 'nowrap' }}>🖨 Print PDF</button>
-              <button onClick={handleExcel} style={{ background: T.accent, border: 'none', color: '#000', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
+              <button onClick={handleExcel} style={{ background: T.accent, border: 'none', color: '#fff', borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: "'Inter',sans-serif", whiteSpace: 'nowrap' }}>📥 Excel</button>
             </>}
           </div>
         </div>
@@ -344,8 +354,8 @@ export default function ShiftSalesReport() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: T.surface }}>
-                      {['Date', 'Employee', 'Role', 'Shift', 'Time', 'Status', 'Orders', 'Revenue', 'Avg Order', 'Guests', ''].map((h, i) => (
-                        <th key={i} style={{ padding: '10px 12px', textAlign: i >= 6 && i <= 8 ? 'right' : 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.5px', color: T.textDim, borderBottom: `2px solid ${T.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                      {['Date', 'Employee', 'Role', 'Shift', 'Time', 'Status', 'Orders', 'Revenue', 'Expected', 'System', 'Collected', 'Variance', 'Avg Order', 'Guests', ''].map((h, i) => (
+                        <th key={i} style={{ padding: '10px 12px', textAlign: i >= 6 && i <= 12 ? 'right' : 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.5px', color: T.textDim, borderBottom: `2px solid ${T.border}`, whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -402,6 +412,18 @@ export default function ShiftSalesReport() {
                               {fmtPKR(sh.revenue)}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'right', color: T.textMid, fontFamily: 'monospace' }}>
+                              {fmtPKR(sh.expected_closing)}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: T.text, fontFamily: 'monospace' }}>
+                              {fmtPKR(sh.closing_balance)}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: T.text, fontFamily: 'monospace' }}>
+                              {fmtMaybePKR(sh.cashier_collection)}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: Math.abs(Number(sh.variance || 0)) > 0.01 ? T.red : T.green, fontFamily: 'monospace' }}>
+                              {fmtMaybePKR(sh.variance)}
+                            </td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right', color: T.textMid, fontFamily: 'monospace' }}>
                               {fmtPKR(sh.avg_order_value)}
                             </td>
                             <td style={{ padding: '10px 12px', textAlign: 'right', color: T.textMid }}>
@@ -415,7 +437,7 @@ export default function ShiftSalesReport() {
                           {/* ── Expanded breakdown ── */}
                           {isExp && (
                             <tr style={{ background: T.bg || T.surface }}>
-                              <td colSpan={11} style={{ padding: '12px 24px 16px' }}>
+                              <td colSpan={15} style={{ padding: '12px 24px 16px' }}>
                                 <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                                   {typeRows.length > 0 && (
                                     <div>
@@ -445,12 +467,16 @@ export default function ShiftSalesReport() {
                                       ['Subtotal',  sh.subtotal],
                                       ['Discount',  `-${fmtPKR(sh.discount)}`],
                                       ['Tax',       sh.tax],
+                                      ['Expected Closing', sh.expected_closing],
+                                      ['System Closing', sh.closing_balance],
+                                      ['Cashier Collection', sh.cashier_collection],
+                                      ['Variance', sh.variance],
                                       ['Net Revenue', sh.revenue],
                                     ].map(([l, v]) => (
                                       <div key={l} style={{ display: 'flex', justifyContent: 'space-between', gap: 24, marginBottom: 5 }}>
                                         <span style={{ fontSize: 12, color: T.textMid }}>{l}</span>
                                         <b style={{ fontSize: 12, fontFamily: 'monospace', color: T.green }}>
-                                          {typeof v === 'string' ? v : fmtPKR(v)}
+                                          {typeof v === 'string' ? v : fmtMaybePKR(v)}
                                         </b>
                                       </div>
                                     ))}
@@ -473,7 +499,7 @@ export default function ShiftSalesReport() {
                         </td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', color: T.text }}>{fmt(s.total_orders)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', color: T.green, fontFamily: 'monospace' }}>{fmtPKR(s.total_revenue)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', color: T.textMid, fontFamily: 'monospace' }}>{fmtPKR(s.avg_revenue_per_shift)}</td>
+                        <td colSpan={5} />
                         <td style={{ padding: '10px 12px', textAlign: 'right', color: T.textMid }}>{fmt(s.total_guests)}</td>
                         <td />
                       </tr>

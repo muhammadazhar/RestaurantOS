@@ -172,7 +172,7 @@ function GeneralInfo() {
             </button>
             {logoFile && (
               <button onClick={handleLogoUpload} disabled={logoUploading} style={{
-                background: T.accent, color: '#000', border: 'none',
+                background: T.accent, color: '#fff', border: 'none',
                 borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 800,
                 cursor: logoUploading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif",
               }}>
@@ -310,7 +310,7 @@ function TaxRates() {
               </SelectInput>
             </Field>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={addTax} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '10px 16px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap' }}>Add</button>
+              <button onClick={addTax} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 16px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap' }}>Add</button>
               <button onClick={() => setAdding(false)} style={{ background: T.border, color: T.textMid, border: 'none', borderRadius: 8, padding: '10px 12px', cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Cancel</button>
             </div>
           </div>
@@ -382,6 +382,7 @@ function PaymentMethods() {
 
 // ─── 4. Roles & Permissions ───────────────────────────────────────────────────
 const ALL_PERMS = [
+  { key: 'shift_management', label: 'Shift Management', icon: 'SM' },
   { key: 'dashboard',  label: 'Dashboard',      icon: '⬛' },
   { key: 'pos',        label: 'POS / Orders',   icon: '📲' },
   { key: 'kitchen',    label: 'Kitchen Display',icon: '👨‍🍳' },
@@ -481,7 +482,7 @@ function RolesPermissions() {
             <input value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="New role name"
               onKeyDown={e => e.key === 'Enter' && addRole()}
               style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 10px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }} />
-            <button onClick={addRole} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '7px 10px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>+</button>
+            <button onClick={addRole} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '7px 10px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>+</button>
           </div>
         </div>
 
@@ -517,7 +518,7 @@ function RolesPermissions() {
                     background: active ? T.accent : T.border,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    {active && <span style={{ color: '#000', fontSize: 11, fontWeight: 800 }}>✓</span>}
+                    {active && <span style={{ color: '#fff', fontSize: 11, fontWeight: 800 }}>✓</span>}
                   </div>
                 </div>
               );
@@ -634,7 +635,7 @@ function AlertThresholds() {
                 <div style={{ fontSize: 11, color: T.textDim }}>{hint}</div>
               </div>
               <div style={{ width: 18, height: 18, borderRadius: '50%', background: alertTypes[key] ? T.accent : T.border, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {alertTypes[key] && <span style={{ color: '#000', fontSize: 11, fontWeight: 800 }}>✓</span>}
+                {alertTypes[key] && <span style={{ color: '#fff', fontSize: 11, fontWeight: 800 }}>✓</span>}
               </div>
             </div>
           ))}

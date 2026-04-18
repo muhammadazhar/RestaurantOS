@@ -81,7 +81,7 @@ export default function LicenseGate({ moduleKey = 'base', moduleName = 'Restaura
           disabled={requesting}
           style={{
             width: '100%', padding: '13px', borderRadius: 10, border: 'none',
-            background: T.accent, color: '#000', fontSize: 14, fontWeight: 700,
+            background: T.accent, color: '#fff', fontSize: 14, fontWeight: 700,
             cursor: requesting ? 'not-allowed' : 'pointer', marginBottom: 12,
             opacity: requesting ? 0.7 : 1,
           }}

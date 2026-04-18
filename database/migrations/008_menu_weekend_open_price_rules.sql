@@ -1,0 +1,7 @@
+ALTER TABLE menu_items
+  ADD COLUMN IF NOT EXISTS weekend_price DECIMAL(10,2),
+  ADD COLUMN IF NOT EXISTS weekend_days TEXT[] NOT NULL DEFAULT ARRAY['FRI','SAT'],
+  ADD COLUMN IF NOT EXISTS open_price_role VARCHAR(40) NOT NULL DEFAULT 'manager';
+
+ALTER TABLE menu_item_variants
+  ADD COLUMN IF NOT EXISTS weekend_price DECIMAL(10,2);

@@ -1,0 +1,6 @@
+ALTER TABLE shifts
+  ADD COLUMN IF NOT EXISTS opening_balance NUMERIC(10,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS closing_cash NUMERIC(10,2);
+
+ALTER TABLE shift_sessions
+  ADD COLUMN IF NOT EXISTS cashier_collection NUMERIC(10,2);

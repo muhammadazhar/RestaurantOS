@@ -499,7 +499,7 @@ function AlertsTab({ items, onStockEntry }) {
         <div style={{ fontFamily:'monospace', fontWeight:800, fontSize:15, color:level==='critical'?T.red:T.accent }}>
           {fmt(Number(item.max_quantity)-Number(item.stock_quantity),0)} {item.unit}
         </div>
-        <button onClick={()=>onStockEntry(item)} style={{ marginTop:8, background:T.accent, color:'#000', border:'none', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>
+        <button onClick={()=>onStockEntry(item)} style={{ marginTop:8, background:T.accent, color:'#fff', border:'none', borderRadius:8, padding:'6px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif" }}>
           + Receive Stock
         </button>
       </div>

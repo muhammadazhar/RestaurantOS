@@ -119,7 +119,7 @@ function MenuItemCard({ item, inCart, onAdd, onRemove }) {
       {inCart && (
         <div style={{
           position: 'absolute', top: 8, right: 8,
-          background: T.accent, color: '#000',
+          background: T.accent, color: '#fff',
           borderRadius: '50%', width: 22, height: 22,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 11, fontWeight: 800,
@@ -402,7 +402,7 @@ export default function PhoneOrder() {
                 <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
                   <button
                     type="button" onClick={calcFee} disabled={feeLoading}
-                    style={{ padding: '8px 14px', borderRadius: 8, background: T.accent, color: '#000', border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', opacity: feeLoading ? 0.6 : 1, height: 36 }}
+                    style={{ padding: '8px 14px', borderRadius: 8, background: T.accent, color: '#fff', border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', opacity: feeLoading ? 0.6 : 1, height: 36 }}
                   >
                     {feeLoading ? '⏳' : '💲 Calc Fee'}
                   </button>
@@ -512,7 +512,7 @@ export default function PhoneOrder() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <button onClick={() => changeQty(item.id, -1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>−</button>
                         <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 12, color: T.text, minWidth: 16, textAlign: 'center' }}>{item.quantity}</span>
-                        <button onClick={() => changeQty(item.id, 1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#000', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>+</button>
+                        <button onClick={() => changeQty(item.id, 1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1 }}>+</button>
                       </div>
                     </div>
                     {/* Per-item action row */}

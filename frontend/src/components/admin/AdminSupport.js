@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   adminGetAllTickets, adminGetTicketMessages,
@@ -26,26 +26,26 @@ const ALL_STATUSES = ['', 'open', 'assigned', 'in_progress', 'resolved', 'closed
 
 export default function AdminSupport() {
   const { theme: T } = useTheme();
-  const [tickets, setTickets]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [filter, setFilter]         = useState('');
-  const [selected, setSelected]     = useState(null);
-  const [messages, setMessages]     = useState([]);
-  const [msgInput, setMsgInput]     = useState('');
-  const [sendingMsg, setSendingMsg] = useState(false);
-  const [assignName, setAssignName] = useState('');
-  const [showAssign, setShowAssign] = useState(false);
-  const [resolving, setResolving]   = useState(false);
-  const msgEndRef                   = useRef();
+  const [tickets, setTickets]       = React.useState([]);
+  const [loading, setLoading]       = React.useState(true);
+  const [filter, setFilter]         = React.useState('');
+  const [selected, setSelected]     = React.useState(null);
+  const [messages, setMessages]     = React.useState([]);
+  const [msgInput, setMsgInput]     = React.useState('');
+  const [sendingMsg, setSendingMsg] = React.useState(false);
+  const [assignName, setAssignName] = React.useState('');
+  const [showAssign, setShowAssign] = React.useState(false);
+  const [resolving, setResolving]   = React.useState(false);
+  const msgEndRef                   = React.useRef();
 
   const IMG_BASE = process.env.REACT_APP_SOCKET_URL
     || (window.location.protocol + '//' + window.location.hostname + ':5000');
 
-  useEffect(() => { load(); }, [filter]);
-  useEffect(() => {
+  React.useEffect(() => { load(); }, [filter]);
+  React.useEffect(() => {
     if (selected) loadMessages(selected.id);
   }, [selected]);
-  useEffect(() => {
+  React.useEffect(() => {
     msgEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -254,7 +254,7 @@ export default function AdminSupport() {
                       style={{ ...inp, maxWidth: 220 }}
                       onKeyDown={e => e.key === 'Enter' && handleAssign()}
                     />
-                    <button onClick={handleAssign} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '9px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap' }}>
+                    <button onClick={handleAssign} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif", whiteSpace: 'nowrap' }}>
                       Assign
                     </button>
                     <button onClick={() => { setShowAssign(false); setAssignName(''); }} style={{ background: 'none', border: 'none', color: T.textMid, fontSize: 18, cursor: 'pointer', padding: '0 4px' }}>×</button>
@@ -306,7 +306,7 @@ export default function AdminSupport() {
               <button
                 onClick={handleSendMessage}
                 disabled={sendingMsg || !msgInput.trim()}
-                style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '0 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif", opacity: sendingMsg || !msgInput.trim() ? 0.6 : 1 }}
+                style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '0 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter', sans-serif", opacity: sendingMsg || !msgInput.trim() ? 0.6 : 1 }}
               >
                 Send
               </button>

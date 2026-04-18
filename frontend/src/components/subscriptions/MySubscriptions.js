@@ -164,7 +164,7 @@ export default function MySubscriptions() {
                       size="sm"
                       onClick={() => handleRequest(key, p.plan_type)}
                       disabled={!!requesting[key]}
-                      style={{ background: '#f39c12', color: '#000' }}
+                      style={{ background: '#f39c12', color: '#fff' }}
                     >
                       {requesting[key] === p.plan_type ? '⏳' : '🧪 Free Trial'}
                     </Btn>

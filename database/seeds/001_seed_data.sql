@@ -34,7 +34,7 @@ INSERT INTO restaurants (id, plan_id, name, slug, email, phone, address, city, c
 -- ─────────────────────────────────────────────
 INSERT INTO roles (id, restaurant_id, name, permissions, is_system) VALUES
   ('c1000000-0000-0000-0000-000000000001', 'b1000000-0000-0000-0000-000000000001', 'Manager',
-   '["dashboard","pos","kitchen","tables","inventory","recipes","employees","gl","alerts","settings"]', TRUE),
+   '["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","shift_management","gl","alerts","settings"]', TRUE),
   ('c1000000-0000-0000-0000-000000000002', 'b1000000-0000-0000-0000-000000000001', 'Head Server',
    '["pos","kitchen","tables","alerts"]', TRUE),
   ('c1000000-0000-0000-0000-000000000003', 'b1000000-0000-0000-0000-000000000001', 'Server',

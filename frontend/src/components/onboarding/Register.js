@@ -211,7 +211,7 @@ export default function Register() {
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <button onClick={startBranchSetup} style={{
-              background: T.accent, color: '#000', border: 'none', borderRadius: 12,
+              background: T.accent, color: '#fff', border: 'none', borderRadius: 12,
               padding: '14px 24px', fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif",
             }}>
               🏪 Set Up a Branch Now →
@@ -515,7 +515,7 @@ export default function Register() {
                     borderRadius: 16, padding: '18px 20px', cursor: 'pointer', transition: 'all 0.2s', position: 'relative',
                   }}>
                     {plan.popular && (
-                      <div style={{ position: 'absolute', top: -10, left: 20, background: T.accent, color: '#000', borderRadius: 20, padding: '2px 12px', fontSize: 11, fontWeight: 800 }}>
+                      <div style={{ position: 'absolute', top: -10, left: 20, background: T.accent, color: '#fff', borderRadius: 20, padding: '2px 12px', fontSize: 11, fontWeight: 800 }}>
                         ⭐ Most Popular
                       </div>
                     )}
@@ -546,7 +546,7 @@ export default function Register() {
                       ))}
                     </div>
                     {form.plan === plan.id && (
-                      <div style={{ position: 'absolute', top: 16, right: 20, width: 22, height: 22, borderRadius: '50%', background: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#000' }}>✓</div>
+                      <div style={{ position: 'absolute', top: 16, right: 20, width: 22, height: 22, borderRadius: '50%', background: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff' }}>✓</div>
                     )}
                   </div>
                 ))}
@@ -620,7 +620,7 @@ export default function Register() {
             )}
             {step < STEPS.length - 1 ? (
               <button onClick={next} style={{
-                flex: 1, background: T.accent, color: '#000', border: 'none',
+                flex: 1, background: T.accent, color: '#fff', border: 'none',
                 borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800,
                 cursor: 'pointer', fontFamily: "'Inter', sans-serif",
               }}>Continue →</button>

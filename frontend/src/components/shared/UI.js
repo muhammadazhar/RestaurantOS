@@ -1,4 +1,4 @@
-import React, { useState, useContext, createContext } from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 
 // ── T: live theme token object ─────────────────────────────────────────────────
@@ -39,17 +39,19 @@ export const Badge = ({ color, children, small, style }) => {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center',
-      background: bg, color: color || T.accent, borderRadius: 20,
-      padding: small ? '2px 8px' : '4px 10px',
-      fontSize: small ? 10 : 11, fontWeight: 700, letterSpacing: 0.5,
+      background: bg, color: color || T.accent, borderRadius: 999,
+      padding: small ? '4px 8px' : '5px 10px',
+      fontSize: small ? 10 : 11, fontWeight: 800, letterSpacing: 0,
       textTransform: 'uppercase', ...style,
     }}>{children}</span>
   );
 };
 
 export const Card = ({ children, style, onClick, hover }) => {
+  const { mode } = useTheme();
   useT();
   const [hov, setHov] = useState(false);
+  const light = mode === 'light';
   return (
     <div
       onClick={onClick}
@@ -58,9 +60,11 @@ export const Card = ({ children, style, onClick, hover }) => {
       style={{
         background: T.card,
         border: `1px solid ${hov ? T.borderLight : T.border}`,
-        borderRadius: 16, padding: 20, transition: 'all 0.2s',
+        borderRadius: light ? 16 : 22, padding: 20, transition: 'all 0.2s',
         transform: hov ? 'translateY(-2px)' : 'none',
-        boxShadow: hov ? '0 8px 32px rgba(0,0,0,0.15)' : 'none',
+        boxShadow: light
+          ? (hov ? '0 10px 24px rgba(15,23,42,0.08)' : '0 1px 2px rgba(15,23,42,0.05)')
+          : (hov ? '0 18px 42px rgba(0,0,0,0.25)' : '0 18px 42px rgba(0,0,0,0.12)'),
         cursor: onClick ? 'pointer' : 'default',
         ...style,
       }}
@@ -69,13 +73,15 @@ export const Card = ({ children, style, onClick, hover }) => {
 };
 
 export const StatCard = ({ label, value, sub, color, icon }) => {
+  const { mode } = useTheme();
   useT();
+  const light = mode === 'light';
   return (
-    <Card hover style={{ flex: 1 }}>
+    <Card hover style={{ flex: 1, background: light ? T.card : 'rgba(15,23,42,0.92)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: 11, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>{label}</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: color || T.accent, fontFamily: 'monospace' }}>{value}</div>
+          <div style={{ fontSize: 11, color: T.textDim, letterSpacing: 0, textTransform: 'uppercase', marginBottom: 8 }}>{label}</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: color || T.text }}>{value}</div>
           {sub && <div style={{ fontSize: 12, color: T.textMid, marginTop: 6 }}>{sub}</div>}
         </div>
         <div style={{ fontSize: 26, opacity: 0.25 }}>{icon}</div>
@@ -85,26 +91,30 @@ export const StatCard = ({ label, value, sub, color, icon }) => {
 };
 
 export const Pill = ({ active, onClick, children }) => {
+  const { mode } = useTheme();
   useT();
+  const light = mode === 'light';
   return (
     <button onClick={onClick} style={{
       background: active ? T.accent : 'transparent',
-      color: active ? '#000' : T.textMid,
+      color: active ? (light ? '#fff' : '#020617') : T.textMid,
       border: `1px solid ${active ? T.accent : T.border}`,
-      borderRadius: 24, padding: '6px 16px', fontSize: 13, fontWeight: 600,
+      borderRadius: 999, padding: '9px 14px', fontSize: 13, fontWeight: active ? 800 : 600,
       cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.2s',
     }}>{children}</button>
   );
 };
 
 export const Input = ({ label, ...props }) => {
+  const { mode } = useTheme();
   useT();
+  const light = mode === 'light';
   return (
     <div style={{ marginBottom: 12 }}>
       {label && <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6, fontWeight: 600, letterSpacing: 0.3 }}>{label}</div>}
       <input {...props} style={{
-        background: T.surface, border: `1px solid ${T.border}`,
-        borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13,
+        background: light ? T.surface : '#0f172a', border: `1px solid ${T.border}`,
+        borderRadius: light ? 12 : 14, padding: '12px 14px', color: T.text, fontSize: 13,
         width: '100%', outline: 'none', fontFamily: "'Inter', sans-serif",
         transition: 'border-color 0.2s',
         ...props.style,
@@ -114,13 +124,15 @@ export const Input = ({ label, ...props }) => {
 };
 
 export const Select = ({ label, children, ...props }) => {
+  const { mode } = useTheme();
   useT();
+  const light = mode === 'light';
   return (
     <div style={{ marginBottom: 12 }}>
       {label && <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6, fontWeight: 600, letterSpacing: 0.3 }}>{label}</div>}
       <select {...props} style={{
-        background: T.surface, border: `1px solid ${T.border}`,
-        borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13,
+        background: light ? T.surface : '#0f172a', border: `1px solid ${T.border}`,
+        borderRadius: light ? 12 : 14, padding: '12px 14px', color: T.text, fontSize: 13,
         width: '100%', outline: 'none', fontFamily: "'Inter', sans-serif",
         ...props.style,
       }}>{children}</select>
@@ -129,22 +141,24 @@ export const Select = ({ label, children, ...props }) => {
 };
 
 export const Btn = ({ children, variant = 'primary', size = 'md', style, ...props }) => {
+  const { mode } = useTheme();
   useT();
+  const light = mode === 'light';
   const bg    = variant === 'primary' ? T.accent
               : variant === 'danger'  ? T.red
               : variant === 'ghost'   ? 'transparent'
-              : T.card;
-  const color = variant === 'primary' ? '#000'
+              : light ? T.card : 'rgba(255,255,255,0.06)';
+  const color = variant === 'primary' ? (light ? '#fff' : '#000')
               : variant === 'danger'  ? '#fff'
               : T.text;
-  const pad   = size === 'sm' ? '6px 12px' : size === 'lg' ? '14px 24px' : '10px 18px';
+  const pad   = size === 'sm' ? '8px 12px' : size === 'lg' ? '14px 24px' : '12px 16px';
   return (
     <button {...props} style={{
       background: bg, color,
-      border: `1px solid ${variant === 'ghost' ? T.border : 'transparent'}`,
-      borderRadius: 10, padding: pad,
+      border: `1px solid ${variant === 'ghost' || variant === 'secondary' ? T.border : 'transparent'}`,
+      borderRadius: light ? 12 : 14, padding: pad,
       fontSize: size === 'sm' ? 12 : 13,
-      fontWeight: 700, cursor: 'pointer',
+      fontWeight: variant === 'primary' ? 900 : 800, cursor: props.disabled ? 'not-allowed' : 'pointer',
       fontFamily: "'Inter', sans-serif", transition: 'all 0.2s',
       ...style,
     }}>{children}</button>
@@ -172,11 +186,20 @@ export const Empty = ({ message = 'No data', icon = '📭' }) => {
 };
 
 export const PageHeader = ({ title, subtitle, action }) => {
+  const { mode } = useTheme();
   useT();
+  const light = mode === 'light';
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24,
+      borderRadius: light ? 0 : 22,
+      border: light ? '0' : `1px solid ${T.border}`,
+      background: light ? 'transparent' : 'linear-gradient(135deg,#111827,#020617)',
+      padding: light ? '0 0 4px' : 22,
+      boxShadow: light ? 'none' : '0 24px 60px rgba(0,0,0,0.24)',
+    }}>
       <div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: T.text, marginBottom: 4 }}>{title}</div>
+        <div style={{ fontSize: 26, fontWeight: 900, color: T.text, marginBottom: 4 }}>{title}</div>
         {subtitle && <div style={{ fontSize: 13, color: T.textMid }}>{subtitle}</div>}
       </div>
       {action}
@@ -215,16 +238,18 @@ export const Table = ({ columns, rows, keyField = 'id' }) => {
 };
 
 export const Modal = ({ open, onClose, title, children, width = 480 }) => {
+  const { mode } = useTheme();
   useT();
+  const light = mode === 'light';
   if (!open) return null;
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} />
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(2,6,23,0.78)', backdropFilter: 'blur(4px)' }} />
       <div style={{
-        position: 'relative', background: T.card,
-        border: `1px solid ${T.border}`, borderRadius: 20,
-        padding: 28, width, maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.3)',
+        position: 'relative', background: light ? T.card : '#111827',
+        border: `1px solid ${T.border}`, borderRadius: 18,
+        padding: 24, width, maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto',
+        boxShadow: '0 28px 70px rgba(0,0,0,0.45)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ color: T.text, fontSize: 18, fontWeight: 800, margin: 0 }}>{title}</h2>

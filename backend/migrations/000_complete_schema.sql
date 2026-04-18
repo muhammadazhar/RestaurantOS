@@ -146,6 +146,26 @@ CREATE TABLE IF NOT EXISTS shifts (
 CREATE INDEX IF NOT EXISTS idx_shifts_employee ON shifts(employee_id, date);
 CREATE INDEX IF NOT EXISTS idx_shifts_restaurant ON shifts(restaurant_id, date);
 
+CREATE TABLE IF NOT EXISTS shift_sessions (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  shift_id        UUID NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+  restaurant_id   UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  employee_id     UUID REFERENCES employees(id) ON DELETE SET NULL,
+  shift_date      DATE NOT NULL,
+  status          VARCHAR(20) NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active','in_process','completed','closed')),
+  opening_balance DECIMAL(10,2) DEFAULT 0,
+  closing_cash    DECIMAL(10,2),
+  cashier_collection DECIMAL(10,2),
+  opened_at       TIMESTAMPTZ DEFAULT NOW(),
+  closed_at       TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_shift_sessions_shift_date ON shift_sessions(shift_id, shift_date);
+CREATE INDEX IF NOT EXISTS idx_shift_sessions_restaurant_date ON shift_sessions(restaurant_id, shift_date);
+CREATE INDEX IF NOT EXISTS idx_shift_sessions_employee_date ON shift_sessions(employee_id, shift_date);
+
 -- ── Categories ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS categories (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -171,6 +191,33 @@ CREATE TABLE IF NOT EXISTS menu_items (
   image_url       TEXT,
   is_available    BOOLEAN NOT NULL DEFAULT TRUE,
   is_featured     BOOLEAN NOT NULL DEFAULT FALSE,
+  pricing_mode    VARCHAR(20) NOT NULL DEFAULT 'variant'
+                    CHECK (pricing_mode IN ('variant','weight','piece','pack')),
+  kitchen_route   VARCHAR(120),
+  status          VARCHAR(20) NOT NULL DEFAULT 'active'
+                    CHECK (status IN ('active','draft','inactive')),
+  visible_pos     BOOLEAN NOT NULL DEFAULT TRUE,
+  visible_web     BOOLEAN NOT NULL DEFAULT TRUE,
+  visible_delivery BOOLEAN NOT NULL DEFAULT TRUE,
+  tax_included    BOOLEAN NOT NULL DEFAULT TRUE,
+  tax_applicable  BOOLEAN NOT NULL DEFAULT FALSE,
+  discount_eligible BOOLEAN NOT NULL DEFAULT TRUE,
+  min_qty         DECIMAL(10,2) NOT NULL DEFAULT 1,
+  max_qty         DECIMAL(10,2) NOT NULL DEFAULT 10,
+  step_qty        DECIMAL(10,2) NOT NULL DEFAULT 1,
+  round_off_rule  VARCHAR(40) NOT NULL DEFAULT 'nearest_0_50',
+  service_charge_percent DECIMAL(6,2) NOT NULL DEFAULT 0,
+  price_override_role VARCHAR(40) NOT NULL DEFAULT 'manager_only',
+  allow_open_price BOOLEAN NOT NULL DEFAULT FALSE,
+  open_price_role VARCHAR(40) NOT NULL DEFAULT 'manager',
+  hide_cost_on_pos BOOLEAN NOT NULL DEFAULT TRUE,
+  combo_eligible BOOLEAN NOT NULL DEFAULT TRUE,
+  weekend_price_rule BOOLEAN NOT NULL DEFAULT FALSE,
+  weekend_price DECIMAL(10,2),
+  weekend_days TEXT[] NOT NULL DEFAULT ARRAY['FRI','SAT'],
+  promotion_label VARCHAR(80),
+  is_deleted      BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_at      TIMESTAMPTZ,
   sort_order      INT NOT NULL DEFAULT 0,
   tags            JSONB DEFAULT '[]',
   allergens       JSONB DEFAULT '[]',
@@ -180,6 +227,49 @@ CREATE TABLE IF NOT EXISTS menu_items (
 );
 CREATE INDEX IF NOT EXISTS idx_menu_items_restaurant ON menu_items(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_menu_items_category ON menu_items(category_id);
+
+CREATE TABLE IF NOT EXISTS menu_item_variants (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  menu_item_id    UUID NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+  name            VARCHAR(80) NOT NULL,
+  price           DECIMAL(10,2) NOT NULL DEFAULT 0,
+  weekend_price   DECIMAL(10,2),
+  badge           VARCHAR(120),
+  value_label     VARCHAR(80),
+  cost            DECIMAL(10,2) NOT NULL DEFAULT 0,
+  sort_order      INT NOT NULL DEFAULT 0,
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  is_default      BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_menu_item_variants_item ON menu_item_variants(menu_item_id);
+
+CREATE TABLE IF NOT EXISTS menu_item_addon_groups (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  menu_item_id    UUID NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+  name            VARCHAR(120) NOT NULL,
+  min_select      INT NOT NULL DEFAULT 0,
+  max_select      INT NOT NULL DEFAULT 3,
+  sort_order      INT NOT NULL DEFAULT 0,
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_menu_item_addon_groups_item ON menu_item_addon_groups(menu_item_id);
+
+CREATE TABLE IF NOT EXISTS menu_item_addons (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  addon_group_id  UUID NOT NULL REFERENCES menu_item_addon_groups(id) ON DELETE CASCADE,
+  name            VARCHAR(120) NOT NULL,
+  price           DECIMAL(10,2) NOT NULL DEFAULT 0,
+  cost            DECIMAL(10,2) NOT NULL DEFAULT 0,
+  sort_order      INT NOT NULL DEFAULT 0,
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_menu_item_addons_group ON menu_item_addons(addon_group_id);
 
 -- ── Dining Tables ─────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dining_tables (
@@ -203,6 +293,8 @@ CREATE TABLE IF NOT EXISTS orders (
   restaurant_id           UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
   table_id                UUID REFERENCES dining_tables(id),
   employee_id             UUID REFERENCES employees(id),
+  shift_id                UUID REFERENCES shifts(id),
+  shift_session_id        UUID REFERENCES shift_sessions(id),
   order_number            VARCHAR(30) NOT NULL,
   order_type              VARCHAR(20) NOT NULL DEFAULT 'dine_in'
                             CHECK (order_type IN ('dine_in','takeaway','online','delivery')),
@@ -242,6 +334,7 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_restaurant ON orders(restaurant_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_shift_session ON orders(shift_session_id);
 CREATE INDEX IF NOT EXISTS idx_orders_platform ON orders(restaurant_id, platform) WHERE platform IS NOT NULL;
 
 -- ── Order Items ───────────────────────────────────────────────────────────────
@@ -559,6 +652,15 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_menu_items_updated') THEN
     CREATE TRIGGER trg_menu_items_updated BEFORE UPDATE ON menu_items FOR EACH ROW EXECUTE FUNCTION update_updated_at();
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_menu_item_variants_updated') THEN
+    CREATE TRIGGER trg_menu_item_variants_updated BEFORE UPDATE ON menu_item_variants FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_menu_item_addon_groups_updated') THEN
+    CREATE TRIGGER trg_menu_item_addon_groups_updated BEFORE UPDATE ON menu_item_addon_groups FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_menu_item_addons_updated') THEN
+    CREATE TRIGGER trg_menu_item_addons_updated BEFORE UPDATE ON menu_item_addons FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_orders_updated') THEN
     CREATE TRIGGER trg_orders_updated BEFORE UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION update_updated_at();
   END IF;
@@ -621,7 +723,7 @@ BEGIN
   -- Manager role
   INSERT INTO roles(id, restaurant_id, name, permissions, is_system)
   VALUES (v_role_id, v_restaurant_id, 'Manager',
-    '["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","gl","alerts","settings"]'::jsonb, TRUE)
+    '["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","shift_management","gl","alerts","settings"]'::jsonb, TRUE)
   ON CONFLICT (id) DO NOTHING;
 
   -- Other roles

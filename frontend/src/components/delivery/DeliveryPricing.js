@@ -115,7 +115,7 @@ function Btn({ children, variant = 'primary', size = 'md', onClick, disabled, st
     opacity: disabled ? 0.6 : 1, transition: 'opacity 0.15s',
   };
   const variants = {
-    primary: { background: T.accent, color: '#000' },
+    primary: { background: T.accent, color: '#fff' },
     ghost: { background: 'transparent', color: T.textMid, border: `1px solid ${T.border}` },
     danger: { background: T.red, color: '#fff' },
   };

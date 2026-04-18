@@ -3,24 +3,24 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 // ─── Theme palettes ────────────────────────────────────────────────────────────
 export const THEMES = {
   dark: {
-    bg:          '#0A0C10',
-    surface:     '#111318',
-    card:        '#181C24',
-    border:      '#252A35',
-    borderLight: '#2E3545',
-    accent:      '#F5A623',
-    accentGlow:  'rgba(245,166,35,0.18)',
-    accentDim:   '#C47F0F',
-    green:       '#2ECC71',
-    greenDim:    'rgba(46,204,113,0.15)',
-    red:         '#E74C3C',
-    redDim:      'rgba(231,76,60,0.15)',
-    blue:        '#3498DB',
-    blueDim:     'rgba(52,152,219,0.15)',
+    bg:          '#020617',
+    surface:     '#111827',
+    card:        '#0F172A',
+    border:      'rgba(255,255,255,0.10)',
+    borderLight: 'rgba(255,255,255,0.16)',
+    accent:      '#FBBF24',
+    accentGlow:  'rgba(251,191,36,0.12)',
+    accentDim:   '#F59E0B',
+    green:       '#10B981',
+    greenDim:    'rgba(16,185,129,0.15)',
+    red:         '#EF4444',
+    redDim:      'rgba(239,68,68,0.14)',
+    blue:        '#38BDF8',
+    blueDim:     'rgba(56,189,248,0.14)',
     purple:      '#9B59B6',
-    text:        '#E8ECF4',
-    textMid:     '#8A94A8',
-    textDim:     '#4A5568',
+    text:        '#FFFFFF',
+    textMid:     '#CBD5E1',
+    textDim:     '#94A3B8',
   },
   ocean: {
     bg:          '#070D17',
@@ -83,24 +83,24 @@ export const THEMES = {
     textDim:     '#4A5568',
   },
   light: {
-    bg:          '#ECEEF2',        // slightly deeper — distinguishes bg from surface
-    surface:     '#F5F6F8',        // sidebar / panels — off-white, clearly ≠ card
-    card:        '#FFFFFF',        // content cards stay pure white
-    border:      '#C8CDD8',        // darker border — cards clearly visible on bg
-    borderLight: '#B0B7C6',        // secondary borders, dividers
-    accent:      '#C47A0A',        // deeper amber — 4.5:1+ on white
-    accentGlow:  'rgba(196,122,10,0.14)', // visible active-nav highlight
-    accentDim:   '#A36308',        // hover/dim accent
-    green:       '#15803D',        // deeper green — 4.8:1 on white
+    bg:          '#F4F7FB',
+    surface:     '#F8FAFC',
+    card:        '#FFFFFF',
+    border:      '#E2E8F0',
+    borderLight: '#CBD5E1',
+    accent:      '#14B8A6',
+    accentGlow:  '#F0FDFA',
+    accentDim:   '#0D9488',
+    green:       '#15803D',
     greenDim:    'rgba(21,128,61,0.12)',
-    red:         '#B91C1C',        // deeper red — 5.0:1 on white
+    red:         '#B91C1C',
     redDim:      'rgba(185,28,28,0.10)',
-    blue:        '#1D4ED8',        // deeper blue — 5.9:1 on white
-    blueDim:     'rgba(29,78,216,0.10)',
-    purple:      '#6D28D9',        // deeper purple — 5.1:1 on white
-    text:        '#111827',        // near-black — unchanged
-    textMid:     '#374151',        // dark gray — 10:1 on white (was too light)
-    textDim:     '#6B7280',        // medium gray — 4.6:1 on white (was #9CA3AF at 2.8:1)
+    blue:        '#0D9488',
+    blueDim:     '#CCFBF1',
+    purple:      '#6D28D9',
+    text:        '#0F172A',
+    textMid:     '#475569',
+    textDim:     '#64748B',
   },
 };
 
@@ -109,7 +109,7 @@ const ThemeContext = createContext(null);
 export function ThemeProvider({ children }) {
   const [mode, setMode] = useState(() => {
     const saved = localStorage.getItem('ros_theme');
-    return (saved && THEMES[saved]) ? saved : 'dark';
+    return (saved && THEMES[saved]) ? saved : 'light';
   });
 
   const theme = THEMES[mode] || THEMES.dark;

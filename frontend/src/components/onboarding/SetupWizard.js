@@ -275,7 +275,7 @@ export default function SetupWizard() {
                     <input type="number" min={1} max={50} value={customTable.capacity} onChange={e => setCustomTable(c => ({ ...c, capacity: parseInt(e.target.value) || 4 }))}
                       style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Inter',sans-serif", outline: 'none', width: '100%' }} />
                   </div>
-                  <button onClick={addCustomTable} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>+ Add</button>
+                  <button onClick={addCustomTable} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Inter',sans-serif", whiteSpace: 'nowrap' }}>+ Add</button>
                 </div>
               </div>
 
@@ -338,7 +338,7 @@ export default function SetupWizard() {
                     onKeyDown={e => e.key === 'Enter' && addCustomCat()}
                     placeholder="Add custom category and press Enter…"
                     style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '9px 12px', color: T.text, fontSize: 13, fontFamily:"'Inter',sans-serif", outline: 'none' }} />
-                  <button onClick={addCustomCat} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Inter',sans-serif" }}>+ Add</button>
+                  <button onClick={addCustomCat} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily:"'Inter',sans-serif" }}>+ Add</button>
                 </div>
               </div>
             </div>

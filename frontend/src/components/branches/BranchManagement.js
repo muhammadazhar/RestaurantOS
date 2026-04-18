@@ -237,7 +237,7 @@ export default function BranchManagement() {
           return (
             <Card key={b.id} style={{ padding: 18, border: isCurrent ? `2px solid ${T.accent}` : `1px solid ${T.border}`, position: 'relative' }}>
               {isCurrent && (
-                <div style={{ position: 'absolute', top: 10, right: 10, background: T.accent, color: '#000', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6 }}>
+                <div style={{ position: 'absolute', top: 10, right: 10, background: T.accent, color: '#fff', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6 }}>
                   YOU ARE HERE
                 </div>
               )}

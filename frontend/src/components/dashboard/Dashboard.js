@@ -73,7 +73,7 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-          <button onClick={() => navigate('/setup')} style={{ background: T.accent, color: '#000', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>
+          <button onClick={() => navigate('/setup')} style={{ background: T.accent, color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif", flexShrink: 0 }}>
             Continue Setup →
           </button>
         </div>
