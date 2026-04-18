@@ -1,10 +1,18 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const db = require('../config/db');
 const { getActiveModuleKeys } = require('./subscriptionController');
 
 const signToken = (payload, secret, expiresIn) =>
   jwt.sign(payload, secret, { expiresIn });
+
+const hashResetToken = (token) =>
+  crypto.createHash('sha256').update(token).digest('hex');
+
+const resetResponse = {
+  message: 'If an active account matches those details, password reset instructions have been sent.',
+};
 
 // POST /api/auth/login  — employee login
 exports.login = async (req, res) => {
@@ -20,7 +28,7 @@ exports.login = async (req, res) => {
        FROM employees e
        JOIN restaurants r ON e.restaurant_id = r.id
        JOIN roles ro ON e.role_id = ro.id
-       WHERE e.email = $1 AND r.slug = $2 AND e.status = 'active'`,
+       WHERE LOWER(e.email) = LOWER($1) AND LOWER(r.slug) = LOWER($2) AND e.status = 'active'`,
       [email, restaurantSlug]
     );
 
@@ -85,7 +93,7 @@ exports.superLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await db.query(
-      `SELECT * FROM users WHERE email = $1 AND is_super_admin = TRUE`, [email]
+      `SELECT * FROM users WHERE LOWER(email) = LOWER($1) AND is_super_admin = TRUE`, [email]
     );
     if (!result.rows.length)
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -137,6 +145,134 @@ exports.logout = async (req, res) => {
   const { refreshToken } = req.body;
   if (refreshToken) await db.query(`DELETE FROM refresh_tokens WHERE token = $1`, [refreshToken]);
   res.json({ message: 'Logged out' });
+};
+
+// POST /api/auth/forgot-password
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email, restaurantSlug } = req.body;
+    if (!email || !restaurantSlug)
+      return res.status(400).json({ error: 'Email and restaurant slug required' });
+
+    const result = await db.query(
+      `SELECT e.id, e.full_name, e.email, r.name AS restaurant_name, r.slug
+       FROM employees e
+       JOIN restaurants r ON e.restaurant_id = r.id
+       WHERE LOWER(e.email) = LOWER($1)
+         AND r.slug = $2
+         AND e.status = 'active'
+         AND r.status != 'suspended'
+       LIMIT 1`,
+      [email, restaurantSlug]
+    );
+
+    if (!result.rows.length) return res.json(resetResponse);
+
+    const employee = result.rows[0];
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashResetToken(token);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await db.query(
+      `UPDATE password_reset_tokens
+       SET used_at = NOW()
+       WHERE employee_id = $1 AND used_at IS NULL`,
+      [employee.id]
+    );
+
+    await db.query(
+      `INSERT INTO password_reset_tokens(employee_id, token_hash, expires_at)
+       VALUES($1, $2, $3)`,
+      [employee.id, tokenHash, expiresAt]
+    );
+
+    const clientUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${clientUrl.replace(/\/$/, '')}/reset-password?token=${token}`;
+
+    try {
+      const { sendEmail } = require('../utils/email');
+      await sendEmail(
+        employee.email,
+        'Reset your RestaurantOS password',
+        `<h2>Password reset requested</h2>
+         <p>Hello ${employee.full_name || 'there'},</p>
+         <p>Use the button below to reset your password for <b>${employee.restaurant_name}</b>. This link expires in 1 hour.</p>
+         <p><a href="${resetUrl}" style="display:inline-block;padding:12px 18px;background:#F5C542;color:#111;text-decoration:none;border-radius:8px;font-weight:700">Reset password</a></p>
+         <p>If you did not request this, you can ignore this email.</p>`
+      );
+    } catch (emailErr) {
+      console.warn('Password reset email failed:', emailErr.message);
+    }
+
+    const body = { ...resetResponse };
+    if (process.env.NODE_ENV !== 'production') {
+      body.resetToken = token;
+      body.resetUrl = resetUrl;
+    }
+    res.json(body);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// POST /api/auth/reset-password
+exports.resetPassword = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    const { token, password } = req.body;
+    if (!token || !password)
+      return res.status(400).json({ error: 'Token and password required' });
+    if (password.length < 6)
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    const tokenHash = hashResetToken(token);
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `SELECT prt.id, prt.employee_id
+       FROM password_reset_tokens prt
+       JOIN employees e ON e.id = prt.employee_id
+       JOIN restaurants r ON r.id = e.restaurant_id
+       WHERE prt.token_hash = $1
+         AND prt.used_at IS NULL
+         AND prt.expires_at > NOW()
+         AND e.status = 'active'
+         AND r.status != 'suspended'
+       FOR UPDATE`,
+      [tokenHash]
+    );
+
+    if (!result.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Reset link is invalid or expired' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const { employee_id, id: resetId } = result.rows[0];
+
+    await client.query(
+      `UPDATE employees SET password_hash = $1 WHERE id = $2`,
+      [passwordHash, employee_id]
+    );
+    await client.query(
+      `UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`,
+      [resetId]
+    );
+    await client.query(
+      `DELETE FROM refresh_tokens WHERE employee_id = $1`,
+      [employee_id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Password reset successful. You can sign in now.' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
 };
 
 // GET /api/auth/groups  — public list of company groups (for registration + login)
@@ -252,7 +388,7 @@ exports.register = async (req, res) => {
 
     // Create all default roles
     const roleNames = [
-      ['Manager', '["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","gl","alerts","settings","rider"]', true],
+      ['Manager', '["dashboard","pos","kitchen","tables","inventory","recipes","employees","attendance","shift_management","gl","alerts","settings","rider"]', true],
       ['Head Server', '["pos","kitchen","tables","alerts"]', false],
       ['Server', '["pos","tables","alerts"]', false],
       ['Chef', '["kitchen","recipes","inventory","alerts"]', false],
