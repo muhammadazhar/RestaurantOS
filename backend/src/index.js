@@ -17,10 +17,27 @@ const fs     = require('fs');
 const uploadsDir = require('path').join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+const configuredOrigins = (process.env.CLIENT_URL || 'http://localhost:3000')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (configuredOrigins.includes(origin)) return true;
+  return process.env.NODE_ENV !== 'production'
+    && /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+};
+
+const corsOrigin = (origin, cb) => {
+  if (isAllowedOrigin(origin)) return cb(null, true);
+  return cb(new Error(`CORS blocked origin: ${origin}`));
+};
+
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, {
-  cors: { origin: process.env.CLIENT_URL || 'http://localhost:3000', methods: ['GET','POST'] }
+  cors: { origin: corsOrigin, methods: ['GET','POST'] }
 });
 
 // Trust proxy headers (fixes ERR_ERL_UNEXPECTED_X_FORWARDED_FOR with express-rate-limit)
@@ -29,7 +46,7 @@ app.set('trust proxy', 1);
 // ── Middleware ─────────────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(compression());
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('dev'));
 // Allow cross-origin loading of uploaded images (frontend at :3000 fetches from :5000)
@@ -49,6 +66,15 @@ app.set('io', io);
 app.use('/api', routes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+
+const frontendBuildDir = path.join(__dirname, '../../frontend/build');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendBuildDir)) {
+  app.use(express.static(frontendBuildDir));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(frontendBuildDir, 'index.html'));
+  });
+}
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
@@ -145,6 +171,66 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE shifts ADD CONSTRAINT shifts_status_check
       CHECK (status IN ('scheduled','active','in_process','completed','closed','absent'));
   `).catch(e => console.warn('Migration 008b note:', e.message));
+
+  // Migration 008c: range-based shift schedules + daily open/close sessions.
+  await db.query(`
+    ALTER TABLE shifts
+      ADD COLUMN IF NOT EXISTS date_from DATE,
+      ADD COLUMN IF NOT EXISTS date_to DATE,
+      ADD COLUMN IF NOT EXISTS working_days INT[] DEFAULT ARRAY[1,2,3,4,5],
+      ADD COLUMN IF NOT EXISTS allow_multiple_per_day BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS require_balance BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS schedule_type VARCHAR(20) NOT NULL DEFAULT 'single';
+
+    UPDATE shifts
+    SET date_from = COALESCE(date_from, date),
+        date_to = COALESCE(date_to, date),
+        working_days = COALESCE(working_days, ARRAY[EXTRACT(ISODOW FROM date)::INT]),
+        schedule_type = CASE
+          WHEN date_from IS NOT NULL AND date_to IS NOT NULL AND date_from <> date_to THEN 'range'
+          ELSE 'single'
+        END
+    WHERE date IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS shift_sessions (
+      id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      shift_id        UUID NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+      restaurant_id   UUID NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+      employee_id     UUID REFERENCES employees(id) ON DELETE SET NULL,
+      shift_date      DATE NOT NULL,
+      status          VARCHAR(20) NOT NULL DEFAULT 'active'
+                        CHECK (status IN ('active','in_process','completed','closed')),
+      opening_balance NUMERIC(10,2) DEFAULT 0,
+      closing_cash    NUMERIC(10,2),
+      opened_at       TIMESTAMPTZ DEFAULT NOW(),
+      closed_at       TIMESTAMPTZ,
+      created_at      TIMESTAMPTZ DEFAULT NOW(),
+      updated_at      TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_shift_sessions_shift_date
+      ON shift_sessions(shift_id, shift_date);
+    CREATE INDEX IF NOT EXISTS idx_shift_sessions_restaurant_date
+      ON shift_sessions(restaurant_id, shift_date);
+    CREATE INDEX IF NOT EXISTS idx_shift_sessions_employee_date
+      ON shift_sessions(employee_id, shift_date);
+  `).catch(e => console.warn('Migration 008c note:', e.message));
+
+  // Password reset tokens for forgot-password flow
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      employee_id   UUID NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+      token_hash    TEXT NOT NULL UNIQUE,
+      expires_at    TIMESTAMPTZ NOT NULL,
+      used_at       TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_employee
+      ON password_reset_tokens(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_hash
+      ON password_reset_tokens(token_hash);
+  `).catch(e => console.warn('Password reset migration note:', e.message));
 
   // Migration 010: Module-based licensing system
   await db.query(`
@@ -279,6 +365,51 @@ db.query('SELECT NOW()').then(async () => {
     ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_active    BOOLEAN DEFAULT TRUE;
     ALTER TABLE categories ADD COLUMN IF NOT EXISTS image_url    TEXT;
   `).catch(e => console.warn('Migration 016 note:', e.message));
+
+  // Menu variants and channel visibility
+  await db.query(`
+    ALTER TABLE menu_items
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active',
+      ADD COLUMN IF NOT EXISTS visible_pos BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS visible_web BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS visible_delivery BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'menu_items_status_check'
+      ) THEN
+        ALTER TABLE menu_items
+          ADD CONSTRAINT menu_items_status_check
+          CHECK (status IN ('active','draft','inactive'));
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS menu_item_variants (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      menu_item_id UUID NOT NULL REFERENCES menu_items(id) ON DELETE CASCADE,
+      name         VARCHAR(80) NOT NULL,
+      price        DECIMAL(10,2) NOT NULL DEFAULT 0,
+      badge        VARCHAR(120),
+      sort_order   INT NOT NULL DEFAULT 0,
+      is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at   TIMESTAMPTZ DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_menu_item_variants_item
+      ON menu_item_variants(menu_item_id);
+
+    INSERT INTO menu_item_variants(menu_item_id, name, price, badge, sort_order, is_active)
+    SELECT mi.id, 'Regular', mi.price, NULL, 0, TRUE
+    FROM menu_items mi
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM menu_item_variants mv
+      WHERE mv.menu_item_id = mi.id
+    );
+  `).catch(e => console.warn('Menu variants migration note:', e.message));
 
   // Migration 015: Customer support ticketing system
   await db.query(`

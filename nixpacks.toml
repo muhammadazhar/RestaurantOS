@@ -1,8 +1,8 @@
 [phases.install]
-cmds = ['npm install --prefix backend --legacy-peer-deps']
+cmds = ['npm install --prefix backend --legacy-peer-deps', 'npm install --prefix frontend --legacy-peer-deps']
 
 [phases.build]
-cmds = []
+cmds = ['CI=false npm run build --prefix frontend']
 
 [start]
 cmd = 'node backend/src/index.js'
