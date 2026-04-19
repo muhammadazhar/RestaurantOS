@@ -4,6 +4,7 @@ import { Card, Badge, Spinner, Btn, Modal, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { mergePrintTemplates, renderKotHtml, renderReceiptHtml } from '../../utils/printTemplates';
 import toast from 'react-hot-toast';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
@@ -526,65 +527,21 @@ export default function POS() {
     ).filter(i => i?.name);
 
     const tbl = tableId ? tables.find(t => t.id === tableId) : null;
-    const typeLabel = (order.order_type || orderType).replace(/_/g, ' ').toUpperCase();
-    const timeStr = new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+    const templates = mergePrintTemplates(menu.settings || {});
+    const waiterName = waiterId ? employees.find(e => e.id === waiterId)?.full_name : order.waiter_name;
 
     const w = window.open('', '_blank', 'width=360,height=600');
     if (!w) { toast.error('Pop-up blocked - please allow pop-ups for KOT printing'); return; }
-    w.document.write(`
-      <!DOCTYPE html><html><head><title>KOT - ${order.order_number}</title>
-      <style>
-        @page { size: 80mm auto; margin: 0; }
-        * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
-        html, body { background: #fff; width: 80mm; }
-        body {
-          font-family: Consolas, 'Courier New', monospace;
-          font-size: 13px;
-          font-weight: 700;
-          line-height: 1.25;
-          padding: 2mm 3mm;
-          color: #000;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .center { text-align: center; }
-        .bold { font-weight: 900; }
-        .kot-header { font-size: 15px; font-weight: 900; text-align: center; letter-spacing: 0; }
-        .order-num { font-size: 28px; font-weight: 900; text-align: center; letter-spacing: 1px; margin: 5px 0; }
-        .line { border-top: 2px solid #000; margin: 8px 0; }
-        .dline { border-top: 1px dashed #000; margin: 5px 0; }
-        .row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-size: 12px; }
-        .row span:last-child { text-align: right; max-width: 62%; overflow-wrap: anywhere; }
-        .item-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; }
-        .item-name { font-size: 15px; font-weight: 900; flex: 1; padding-right: 8px; overflow-wrap: anywhere; }
-        .item-qty { font-size: 22px; font-weight: 900; min-width: 40px; text-align: right; }
-        .notes { font-size: 12px; padding: 2px 0 4px 8px; font-style: italic; overflow-wrap: anywhere; }
-        @media print {
-          html, body { width: 80mm; }
-          body { padding: 2mm 3mm; }
-        }
-      </style></head>
-      <body>
-        <div class="kot-header">KITCHEN ORDER</div>
-        <div class="order-num">#${order.order_number}</div>
-        <div class="line"></div>
-        <div class="row"><span class="bold">Type:</span><span>${typeLabel}</span></div>
-        ${tbl ? `<div class="row"><span class="bold">Table:</span><span>${tbl.section ? tbl.section + ' - ' : ''}${tbl.label}</span></div>` : ''}
-        ${(custName || order.customer_name) ? `<div class="row"><span class="bold">Customer:</span><span>${custName || order.customer_name}</span></div>` : ''}
-        ${waiterId ? `<div class="row"><span class="bold">Waiter:</span><span>${employees.find(e => e.id === waiterId)?.full_name || ''}</span></div>` : (order.waiter_name ? `<div class="row"><span class="bold">Waiter:</span><span>${order.waiter_name}</span></div>` : '')}
-        <div class="row"><span class="bold">Time:</span><span>${timeStr}</span></div>
-        <div class="line"></div>
-        ${items.map(i => `
-          <div class="item-row">
-            <span class="item-name">${i.name}</span>
-            <span class="item-qty">x${i.quantity ?? i.qty}</span>
-          </div>
-          ${i.notes ? `<div class="notes">Note: ${i.notes}</div>` : ''}
-          <div class="dline"></div>
-        `).join('')}
-        ${orderNotes ? `<div style="margin-top:8px;padding:6px;border:1px solid #000;border-radius:4px"><span class="bold">Order Notes:</span><br><span style="font-size:13px">${orderNotes}</span></div>` : ''}
-      </body></html>
-    `);
+    w.document.write(renderKotHtml({
+      template: templates.kot,
+      restaurant: { logo_url: menu.settings?.logo_url },
+      order: { ...order, order_type: order.order_type || orderType, customer_name: custName || order.customer_name },
+      items,
+      table: tbl,
+      orderNotes,
+      cashierName: user?.full_name || user?.name || '',
+      waiterName,
+    }));
     w.document.close();
     setTimeout(() => { w.print(); }, 300);
   };
@@ -594,7 +551,6 @@ export default function POS() {
     const o = createdOrder;
     const methodLabel = { cash: 'Cash', card: 'Card', jazzcash: 'JazzCash', easypaisa: 'Easypaisa', cod: 'Cash on Delivery' }[takePayMethod] || takePayMethod;
     const isCOD = takePayMethod === 'cod';
-    const fmtD = (d) => new Date(d).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' });
     const items = (o.items && o.items.length ? o.items : o._cartItems.map(c => ({
       name: c.name, quantity: c.qty, unit_price: c.price, total_price: c.price * c.qty, notes: c.notes,
     }))).filter(i => i?.name);
@@ -605,90 +561,24 @@ export default function POS() {
     const disc = Number(o.discount_amount || o._discountAmt || 0);
     const ttl  = Number(o.total_amount   || o._total);
     const w = window.open('', '_blank', 'width=420,height=720');
-    w.document.write(`
-      <!DOCTYPE html><html><head><title>Receipt - ${o.order_number}</title>
-      <style>
-        @page { size: 80mm auto; margin: 0; }
-        * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
-        html, body { background: #fff; width: 80mm; }
-        body {
-          font-family: Consolas, 'Courier New', monospace;
-          font-size: 12px;
-          font-weight: 700;
-          line-height: 1.25;
-          padding: 2mm 3mm;
-          color: #000;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .center { text-align: center; }
-        .bold   { font-weight: 900; }
-        .row    { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
-        .row span:last-child { text-align: right; max-width: 62%; overflow-wrap: anywhere; }
-        .grid4  { display: grid; grid-template-columns: minmax(0,1fr) 24px 52px 58px; gap: 3px; padding: 4px 0; border-bottom: 1px dashed #000; align-items: start; }
-        .grid4 span:first-child { overflow-wrap: anywhere; }
-        .line   { border-top: 1px dashed #000; margin: 8px 0; }
-        .big    { font-size: 15px; font-weight: 900; }
-        .small  { font-size: 10px; font-weight: 700; }
-        .paid-stamp { border: 2px solid #000; border-radius: 4px; padding: 5px 14px; display: inline-block; font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 12px; }
-        .cod-stamp  { border: 2px solid #000; border-radius: 4px; padding: 5px 12px; display: inline-block; font-size: 13px; font-weight: 900; letter-spacing: 1px; margin-top: 12px; }
-        @media print {
-          html, body { width: 80mm; }
-          body { padding: 2mm 3mm; }
-        }
-      </style></head>
-      <body>
-        <div class="center bold" style="font-size:20px; margin-bottom:4px">The Golden Fork</div>
-        <div class="center small" style="margin-bottom:16px">Fine dining at its best - Karachi</div>
-        <div class="line"></div>
-        <div class="row"><span>Order:</span><span class="bold">${o.order_number}</span></div>
-        <div class="row"><span>Type:</span><span>${(o.order_type || orderType).replace('_',' ').toUpperCase()}</span></div>
-        <div class="row"><span>Customer:</span><span class="bold">${o.customer_name || o._custName || '-'}</span></div>
-        ${(o.customer_phone || o._custPhone) ? `<div class="row"><span>Phone:</span><span>${o.customer_phone || o._custPhone}</span></div>` : ''}
-        ${isCOD && (o.delivery_address?.address || custAddr) ? `<div class="row"><span>Address:</span><span>${o.delivery_address?.address || custAddr}</span></div>` : ''}
-        <div class="row"><span>Date:</span><span>${fmtD(o.created_at || new Date())}</span></div>
-        <div class="row"><span>Cashier:</span><span class="bold">${user?.full_name || user?.name || '-'}</span></div>
-        ${waiterId ? `<div class="row"><span>Waiter:</span><span class="bold">${employees.find(e => e.id === waiterId)?.full_name || '-'}</span></div>` : (o.waiter_name ? `<div class="row"><span>Waiter:</span><span class="bold">${o.waiter_name}</span></div>` : '')}
-        ${currentShift?.shift ? `<div class="row"><span>Shift:</span><span class="bold">#${currentShift.shift.shift_number || '-'} ${currentShift.shift.shift_name} (${currentShift.shift.start_time?.slice(0,5)}-${currentShift.shift.end_time?.slice(0,5)})</span></div>` : ''}
-        <div class="line"></div>
-        <div class="grid4">
-          <span class="small">ITEM</span>
-          <span class="small" style="text-align:center">QTY</span>
-          <span class="small" style="text-align:right">UNIT</span>
-          <span class="small" style="text-align:right">TOTAL</span>
-        </div>
-        ${items.map(i => `
-          <div class="grid4">
-            <span>${i.name}${i.notes ? '<br><span style="font-size:10px;color:#888">'+i.notes+'</span>' : ''}</span>
-            <span style="text-align:center">x${i.quantity}</span>
-            <span style="text-align:right">PKR ${Number(i.unit_price).toLocaleString()}</span>
-            <span style="text-align:right" class="bold">PKR ${Number(i.total_price).toLocaleString()}</span>
-          </div>
-        `).join('')}
-        <div class="line"></div>
-        <div class="row"><span>Subtotal</span><span>PKR ${sub.toLocaleString()}</span></div>
-        ${receiptTaxBreakdown.length
-          ? receiptTaxBreakdown.map(t => `<div class="row"><span>${t.name || 'Tax'} (${Number(t.rate || 0).toLocaleString()}%)</span><span>PKR ${Number(t.amount || 0).toLocaleString()}</span></div>`).join('')
-          : `<div class="row"><span>${receiptTaxLabel}</span><span>PKR ${tax.toLocaleString()}</span></div>`}
-        ${disc > 0 ? `<div class="row"><span>Discount</span><span>- PKR ${disc.toLocaleString()}</span></div>` : ''}
-        <div class="line"></div>
-        <div class="row big"><span>TOTAL</span><span>PKR ${ttl.toLocaleString()}</span></div>
-        <div class="line"></div>
-        <div class="row"><span>Payment</span><span class="bold">${methodLabel}</span></div>
-        ${takePayMethod === 'cash' && tenderedAmount ? `
-          <div class="row"><span>Tendered</span><span>PKR ${parseFloat(tenderedAmount).toLocaleString()}</span></div>
-          <div class="row bold"><span>Change</span><span>PKR ${Math.max(0, parseFloat(tenderedAmount) - ttl).toLocaleString(undefined, {minimumFractionDigits:0,maximumFractionDigits:2})}</span></div>
-        ` : ''}
-        <div class="center" style="margin-top:12px">
-          ${isCOD
-            ? `<span class="cod-stamp">CASH ON DELIVERY</span>`
-            : `<span class="paid-stamp">PAID</span>`}
-        </div>
-        <div class="center small" style="margin-top:20px; line-height:1.8">
-          Thank you for your order!<br>Please come again soon.
-        </div>
-      </body></html>
-    `);
+    const templates = mergePrintTemplates(menu.settings || {});
+    const waiterName = waiterId ? employees.find(e => e.id === waiterId)?.full_name : o.waiter_name;
+    w.document.write(renderReceiptHtml({
+      template: templates.receipt,
+      restaurant: { logo_url: menu.settings?.logo_url },
+      order: { ...o, subtotal: sub, tax_amount: tax, discount_amount: disc, total_amount: ttl, order_type: o.order_type || orderType },
+      items,
+      taxBreakdown: receiptTaxBreakdown,
+      taxLabel: receiptTaxLabel,
+      methodLabel,
+      isPaid: true,
+      isCOD,
+      tenderedAmount,
+      cashierName: user?.full_name || user?.name || '-',
+      waiterName,
+      address: isCOD ? (o.delivery_address?.address || custAddr) : '',
+      shiftLabel: currentShift?.shift ? `#${currentShift.shift.shift_number || '-'} ${currentShift.shift.shift_name} (${currentShift.shift.start_time?.slice(0,5)}-${currentShift.shift.end_time?.slice(0,5)})` : '',
+    }));
     w.document.close();
     setTimeout(() => w.print(), 400);
   };

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getOrders, updateOrderStatus } from '../../services/api';
+import { getOrders, updateOrderStatus, getRestaurantSettings } from '../../services/api';
 import { T, useT } from '../shared/UI';
+import { mergePrintTemplates, renderReceiptHtml } from '../../utils/printTemplates';
 import toast from 'react-hot-toast';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export default function TableBill({ table, onClose, onPaid }) {
   const [payMethod,       setPayMethod]        = useState('cash');
   const [tenderedAmount,  setTenderedAmount]   = useState('');
   const [showPrintPrompt, setShowPrintPrompt]  = useState(false);
+  const [printSettings, setPrintSettings] = useState(null);
   const printRef = useRef();
 
   useEffect(() => {
@@ -64,6 +66,10 @@ export default function TableBill({ table, onClose, onPaid }) {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [table?.id]);
+
+  useEffect(() => {
+    getRestaurantSettings().then(r => setPrintSettings(r.data)).catch(() => {});
+  }, []);
 
   const handlePay = async () => {
     if (!order) return;
@@ -87,6 +93,23 @@ export default function TableBill({ table, onClose, onPaid }) {
     const methodLabel = { cash: 'Cash', card: 'Card', jazzcash: 'JazzCash', easypaisa: 'Easypaisa' }[method] || method;
     const isPaid = showPrintPrompt || order.payment_status === 'paid';
     const w = window.open('', '_blank', 'width=420,height=720');
+    const templates = mergePrintTemplates(printSettings || {});
+    w.document.write(renderReceiptHtml({
+      template: templates.receipt,
+      restaurant: printSettings || {},
+      order,
+      items: order.items || [],
+      table,
+      taxLabel: 'Tax',
+      methodLabel,
+      isPaid,
+      tenderedAmount: method === 'cash' ? tenderedAmount : '',
+      cashierName: order.server_name || '',
+      waiterName: order.waiter_name || '',
+    }));
+    w.document.close();
+    setTimeout(() => w.print(), 400);
+    return;
     w.document.write(`
       <!DOCTYPE html><html><head><title>Receipt — ${table.label}</title>
       <style>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { getOrders, updateOrderStatus, getPhoneOrders, assignRider, getRiders } from '../../services/api';
+import { getOrders, updateOrderStatus, getPhoneOrders, assignRider, getRiders, getRestaurantSettings } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, Select, PageHeader, T, useT } from '../shared/UI';
+import { mergePrintTemplates, renderReceiptHtml } from '../../utils/printTemplates';
 import toast from 'react-hot-toast';
 
 const STATUS_COLOR = {
@@ -17,12 +18,29 @@ const fmtDT  = d => new Date(d).toLocaleString('en-PK', { dateStyle:'short', tim
 const fmtDay = d => new Date(d).toLocaleDateString('en-PK', { weekday:'short', day:'numeric', month:'short' });
 
 // ─── Receipt printer ──────────────────────────────────────────────────────────
-function printReceipt(order) {
+function printReceipt(order, printSettings) {
   const fmtD = (d) => new Date(d).toLocaleString('en-PK', { dateStyle: 'medium', timeStyle: 'short' });
   const methodLabel = { cash: 'Cash', card: 'Card', jazzcash: 'JazzCash', easypaisa: 'Easypaisa' }[order.payment_method] || order.payment_method || '—';
   const isDineIn = order.order_type === 'dine_in';
   const items = (order.items || []).filter(i => i?.name);
   const w = window.open('', '_blank', 'width=420,height=720');
+  const templates = mergePrintTemplates(printSettings || {});
+  w.document.write(renderReceiptHtml({
+    template: templates.receipt,
+    restaurant: printSettings || {},
+    order,
+    items,
+    table: isDineIn ? { label: order.table_label } : null,
+    taxLabel: 'Tax',
+    methodLabel,
+    isPaid: order.payment_status === 'paid',
+    cashierName: order.server_name || '',
+    waiterName: order.waiter_name || '',
+    shiftLabel: order.shift_number ? `#${order.shift_number} ${order.shift_name || ''} (${(order.shift_start || '').slice(0, 5)}-${(order.shift_end || '').slice(0, 5)})` : '',
+  }));
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+  return;
   w.document.write(`
     <!DOCTYPE html><html><head><title>Receipt — ${order.order_number}</title>
     <style>
@@ -91,7 +109,7 @@ function printReceipt(order) {
 }
 
 // ─── Order detail modal ───────────────────────────────────────────────────────
-function OrderDetailModal({ order, open, onClose, onStatusChange }) {
+function OrderDetailModal({ order, open, onClose, onStatusChange, printSettings }) {
   if (!order) return null;
   const canAdvance = !['paid','cancelled','served'].includes(order.status);
   const NEXT = { pending:'confirmed', confirmed:'preparing', preparing:'ready', ready:'served', served:'paid' };
@@ -182,7 +200,7 @@ function OrderDetailModal({ order, open, onClose, onStatusChange }) {
             ✓ Mark as Paid
           </Btn>
         )}
-        <Btn variant="ghost" onClick={() => printReceipt(order)} style={{ width: '100%' }}>
+        <Btn variant="ghost" onClick={() => printReceipt(order, printSettings)} style={{ width: '100%' }}>
           🖨 Print Receipt
         </Btn>
         {order.payment_status !== 'paid' && order.status !== 'cancelled' && (
@@ -356,6 +374,7 @@ export default function Orders() {
   const [typeF,    setTypeF]    = useState('all');
   const [dateFrom, setDateFrom] = useState(today());
   const [dateTo,   setDateTo]   = useState(today());
+  const [printSettings, setPrintSettings] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -376,6 +395,9 @@ export default function Orders() {
   }, [statusF, typeF, dateFrom, dateTo]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    getRestaurantSettings().then(r => setPrintSettings(r.data)).catch(() => {});
+  }, []);
 
   const handleStatus = async (id, status) => {
     try { await updateOrderStatus(id, status); toast.success(`Order → ${status}`); load(); }
@@ -563,6 +585,7 @@ export default function Orders() {
         open={!!detail}
         onClose={() => setDetail(null)}
         onStatusChange={handleStatus}
+        printSettings={printSettings}
       />
       </>}
     </div>

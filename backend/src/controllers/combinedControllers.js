@@ -414,15 +414,19 @@ exports.getMenu = async (req, res) => {
       return acc;
     }, {});
     const settingsRes = await db.query(
-      `SELECT settings FROM restaurants WHERE id=$1`, [req.user.restaurantId]
+      `SELECT settings, name, logo_url FROM restaurants WHERE id=$1`, [req.user.restaurantId]
     );
-    const settings = settingsRes.rows[0]?.settings || {};
+    const restaurant = settingsRes.rows[0] || {};
+    const settings = restaurant.settings || {};
     res.json({
       categories: cats.rows,
       items: result.rows.map(item => ({ ...item, addon_groups: groupsByItem[item.id] || [] })),
       settings: {
+        restaurant_name: restaurant.name,
+        logo_url: restaurant.logo_url,
         pos_smart_menu_sort_enabled: settings.pos_smart_menu_sort_enabled === true,
         tax_rates: Array.isArray(settings.tax_rates) ? settings.tax_rates : DEFAULT_TAX_RATES,
+        print_templates: settings.print_templates || null,
       },
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }

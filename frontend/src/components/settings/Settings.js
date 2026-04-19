@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, Badge, T, useT } from '../shared/UI';
 import { getRestaurantSettings, updateRestaurantSettings, uploadRestaurantLogo, getRoles, createRole, updateRole, testWhatsAppMsg } from '../../services/api';
+import { DEFAULT_PRINT_TEMPLATES, KOT_FIELDS, RECEIPT_FIELDS, mergePrintTemplates, renderKotHtml, renderReceiptHtml } from '../../utils/printTemplates';
 import toast from 'react-hot-toast';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
@@ -821,6 +822,160 @@ function Integrations() {
 }
 
 // ─── Main Settings page ───────────────────────────────────────────────────────
+function lineTextToArray(value) {
+  return String(value || '').split('\n').map(line => line.trim()).filter(Boolean);
+}
+
+function PrintTemplateEditor() {
+  useT();
+  const [templates, setTemplates] = useState(DEFAULT_PRINT_TEMPLATES);
+  const [restaurant, setRestaurant] = useState({});
+  const [activeDoc, setActiveDoc] = useState('receipt');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getRestaurantSettings().then(r => {
+      setRestaurant(r.data || {});
+      setTemplates(mergePrintTemplates(r.data || {}));
+    }).catch(() => {});
+  }, []);
+
+  const doc = templates[activeDoc];
+  const fields = activeDoc === 'receipt' ? RECEIPT_FIELDS : KOT_FIELDS;
+  const setDoc = (key, value) => setTemplates(prev => ({ ...prev, [activeDoc]: { ...prev[activeDoc], [key]: value } }));
+  const toggleField = (field) => {
+    const current = doc.fields || [];
+    setDoc('fields', current.includes(field) ? current.filter(f => f !== field) : [...current, field]);
+  };
+
+  const previewOrder = {
+    order_number: 'ORD-1001',
+    order_type: 'dine_in',
+    table_label: 'T-04',
+    customer_name: 'Walk-in Guest',
+    customer_phone: '+92 300 0000000',
+    guest_count: 3,
+    subtotal: 2450,
+    tax_amount: 196,
+    discount_amount: 100,
+    total_amount: 2546,
+    payment_method: 'cash',
+    payment_status: 'paid',
+    created_at: new Date().toISOString(),
+  };
+  const previewItems = [
+    { name: 'Chicken Karahi', quantity: 1, unit_price: 1800, total_price: 1800, notes: 'Medium spicy' },
+    { name: 'Naan', quantity: 5, unit_price: 130, total_price: 650 },
+  ];
+  const previewHtml = activeDoc === 'receipt'
+    ? renderReceiptHtml({
+      template: doc,
+      restaurant,
+      order: previewOrder,
+      items: previewItems,
+      table: { label: 'T-04', section: 'Family' },
+      taxBreakdown: [{ name: 'Sales Tax', rate: 8, amount: 196 }],
+      taxLabel: 'Sales Tax 8%',
+      methodLabel: 'Cash',
+      isPaid: true,
+      tenderedAmount: '3000',
+      cashierName: 'Cashier',
+      waiterName: 'Waiter',
+      shiftLabel: '#1 Morning (09:00-17:00)',
+    })
+    : renderKotHtml({
+      template: doc,
+      restaurant,
+      order: previewOrder,
+      items: previewItems,
+      table: { label: 'T-04', section: 'Family' },
+      cashierName: 'Cashier',
+      waiterName: 'Waiter',
+      orderNotes: 'Serve bread first',
+    });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateRestaurantSettings({ print_templates: templates });
+      toast.success('Print templates saved');
+    } catch {
+      toast.error('Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetCurrent = () => setTemplates(prev => ({ ...prev, [activeDoc]: DEFAULT_PRINT_TEMPLATES[activeDoc] }));
+  const openPreview = () => {
+    const w = window.open('', '_blank', 'width=420,height=720');
+    if (!w) return toast.error('Pop-up blocked');
+    w.document.write(previewHtml);
+    w.document.close();
+  };
+
+  return (
+    <div>
+      <SectionHeader icon="🖨️" title="Receipt & KOT Designer" subtitle="Design POS printer headers, footers, logo, and printed fields." />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+        {[
+          ['receipt', 'Receipt'],
+          ['kot', 'KOT'],
+        ].map(([id, label]) => (
+          <button key={id} onClick={() => setActiveDoc(id)} style={{ background: activeDoc === id ? T.accent : T.surface, color: activeDoc === id ? '#000' : T.text, border: `1px solid ${activeDoc === id ? T.accent : T.border}`, borderRadius: 10, padding: '9px 16px', fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 330px', gap: 22, alignItems: 'start' }}>
+        <div>
+          <Field label="Logo">
+            <Toggle value={doc.showLogo} onChange={v => setDoc('showLogo', v)} label="Print logo on header" />
+            {doc.showLogo && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px', gap: 10 }}>
+                <TextInput value={doc.logoUrl || ''} onChange={e => setDoc('logoUrl', e.target.value)} placeholder={restaurant.logo_url ? 'Leave blank to use restaurant logo' : 'https://.../logo.png'} />
+                <TextInput value={doc.logoWidth || 48} onChange={e => setDoc('logoWidth', e.target.value)} type="number" placeholder="48" />
+              </div>
+            )}
+          </Field>
+
+          <Field label="Header Lines" hint="One line per row. First line prints larger by default.">
+            <textarea value={(doc.headerLines || []).join('\n')} onChange={e => setDoc('headerLines', lineTextToArray(e.target.value))} style={{ width: '100%', minHeight: 92, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical' }} />
+          </Field>
+
+          <Field label="Footer Lines" hint="One line per row. Leave blank for no footer.">
+            <textarea value={(doc.footerLines || []).join('\n')} onChange={e => setDoc('footerLines', lineTextToArray(e.target.value))} style={{ width: '100%', minHeight: 78, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 14px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical' }} />
+          </Field>
+
+          <Field label="Fields to Print">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+              {fields.map(([id, label]) => {
+                const active = (doc.fields || []).includes(id);
+                return (
+                  <button key={id} type="button" onClick={() => toggleField(id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: active ? T.accentGlow : T.surface, color: active ? T.accent : T.textMid, border: `1px solid ${active ? T.accent + '66' : T.border}`, borderRadius: 10, padding: '9px 12px', cursor: 'pointer', fontWeight: 700, fontFamily: "'Inter', sans-serif" }}>
+                    <span>{label}</span>
+                    <span>{active ? 'On' : 'Off'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <SaveBtn onClick={save} saving={saving} />
+            <button onClick={resetCurrent} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 10, padding: '11px 18px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif", marginTop: 8 }}>Reset {activeDoc === 'receipt' ? 'Receipt' : 'KOT'}</button>
+            <button onClick={openPreview} style={{ background: T.greenDim, border: `1px solid ${T.green}55`, color: T.green, borderRadius: 10, padding: '11px 18px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: "'Inter', sans-serif", marginTop: 8 }}>Open Print Preview</button>
+          </div>
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 12 }}>
+          <div style={{ color: '#0f172a', fontSize: 12, fontWeight: 900, marginBottom: 8 }}>POS Printer Preview</div>
+          <iframe title="print-template-preview" srcDoc={previewHtml} style={{ width: '100%', height: 560, border: '1px solid #cbd5e1', borderRadius: 8, background: '#fff' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'general',      icon: '🏪', label: 'General Info'       },
   { id: 'tax',          icon: '🧾', label: 'Tax Rates'          },
@@ -837,6 +992,7 @@ export default function Settings() {
   const content = {
     general:      <GeneralInfo />,
     tax:          <TaxRates />,
+    printing:     <PrintTemplateEditor />,
     payments:     <PaymentMethods />,
     roles:        <RolesPermissions />,
     alerts:       <AlertThresholds />,
@@ -867,6 +1023,18 @@ export default function Settings() {
               {tab.label}
             </button>
           ))}
+          <button onClick={() => setActive('printing')} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px', borderRadius: 10, marginBottom: 4, textAlign: 'left',
+            background: active === 'printing' ? T.accentGlow : 'transparent',
+            color:      active === 'printing' ? T.accent : T.textMid,
+            border:     `1px solid ${active === 'printing' ? T.accent + '44' : 'transparent'}`,
+            fontSize: 13, fontWeight: active === 'printing' ? 700 : 500,
+            cursor: 'pointer', fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
+          }}>
+            <span style={{ fontSize: 16 }}>PR</span>
+            Receipt / KOT
+          </button>
         </div>
 
         {/* Content */}
