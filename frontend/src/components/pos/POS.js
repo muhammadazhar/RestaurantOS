@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getActiveTableOrder, replaceOrderItem, returnOrderItem, cancelOrderReturn, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getActiveTableOrder, addOrderItems, replaceOrderItem, returnOrderItem, cancelOrderReturn, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -347,7 +347,6 @@ export default function POS() {
 
   const handleMenuItemClick = (item, variant = getItemVariants(item)[0]) => {
     if (replaceTarget) return processReplacement(item, variant);
-    if (activeTableOrder) return toast.error('Select Replace on the current order item first');
     addToCart(item, variant);
   };
 
@@ -475,14 +474,33 @@ export default function POS() {
   const tax = Math.round((includedTax + exclusiveTax) * 100) / 100;
   const total = Math.round((subtotal - discountAmt + exclusiveTax) * 100) / 100;
   const taxLabel = activeTaxRates.length ? activeTaxRates.map(r => `${r.name || 'Tax'} ${Number(r.rate).toLocaleString()}%`).join(' + ') : 'Tax';
+  const newCartItems = cart.filter(c => !c.existing_order_item);
 
   const sendToKitchen = async () => {
-    if (activeTableOrder) return toast.error('This table order is loaded for returns. Use Replace or Cancel Return.');
     if (!cart.length)                             return toast.error('Cart is empty');
     if (orderType === 'dine_in' && !tableId)      return toast.error('Select a table');
     if (['takeaway','delivery'].includes(orderType) && !custName) return toast.error('Customer name required');
+    const orderItems = activeTableOrder ? cart.filter(c => !c.existing_order_item) : cart;
+    if (activeTableOrder && !orderItems.length) return toast.error('Add a new item, or use Return/Replace on existing items.');
     setSending(true);
     try {
+      if (activeTableOrder) {
+        const res = await addOrderItems(activeTableOrder.id, {
+          notes: orderNotes || undefined,
+          items: orderItems.map(c => ({
+            menu_item_id: c.id, name: c.name,
+            quantity: c.qty, unit_price: c.price,
+            notes: c.notes || undefined,
+          })),
+        });
+        printKOT(res.data.order, orderItems);
+        setActiveTableOrder(res.data.order);
+        setCart(cartFromOrder(res.data.order));
+        setReplaceTarget(null);
+        toast.success('Items added to order and sent to kitchen');
+        load();
+        return;
+      }
       const res = await createOrder({
         table_id:          tableId || null,
         order_type:        orderType,
@@ -552,9 +570,9 @@ export default function POS() {
 
   // POS section
   const printKOT = (order, cartItems) => {
-    const items = (order.items && order.items.length
-      ? order.items
-      : cartItems.map(c => ({ name: c.name, quantity: c.qty, notes: c.notes }))
+    const items = (cartItems && cartItems.length
+      ? cartItems.map(c => ({ name: c.name, quantity: c.qty || c.quantity, notes: c.notes }))
+      : (order.items || [])
     ).filter(i => i?.name);
 
     const tbl = tableId ? tables.find(t => t.id === tableId) : null;
@@ -1118,7 +1136,10 @@ export default function POS() {
               </div>
               {activeTableOrder ? (
                 <>
-                  <Btn onClick={() => setReplaceTarget(null)} disabled={!replaceTarget || sending} style={{ width: '100%', padding: '13px' }}>
+                  <Btn onClick={sendToKitchen} disabled={sending || !newCartItems.length} style={{ width: '100%', padding: '13px' }}>
+                    {sending ? 'Sending...' : newCartItems.length ? `Send Added Items (${newCartItems.length})` : 'Add Items to Send'}
+                  </Btn>
+                  <Btn variant="ghost" onClick={() => setReplaceTarget(null)} disabled={!replaceTarget || sending} style={{ width: '100%', marginTop: 6 }}>
                     {replaceTarget ? 'Cancel Replacement Selection' : 'Select an Item to Replace'}
                   </Btn>
                   <Btn variant="danger" onClick={cancelLoadedOrder} disabled={sending} style={{ width: '100%', marginTop: 6 }}>Cancel / Return Order</Btn>

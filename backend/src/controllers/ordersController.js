@@ -179,26 +179,33 @@ async function getOrderWithItems(client, restaurantId, orderId) {
 
 async function recalculateOrderTotals(client, order) {
   const activeRes = await client.query(
-    `SELECT COALESCE(SUM(total_price),0) AS subtotal
+    `SELECT menu_item_id, name, quantity, unit_price, total_price, notes
      FROM order_items
-     WHERE order_id=$1 AND status <> 'cancelled'`,
+     WHERE order_id=$1 AND status <> 'cancelled'
+     ORDER BY created_at`,
     [order.id]
   );
 
-  const subtotal = roundMoney(activeRes.rows[0]?.subtotal);
-  const oldTaxable = Math.max(0, numeric(order.subtotal) - numeric(order.discount_amount));
-  const taxRate = oldTaxable > 0 ? numeric(order.tax_amount) / oldTaxable : 0.08;
-  const discount = Math.min(numeric(order.discount_amount), subtotal);
-  const taxable = Math.max(0, subtotal - discount);
-  const taxAmount = roundMoney(taxable * taxRate);
-  const totalAmount = roundMoney(taxable + taxAmount);
+  const totals = await calculateOrderTotals(
+    client,
+    order.restaurant_id,
+    activeRes.rows.map(item => ({
+      menu_item_id: item.menu_item_id,
+      name: item.name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      notes: item.notes,
+    })),
+    order.order_type,
+    order.discount_amount
+  );
 
   const updateRes = await client.query(
     `UPDATE orders
      SET subtotal=$1, discount_amount=$2, tax_amount=$3, total_amount=$4, updated_at=NOW()
      WHERE id=$5
      RETURNING *`,
-    [subtotal, discount, taxAmount, totalAmount, order.id]
+    [totals.subtotal, totals.discount, totals.taxAmount, totals.totalAmount, order.id]
   );
 
   return updateRes.rows[0];
@@ -537,6 +544,80 @@ exports.createOrder = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('createOrder error:', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Server error' });
+  } finally { client.release(); }
+};
+
+// POST /api/orders/:id/items
+exports.addOrderItems = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const { restaurantId } = req.user;
+    const { id } = req.params;
+    const { items, notes } = req.body;
+
+    if (!items || !items.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Items required' });
+    }
+
+    const orderRes = await client.query(
+      `SELECT * FROM orders WHERE id=$1 AND restaurant_id=$2 FOR UPDATE`,
+      [id, restaurantId]
+    );
+    if (!orderRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orderRes.rows[0];
+    if (['paid', 'cancelled'].includes(order.status) || order.payment_status === 'refunded') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Only active orders can accept new items' });
+    }
+
+    const addedItems = [];
+    for (const item of items) {
+      const qty = Math.max(1, parseInt(item.quantity || 1, 10));
+      const unitPrice = roundMoney(item.unit_price);
+      const result = await client.query(
+        `INSERT INTO order_items(order_id, menu_item_id, name, quantity, unit_price, total_price, notes)
+         VALUES($1,$2,$3,$4,$5,$6,$7)
+         RETURNING *`,
+        [
+          id,
+          item.menu_item_id || null,
+          item.name,
+          qty,
+          unitPrice,
+          roundMoney(unitPrice * qty),
+          item.notes || null,
+        ]
+      );
+      addedItems.push(result.rows[0]);
+    }
+
+    const noteText = typeof notes === 'string' ? notes.trim() : '';
+    const orderForTotals = noteText && noteText !== (order.notes || '')
+      ? (await client.query(
+          `UPDATE orders SET notes=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+          [noteText, id]
+        )).rows[0]
+      : order;
+
+    const updatedOrder = await recalculateOrderTotals(client, orderForTotals);
+    const fullOrder = await getOrderWithItems(client, restaurantId, updatedOrder.id);
+
+    await client.query('COMMIT');
+
+    const io = req.app.get('io');
+    if (io) io.to(restaurantId).emit('order_updated', { orderId: id, status: fullOrder.status, tableId: fullOrder.table_id });
+
+    res.status(201).json({ order: fullOrder, added_items: addedItems });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('addOrderItems error:', err.message, err.detail || '');
     res.status(500).json({ error: err.message || 'Server error' });
   } finally { client.release(); }
 };

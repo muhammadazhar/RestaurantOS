@@ -51,6 +51,7 @@ export const createOrder       = (data)   => API.post('/orders', data);
 export const updateOrderStatus = (id, status, paymentMethod) =>
   API.patch(`/orders/${id}/status`, { status, payment_method: paymentMethod });
 export const getActiveTableOrder = (tableId) => API.get(`/orders/table/${tableId}/active`);
+export const addOrderItems       = (id, data) => API.post(`/orders/${id}/items`, data);
 export const replaceOrderItem    = (id, data) => API.post(`/orders/${id}/replace-item`, data);
 export const returnOrderItem     = (id, data) => API.post(`/orders/${id}/return-item`, data);
 export const cancelOrderReturn   = (id, data) => API.post(`/orders/${id}/cancel-return`, data);
