@@ -32,7 +32,7 @@ async function autoJournalizeOrder(restaurantId, order) {
      FROM order_items oi
      LEFT JOIN menu_items mi ON mi.id = oi.menu_item_id
      LEFT JOIN categories c ON c.id = mi.category_id
-     WHERE oi.order_id = $1`,
+     WHERE oi.order_id = $1 AND oi.status <> 'cancelled'`,
     [order.id]
   );
 
@@ -1221,7 +1221,23 @@ exports.getSalesReport = async (req, res) => {
           COALESCE(SUM(tax_amount)  FILTER (WHERE payment_status='paid'), 0)     AS total_tax,
           COALESCE(SUM(discount_amount) FILTER (WHERE payment_status='paid'), 0) AS total_discount,
           COALESCE(AVG(total_amount) FILTER (WHERE payment_status='paid'), 0)    AS avg_order_value,
-          COALESCE(SUM(guest_count) FILTER (WHERE payment_status='paid'), 0)     AS total_guests
+          COALESCE(SUM(guest_count) FILTER (WHERE payment_status='paid'), 0)     AS total_guests,
+          (
+            SELECT COUNT(*)
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+          ) AS returned_items,
+          (
+            SELECT COALESCE(ABS(SUM(oai.total_amount)), 0)
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+          ) AS return_amount
         FROM orders
         WHERE restaurant_id=$1 AND DATE(created_at) BETWEEN $2 AND $3 ${empFilter}`,
         [restaurantId, dateFrom, dateTo]
@@ -1262,9 +1278,27 @@ exports.getSalesReport = async (req, res) => {
       // Top selling items
       db.query(`
         SELECT oi.name, oi.menu_item_id,
-          SUM(oi.quantity)              AS qty_sold,
-          SUM(oi.total_price)           AS total_revenue,
-          AVG(oi.unit_price)            AS avg_price,
+          COALESCE(SUM(oi.quantity) FILTER (WHERE oi.status <> 'cancelled'), 0)     AS qty_sold,
+          COALESCE(SUM(oi.total_price) FILTER (WHERE oi.status <> 'cancelled'), 0)  AS total_revenue,
+          COALESCE((
+            SELECT SUM(oai.quantity)
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+              AND (oai.menu_item_id = oi.menu_item_id OR (oai.menu_item_id IS NULL AND oai.name = oi.name))
+          ), 0) AS returned_qty,
+          COALESCE((
+            SELECT ABS(SUM(oai.total_amount))
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+              AND (oai.menu_item_id = oi.menu_item_id OR (oai.menu_item_id IS NULL AND oai.name = oi.name))
+          ), 0) AS returned_amount,
+          AVG(oi.unit_price) FILTER (WHERE oi.status <> 'cancelled') AS avg_price,
           mi.category_id,
           c.name                        AS category_name
         FROM order_items oi
@@ -1326,7 +1360,25 @@ exports.getEmployeeReport = async (req, res) => {
           COALESCE(SUM(o.total_amount) FILTER (WHERE o.payment_status='paid'), 0) AS total_revenue,
           COALESCE(AVG(o.total_amount) FILTER (WHERE o.payment_status='paid'), 0) AS avg_order_value,
           COALESCE(SUM(o.guest_count)  FILTER (WHERE o.payment_status='paid'), 0) AS total_guests,
-          COUNT(o.id) FILTER (WHERE o.status='cancelled')                AS cancelled_orders
+          COUNT(o.id) FILTER (WHERE o.status='cancelled')                AS cancelled_orders,
+          COALESCE((
+            SELECT COUNT(*)
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND oa.created_by = e.id
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+          ), 0) AS returned_items,
+          COALESCE((
+            SELECT ABS(SUM(oai.total_amount))
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND oa.created_by = e.id
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+          ), 0) AS return_amount
         FROM employees e
         LEFT JOIN roles r ON e.role_id = r.id
         LEFT JOIN orders o ON o.employee_id = e.id
@@ -1366,6 +1418,7 @@ exports.getEmployeeReport = async (req, res) => {
         JOIN orders o ON o.employee_id = e.id AND DATE(o.created_at) BETWEEN $2 AND $3
         JOIN order_items oi ON oi.order_id = o.id
         WHERE e.restaurant_id=$1 AND o.status NOT IN ('cancelled') ${empWhere}
+          AND oi.status <> 'cancelled'
         GROUP BY e.id, e.full_name
         ORDER BY items_revenue DESC`,
         [restaurantId, dateFrom, dateTo]
@@ -1411,12 +1464,30 @@ exports.getMenuReport = async (req, res) => {
         SELECT
           mi.id, mi.name, mi.price, mi.cost, mi.image_url,
           c.name AS category_name,
-          COALESCE(SUM(oi.quantity), 0)             AS qty_sold,
-          COALESCE(SUM(oi.total_price), 0)          AS total_revenue,
+          COALESCE(SUM(oi.quantity) FILTER (WHERE o.id IS NOT NULL AND oi.status <> 'cancelled'), 0)    AS qty_sold,
+          COALESCE(SUM(oi.total_price) FILTER (WHERE o.id IS NOT NULL AND oi.status <> 'cancelled'), 0) AS total_revenue,
+          COALESCE((
+            SELECT SUM(oai.quantity)
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+              AND oai.menu_item_id = mi.id
+          ), 0) AS returned_qty,
+          COALESCE((
+            SELECT ABS(SUM(oai.total_amount))
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+              AND oai.menu_item_id = mi.id
+          ), 0) AS returned_amount,
           COALESCE(COUNT(DISTINCT o.id), 0)         AS order_count,
           COALESCE(AVG(oi.unit_price), mi.price)    AS avg_price,
-          COALESCE(SUM(oi.quantity * mi.cost), 0)   AS estimated_cost,
-          COALESCE(SUM(oi.total_price) - SUM(oi.quantity * mi.cost), 0) AS gross_profit
+          COALESCE(SUM(oi.quantity * mi.cost) FILTER (WHERE o.id IS NOT NULL AND oi.status <> 'cancelled'), 0)   AS estimated_cost,
+          COALESCE(SUM(oi.total_price) FILTER (WHERE o.id IS NOT NULL AND oi.status <> 'cancelled') - SUM(oi.quantity * mi.cost) FILTER (WHERE o.id IS NOT NULL AND oi.status <> 'cancelled'), 0) AS gross_profit
         FROM menu_items mi
         LEFT JOIN categories c   ON mi.category_id = c.id
         LEFT JOIN order_items oi ON oi.menu_item_id = mi.id
@@ -1432,8 +1503,28 @@ exports.getMenuReport = async (req, res) => {
       db.query(`
         SELECT c.name AS category,
           COUNT(DISTINCT mi.id)       AS item_count,
-          COALESCE(SUM(oi.quantity), 0)        AS qty_sold,
-          COALESCE(SUM(oi.total_price), 0)     AS revenue
+          COALESCE(SUM(oi.quantity) FILTER (WHERE o.id IS NOT NULL AND oi.status <> 'cancelled'), 0)        AS qty_sold,
+          COALESCE(SUM(oi.total_price) FILTER (WHERE o.id IS NOT NULL AND oi.status <> 'cancelled'), 0)     AS revenue,
+          COALESCE((
+            SELECT SUM(oai.quantity)
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            JOIN menu_items rmi ON rmi.id = oai.menu_item_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+              AND rmi.category_id = c.id
+          ), 0) AS returned_qty,
+          COALESCE((
+            SELECT ABS(SUM(oai.total_amount))
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            JOIN menu_items rmi ON rmi.id = oai.menu_item_id
+            WHERE oa.restaurant_id=$1
+              AND DATE(oa.created_at) BETWEEN $2 AND $3
+              AND oai.action='return'
+              AND rmi.category_id = c.id
+          ), 0) AS returned_amount
         FROM categories c
         LEFT JOIN menu_items mi ON mi.category_id = c.id AND mi.restaurant_id=$1
         LEFT JOIN order_items oi ON oi.menu_item_id = mi.id
@@ -1452,11 +1543,13 @@ exports.getMenuReport = async (req, res) => {
         JOIN orders o ON oi.order_id = o.id
         WHERE o.restaurant_id=$1 AND DATE(o.created_at) BETWEEN $2 AND $3
           AND o.status NOT IN ('cancelled') ${empFilter}
+          AND oi.status <> 'cancelled'
           AND oi.name IN (
             SELECT oi2.name FROM order_items oi2
             JOIN orders o2 ON oi2.order_id=o2.id
             WHERE o2.restaurant_id=$1 AND DATE(o2.created_at) BETWEEN $2 AND $3
               AND o2.status NOT IN ('cancelled') ${empFilter.replace('o.employee_id', 'o2.employee_id')}
+              AND oi2.status <> 'cancelled'
             GROUP BY oi2.name ORDER BY SUM(oi2.quantity) DESC LIMIT 5
           )
         GROUP BY DATE(o.created_at), oi.name ORDER BY day, qty DESC`,
@@ -1545,6 +1638,26 @@ exports.getShiftSalesReport = async (req, res) => {
           COALESCE(AVG(o.total_amount)    FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS avg_order_value,
           COALESCE(SUM(o.guest_count)     FILTER (WHERE o.status NOT IN ('cancelled')), 0)       AS guest_count,
           COUNT(o.id)       FILTER (WHERE o.status = 'cancelled')                                AS cancelled_count,
+          COALESCE((
+            SELECT COUNT(*)
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            JOIN orders ro ON ro.id = oa.order_id
+            WHERE oa.restaurant_id = s.restaurant_id
+              AND ro.employee_id = e.id
+              AND DATE(oa.created_at) = COALESCE(sess.shift_date, s.date)
+              AND oai.action='return'
+          ), 0) AS returned_items,
+          COALESCE((
+            SELECT ABS(SUM(oai.total_amount))
+            FROM order_adjustment_items oai
+            JOIN order_adjustments oa ON oa.id = oai.adjustment_id
+            JOIN orders ro ON ro.id = oa.order_id
+            WHERE oa.restaurant_id = s.restaurant_id
+              AND ro.employee_id = e.id
+              AND DATE(oa.created_at) = COALESCE(sess.shift_date, s.date)
+              AND oai.action='return'
+          ), 0) AS return_amount,
 
           COUNT(o.id) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'dine_in')   AS dine_in_orders,
           COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled') AND o.order_type = 'dine_in'),  0) AS dine_in_revenue,

@@ -163,7 +163,7 @@ function SalesReport() {
   const handlePrint = () => {
     const byPeriodRows = (data?.byPeriod || []).map(d => [d.period, d.orders, `PKR ${Number(d.revenue).toLocaleString()}`]);
     const byTypeRows   = (data?.byType   || []).map(t => [t.order_type?.replace('_',' '), t.orders, `PKR ${Number(t.revenue).toLocaleString()}`]);
-    const topRows      = (data?.topItems || []).slice(0,15).map((i,idx) => [idx+1, i.name, i.category_name||'—', fmt(i.qty_sold), `PKR ${fmt(i.total_revenue)}`]);
+    const topRows      = (data?.topItems || []).slice(0,15).map((i,idx) => [idx+1, i.name, i.category_name||'—', fmt(i.qty_sold), fmt(i.returned_qty), `PKR ${fmt(i.total_revenue)}`, `PKR ${fmt(i.returned_amount)}`]);
     const hourRows     = hourArray.filter(h=>h.orders>0).map(h => [h.hour, h.orders, `PKR ${fmt(h.revenue)}`]);
     printHTML(`Sales Report — ${from} to ${to}`, `
       <h1>Sales Report</h1>
@@ -173,6 +173,7 @@ function SalesReport() {
         <div class="kpi"><div class="kpi-v">${fmt(s.paid_orders)}</div><div class="kpi-l">Paid Orders</div></div>
         <div class="kpi"><div class="kpi-v">PKR ${fmt(s.avg_order_value)}</div><div class="kpi-l">Avg Order Value</div></div>
         <div class="kpi"><div class="kpi-v">${fmt(s.total_guests)}</div><div class="kpi-l">Total Guests</div></div>
+        <div class="kpi"><div class="kpi-v">${fmt(s.returned_items)}</div><div class="kpi-l">Returned Items</div></div>
       </div>
       <h2>Revenue by Day</h2>
       <table><thead><tr><th>Date</th><th class="right">Orders</th><th class="right">Revenue</th></tr></thead><tbody>
@@ -183,13 +184,14 @@ function SalesReport() {
         ${byTypeRows.map(r=>`<tr><td>${r[0]}</td><td class="right">${r[1]}</td><td class="right">${r[2]}</td></tr>`).join('')}
       </tbody></table>
       <h2>Top Selling Items</h2>
-      <table><thead><tr><th>#</th><th>Item</th><th>Category</th><th class="right">Qty Sold</th><th class="right">Revenue</th></tr></thead><tbody>
-        ${topRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="right">${r[3]}</td><td class="right">${r[4]}</td></tr>`).join('')}
+      <table><thead><tr><th>#</th><th>Item</th><th>Category</th><th class="right">Qty Sold</th><th class="right">Returned</th><th class="right">Revenue</th><th class="right">Return Amt</th></tr></thead><tbody>
+        ${topRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="right">${r[3]}</td><td class="right">${r[4]}</td><td class="right">${r[5]}</td><td class="right">${r[6]}</td></tr>`).join('')}
       </tbody></table>
       <h2>Financial Summary</h2>
       <table><tbody>
         <tr><td>Subtotal</td><td class="right">PKR ${fmt(s.total_subtotal)}</td></tr>
         <tr><td>Discounts</td><td class="right">− PKR ${fmt(s.total_discount)}</td></tr>
+        <tr><td>Returns</td><td class="right">PKR ${fmt(s.return_amount)}</td></tr>
         <tr><td>Tax (8%)</td><td class="right">PKR ${fmt(s.total_tax)}</td></tr>
         <tr><td><b>Net Revenue</b></td><td class="right"><b>PKR ${fmt(s.total_revenue)}</b></td></tr>
       </tbody></table>
@@ -202,6 +204,8 @@ function SalesReport() {
         ['Total Revenue', `PKR ${fmt(s.total_revenue)}`],
         ['Paid Orders', fmt(s.paid_orders)],
         ['Cancelled Orders', fmt(s.cancelled_orders)],
+        ['Returned Items', fmt(s.returned_items)],
+        ['Return Amount', `PKR ${fmt(s.return_amount)}`],
         ['Avg Order Value', `PKR ${fmt(s.avg_order_value)}`],
         ['Total Guests', fmt(s.total_guests)],
         ['Total Subtotal', `PKR ${fmt(s.total_subtotal)}`],
@@ -211,7 +215,7 @@ function SalesReport() {
       { title: 'Revenue by Day', headers: ['Date','Orders','Revenue (PKR)'], rows: (data?.byPeriod||[]).map(d=>[d.period, d.orders, Number(d.revenue).toFixed(2)]) },
       { title: 'Revenue by Order Type', headers: ['Type','Orders','Revenue (PKR)'], rows: (data?.byType||[]).map(t=>[t.order_type, t.orders, Number(t.revenue).toFixed(2)]) },
       { title: 'Orders by Hour', headers: ['Hour','Orders','Revenue (PKR)'], rows: hourArray.map(h=>[h.hour, h.orders, h.revenue.toFixed(2)]) },
-      { title: 'Top Selling Items', headers: ['Item','Category','Qty Sold','Revenue (PKR)'], rows: (data?.topItems||[]).map(i=>[i.name, i.category_name||'', Number(i.qty_sold), Number(i.total_revenue).toFixed(2)]) },
+      { title: 'Top Selling Items', headers: ['Item','Category','Qty Sold','Returned Qty','Revenue (PKR)','Return Amount (PKR)'], rows: (data?.topItems||[]).map(i=>[i.name, i.category_name||'', Number(i.qty_sold), Number(i.returned_qty || 0), Number(i.total_revenue).toFixed(2), Number(i.returned_amount || 0).toFixed(2)]) },
     ]);
   };
 
@@ -370,10 +374,10 @@ function MenuReport() {
   const ABC_LABEL = { A: '⭐ Star', B: '🐎 Workhorse', C: '💤 Low Seller' };
 
   const handlePrint = () => {
-    const catRows  = (data?.byCategory||[]).map(c => [c.category, fmt(c.qty_sold), `PKR ${fmt(c.revenue)}`]);
+    const catRows  = (data?.byCategory||[]).map(c => [c.category, fmt(c.qty_sold), fmt(c.returned_qty), `PKR ${fmt(c.revenue)}`, `PKR ${fmt(c.returned_amount)}`]);
     const itemRows = withABC.map((item,i) => {
       const margin = Number(item.total_revenue)>0 ? Math.round(Number(item.gross_profit)/Number(item.total_revenue)*100) : 0;
-      return [i+1, item.name, item.category_name||'—', item.abc, fmt(item.qty_sold), `PKR ${fmt(item.total_revenue)}`, `PKR ${fmt(item.estimated_cost)}`, `PKR ${fmt(item.gross_profit)}`, `${margin}%`];
+      return [i+1, item.name, item.category_name||'—', item.abc, fmt(item.qty_sold), fmt(item.returned_qty), `PKR ${fmt(item.total_revenue)}`, `PKR ${fmt(item.returned_amount)}`, `PKR ${fmt(item.estimated_cost)}`, `PKR ${fmt(item.gross_profit)}`, `${margin}%`];
     });
     printHTML(`Menu Performance — ${from} to ${to}`, `
       <h1>Menu Performance Report</h1>
@@ -385,22 +389,22 @@ function MenuReport() {
         <div class="kpi"><div class="kpi-v">PKR ${fmt(items.reduce((s,i)=>s+Number(i.gross_profit),0))}</div><div class="kpi-l">Est. Profit</div></div>
       </div>
       <h2>Revenue by Category</h2>
-      <table><thead><tr><th>Category</th><th class="right">Qty Sold</th><th class="right">Revenue</th></tr></thead><tbody>
-        ${catRows.map(r=>`<tr><td>${r[0]}</td><td class="right">${r[1]}</td><td class="right">${r[2]}</td></tr>`).join('')}
+      <table><thead><tr><th>Category</th><th class="right">Qty Sold</th><th class="right">Returned</th><th class="right">Revenue</th><th class="right">Return Amt</th></tr></thead><tbody>
+        ${catRows.map(r=>`<tr><td>${r[0]}</td><td class="right">${r[1]}</td><td class="right">${r[2]}</td><td class="right">${r[3]}</td><td class="right">${r[4]}</td></tr>`).join('')}
       </tbody></table>
       <h2>All Menu Items</h2>
-      <table><thead><tr><th>#</th><th>Item</th><th>Category</th><th class="center">ABC</th><th class="right">Qty</th><th class="right">Revenue</th><th class="right">Est. Cost</th><th class="right">Gross Profit</th><th class="right">Margin</th></tr></thead><tbody>
-        ${itemRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="center">${r[3]}</td><td class="right">${r[4]}</td><td class="right">${r[5]}</td><td class="right">${r[6]}</td><td class="right">${r[7]}</td><td class="right">${r[8]}</td></tr>`).join('')}
+      <table><thead><tr><th>#</th><th>Item</th><th>Category</th><th class="center">ABC</th><th class="right">Qty</th><th class="right">Returned</th><th class="right">Revenue</th><th class="right">Return Amt</th><th class="right">Est. Cost</th><th class="right">Gross Profit</th><th class="right">Margin</th></tr></thead><tbody>
+        ${itemRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="center">${r[3]}</td><td class="right">${r[4]}</td><td class="right">${r[5]}</td><td class="right">${r[6]}</td><td class="right">${r[7]}</td><td class="right">${r[8]}</td><td class="right">${r[9]}</td><td class="right">${r[10]}</td></tr>`).join('')}
       </tbody></table>
     `);
   };
 
   const handleExport = () => {
     downloadExcel(`Menu_Report_${from}_${to}`, [
-      { title: 'Category Summary', headers: ['Category','Qty Sold','Revenue (PKR)'], rows: (data?.byCategory||[]).map(c=>[c.category, Number(c.qty_sold), Number(c.revenue).toFixed(2)]) },
-      { title: 'All Menu Items', headers: ['#','Item','Category','ABC','Qty Sold','Revenue (PKR)','Est. Cost (PKR)','Gross Profit (PKR)','Margin %'], rows: withABC.map((item,i) => {
+      { title: 'Category Summary', headers: ['Category','Qty Sold','Returned Qty','Revenue (PKR)','Return Amount (PKR)'], rows: (data?.byCategory||[]).map(c=>[c.category, Number(c.qty_sold), Number(c.returned_qty || 0), Number(c.revenue).toFixed(2), Number(c.returned_amount || 0).toFixed(2)]) },
+      { title: 'All Menu Items', headers: ['#','Item','Category','ABC','Qty Sold','Returned Qty','Revenue (PKR)','Return Amount (PKR)','Est. Cost (PKR)','Gross Profit (PKR)','Margin %'], rows: withABC.map((item,i) => {
         const margin = Number(item.total_revenue)>0 ? Math.round(Number(item.gross_profit)/Number(item.total_revenue)*100) : 0;
-        return [i+1, item.name, item.category_name||'', item.abc, Number(item.qty_sold), Number(item.total_revenue).toFixed(2), Number(item.estimated_cost).toFixed(2), Number(item.gross_profit).toFixed(2), margin];
+        return [i+1, item.name, item.category_name||'', item.abc, Number(item.qty_sold), Number(item.returned_qty || 0), Number(item.total_revenue).toFixed(2), Number(item.returned_amount || 0).toFixed(2), Number(item.estimated_cost).toFixed(2), Number(item.gross_profit).toFixed(2), margin];
       })},
     ]);
   };
@@ -495,7 +499,7 @@ function MenuReport() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: T.surface }}>
-              {['#', 'Item', 'Category', 'ABC', 'Units Sold', 'Revenue', 'Est. Cost', 'Gross Profit', 'Margin'].map(h => (
+              {['#', 'Item', 'Category', 'ABC', 'Units Sold', 'Returned', 'Revenue', 'Est. Cost', 'Gross Profit', 'Margin'].map(h => (
                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: T.textMid, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
@@ -521,6 +525,7 @@ function MenuReport() {
                   <td style={{ padding: '10px 14px' }}>{item.category_name && <Badge color={T.blue} small>{item.category_name}</Badge>}</td>
                   <td style={{ padding: '10px 14px' }}><Badge color={ABC_COLOR[item.abc]} small>{item.abc}</Badge></td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: T.text }}>{fmt(item.qty_sold)}</td>
+                  <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: Number(item.returned_qty || 0) ? T.red : T.textDim }}>{fmt(item.returned_qty)}</td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: T.accent }}>{fmtPKR(item.total_revenue)}</td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: T.textMid }}>{fmtPKR(item.estimated_cost)}</td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 600, color: Number(item.gross_profit) >= 0 ? T.green : T.red }}>

@@ -41,6 +41,9 @@ const StatusPill = ({ status }) => {
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
+const isReturnedItem = item => item?.status === 'cancelled';
+const itemChargeTotal = item => isReturnedItem(item) ? 0 : Number(item.total_price || 0);
+
 export default function TableBill({ table, onClose, onPaid }) {
   useT();
   const [order,           setOrder]           = useState(null);
@@ -297,14 +300,22 @@ export default function TableBill({ table, onClose, onPaid }) {
                   <span style={{ textAlign: 'right' }}>Total</span>
                 </div>
 
-                {(order.items || []).filter(i => i?.name).map((item, idx) => (
+                {(order.items || []).filter(i => i?.name).map((item, idx) => {
+                  const returned = isReturnedItem(item);
+                  return (
                   <div key={idx} style={{
                     display: 'grid', gridTemplateColumns: '1fr 52px 88px 92px',
                     gap: 8, padding: '11px 0', borderBottom: `1px solid ${T.border}`,
                     alignItems: 'center',
+                    opacity: returned ? 0.78 : 1,
                   }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{item.name}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: returned ? T.red : T.text, textDecoration: returned ? 'line-through' : 'none' }}>{item.name}</div>
+                      {returned && (
+                        <div style={{ display: 'inline-block', fontSize: 10, color: T.red, background: T.redDim, border: `1px solid ${T.red}44`, borderRadius: 6, padding: '1px 6px', marginTop: 4, fontWeight: 800 }}>
+                          Returned - not charged
+                        </div>
+                      )}
                       {item.notes && (
                         <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>{item.notes}</div>
                       )}
@@ -315,11 +326,11 @@ export default function TableBill({ table, onClose, onPaid }) {
                     <div style={{ textAlign: 'right', fontSize: 12, color: T.textMid, fontFamily: 'monospace' }}>
                       {Number(item.unit_price).toLocaleString()}
                     </div>
-                    <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: T.text, fontFamily: 'monospace' }}>
-                      {Number(item.total_price).toLocaleString()}
+                    <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: returned ? T.red : T.text, fontFamily: 'monospace' }}>
+                      {Number(itemChargeTotal(item)).toLocaleString()}
                     </div>
                   </div>
-                ))}
+                );})}
               </div>
 
               {/* Totals */}
