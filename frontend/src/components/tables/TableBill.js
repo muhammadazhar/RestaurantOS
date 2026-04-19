@@ -146,7 +146,7 @@ export default function TableBill({ table, onClose, onPaid }) {
         `).join('')}
         <div class="line"></div>
         <div class="row"><span>Subtotal</span><span>PKR ${Number(order.subtotal).toLocaleString()}</span></div>
-        <div class="row"><span>Tax (8%)</span><span>PKR ${Number(order.tax_amount).toLocaleString()}</span></div>
+        <div class="row"><span>Tax</span><span>PKR ${Number(order.tax_amount).toLocaleString()}</span></div>
         ${Number(order.discount_amount) > 0 ? `<div class="row"><span>Discount</span><span>- PKR ${Number(order.discount_amount).toLocaleString()}</span></div>` : ''}
         <div class="line"></div>
         <div class="row big"><span>TOTAL</span><span>PKR ${Number(order.total_amount).toLocaleString()}</span></div>
@@ -302,7 +302,7 @@ export default function TableBill({ table, onClose, onPaid }) {
               {/* Totals */}
               <div style={{ background: T.surface, borderRadius: 12, padding: '14px 16px', marginTop: 16 }}>
                 <TotalRow label="Subtotal"  value={fmt(order.subtotal)} />
-                <TotalRow label="Tax (8%)"  value={fmt(order.tax_amount)} />
+                <TotalRow label="Tax"  value={fmt(order.tax_amount)} />
                 {Number(order.discount_amount) > 0 && (
                   <TotalRow label="Discount" value={`− ${fmt(order.discount_amount)}`} accent />
                 )}

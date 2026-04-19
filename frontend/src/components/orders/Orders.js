@@ -70,7 +70,7 @@ function printReceipt(order) {
       `).join('')}
       <div class="line"></div>
       <div class="row"><span>Subtotal</span><span>PKR ${Number(order.subtotal).toLocaleString()}</span></div>
-      <div class="row"><span>Tax (8%)</span><span>PKR ${Number(order.tax_amount).toLocaleString()}</span></div>
+      <div class="row"><span>Tax</span><span>PKR ${Number(order.tax_amount).toLocaleString()}</span></div>
       ${Number(order.discount_amount) > 0 ? `<div class="row"><span>Discount</span><span>- PKR ${Number(order.discount_amount).toLocaleString()}</span></div>` : ''}
       <div class="line"></div>
       <div class="row big"><span>TOTAL</span><span>PKR ${Number(order.total_amount).toLocaleString()}</span></div>
@@ -148,7 +148,7 @@ function OrderDetailModal({ order, open, onClose, onStatusChange }) {
 
       {/* Totals */}
       <div style={{ background: T.surface, borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
-        {[['Subtotal', fmt(order.subtotal)], ['Tax (8%)', fmt(order.tax_amount)]].map(([l,v]) => (
+        {[['Subtotal', fmt(order.subtotal)], ['Tax', fmt(order.tax_amount)]].map(([l,v]) => (
           <div key={l} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 13, color: T.textMid }}>{l}</span>
             <span style={{ fontSize: 13, fontFamily: 'monospace', color: T.text }}>{v}</span>

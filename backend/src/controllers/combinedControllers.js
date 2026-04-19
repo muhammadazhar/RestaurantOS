@@ -1,6 +1,10 @@
 // ── tables.js ─────────────────────────────────────────────────────────────────
 const db = require('../config/db');
 
+const DEFAULT_TAX_RATES = [
+  { id: 'gst', name: 'Sales Tax (GST)', rate: 8, applies_to: 'all', enabled: true },
+];
+
 exports.getTables = async (req, res) => {
   try {
     // Auto-release tables with no active reservation for today
@@ -418,6 +422,7 @@ exports.getMenu = async (req, res) => {
       items: result.rows.map(item => ({ ...item, addon_groups: groupsByItem[item.id] || [] })),
       settings: {
         pos_smart_menu_sort_enabled: settings.pos_smart_menu_sort_enabled === true,
+        tax_rates: Array.isArray(settings.tax_rates) ? settings.tax_rates : DEFAULT_TAX_RATES,
       },
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }

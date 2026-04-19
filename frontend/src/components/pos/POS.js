@@ -17,6 +17,9 @@ const apiDate = (dateStr) => {
 
 const DAY_KEYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 const todayDayKey = () => DAY_KEYS[new Date().getDay()];
+const DEFAULT_TAX_RATES = [
+  { id: 'gst', name: 'Sales Tax (GST)', rate: 8, applies_to: 'all', enabled: true },
+];
 const minutesFromTime = value => {
   const [hours, minutes] = String(value || '00:00').slice(0, 5).split(':').map(Number);
   return (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0);
@@ -55,8 +58,7 @@ const selectOpenableScheduledShift = currentShift => {
 const selectDisplayScheduledShift = currentShift => {
   const openable = selectOpenableScheduledShift(currentShift);
   if (openable) return openable;
-  if (currentShift?.shift && !['active', 'in_process', 'absent'].includes(currentShift.shift.status)) return currentShift.shift;
-  return (currentShift?.shifts || []).find(shift => !['active', 'in_process', 'absent'].includes(shift.status)) || null;
+  return null;
 };
 
 // POS section
@@ -405,11 +407,42 @@ export default function POS() {
     prev.map(c => c.cart_key === cartKey ? { ...c, notes } : c)
   );
 
-  const subtotal     = cart.reduce((s, i) => s + i.price * i.qty, 0);
-  const discountAmt  = Math.min(parseFloat(discount) || 0, subtotal);
-  const taxable      = subtotal - discountAmt;
-  const tax          = Math.round(taxable * 0.08 * 100) / 100;
-  const total        = taxable + tax;
+  const activeTaxRates = (Array.isArray(menu.settings?.tax_rates) ? menu.settings.tax_rates : DEFAULT_TAX_RATES)
+    .filter(rate => rate?.enabled !== false)
+    .filter(rate => ['all', orderType].includes(rate.applies_to || 'all'))
+    .map(rate => ({ ...rate, rate: Number(rate.rate || 0) }))
+    .filter(rate => rate.rate > 0);
+  const combinedTaxRate = activeTaxRates.reduce((sum, rate) => sum + rate.rate, 0) / 100;
+  const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
+  const discountAmt = Math.min(parseFloat(discount) || 0, subtotal);
+  const discountRatio = subtotal > 0 ? discountAmt / subtotal : 0;
+  const taxLines = activeTaxRates.map(rate => ({ ...rate, amount: 0 }));
+  let includedTax = 0;
+  let exclusiveTax = 0;
+
+  cart.forEach(item => {
+    if (item.tax_applicable === false || !activeTaxRates.length) return;
+    const lineTotal = Number(item.price || 0) * Number(item.qty || 0);
+    const discountedLine = lineTotal * (1 - discountRatio);
+    if (discountedLine <= 0) return;
+
+    activeTaxRates.forEach((rate, index) => {
+      const rateDecimal = Number(rate.rate || 0) / 100;
+      const amount = item.tax_included === true
+        ? discountedLine * (rateDecimal / (1 + combinedTaxRate))
+        : discountedLine * rateDecimal;
+      taxLines[index].amount += amount;
+      if (item.tax_included === true) includedTax += amount;
+      else exclusiveTax += amount;
+    });
+  });
+
+  const taxBreakdown = taxLines
+    .map(line => ({ ...line, amount: Math.round(line.amount * 100) / 100 }))
+    .filter(line => line.amount > 0);
+  const tax = Math.round((includedTax + exclusiveTax) * 100) / 100;
+  const total = Math.round((subtotal - discountAmt + exclusiveTax) * 100) / 100;
+  const taxLabel = activeTaxRates.length ? activeTaxRates.map(r => `${r.name || 'Tax'} ${Number(r.rate).toLocaleString()}%`).join(' + ') : 'Tax';
 
   const sendToKitchen = async () => {
     if (activeTableOrder) return toast.error('This table order is loaded for returns. Use Replace or Cancel Return.');
@@ -450,6 +483,8 @@ export default function POS() {
           _subtotal:   subtotal,
           _discountAmt: discountAmt,
           _tax:        tax,
+          _taxBreakdown: taxBreakdown,
+          _taxLabel: taxLabel,
           _total:      total,
           _custName:   custName,
           _custPhone:  custPhone,
@@ -565,6 +600,8 @@ export default function POS() {
     }))).filter(i => i?.name);
     const sub  = Number(o.subtotal  || o._subtotal);
     const tax  = Number(o.tax_amount|| o._tax);
+    const receiptTaxBreakdown = o._taxBreakdown || taxBreakdown;
+    const receiptTaxLabel = o._taxLabel || taxLabel;
     const disc = Number(o.discount_amount || o._discountAmt || 0);
     const ttl  = Number(o.total_amount   || o._total);
     const w = window.open('', '_blank', 'width=420,height=720');
@@ -630,7 +667,9 @@ export default function POS() {
         `).join('')}
         <div class="line"></div>
         <div class="row"><span>Subtotal</span><span>PKR ${sub.toLocaleString()}</span></div>
-        <div class="row"><span>Tax (8%)</span><span>PKR ${tax.toLocaleString()}</span></div>
+        ${receiptTaxBreakdown.length
+          ? receiptTaxBreakdown.map(t => `<div class="row"><span>${t.name || 'Tax'} (${Number(t.rate || 0).toLocaleString()}%)</span><span>PKR ${Number(t.amount || 0).toLocaleString()}</span></div>`).join('')
+          : `<div class="row"><span>${receiptTaxLabel}</span><span>PKR ${tax.toLocaleString()}</span></div>`}
         ${disc > 0 ? `<div class="row"><span>Discount</span><span>- PKR ${disc.toLocaleString()}</span></div>` : ''}
         <div class="line"></div>
         <div class="row big"><span>TOTAL</span><span>PKR ${ttl.toLocaleString()}</span></div>
@@ -1146,7 +1185,7 @@ export default function POS() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: T.textMid }}>Tax (8%)</span>
+                <span style={{ fontSize: 12, color: T.textMid }}>{taxLabel}</span>
                 <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.text }}>PKR {tax.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
@@ -1245,7 +1284,7 @@ export default function POS() {
               <div style={{ background: T.surface, borderRadius: 12, padding: '14px 16px', marginTop: 16 }}>
                 {[
                   ['Subtotal', `PKR ${Number(createdOrder._subtotal).toLocaleString()}`],
-                  ['Tax (8%)', `PKR ${Number(createdOrder._tax).toLocaleString()}`],
+                  [createdOrder._taxLabel || 'Tax', `PKR ${Number(createdOrder._tax).toLocaleString()}`],
                   ...(createdOrder._discountAmt > 0 ? [['Discount', `- PKR ${Number(createdOrder._discountAmt).toLocaleString()}`, true]] : []),
                 ].map(([label, value, accent]) => (
                   <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, color: accent ? T.accent : T.textMid }}>
@@ -1364,6 +1403,11 @@ function CleanPOSGateModal({ currentShift, onUnlocked }) {
   const isClockedIn = currentShift?.attendance?.is_clocked_in;
   const scheduledShift = selectOpenableScheduledShift(currentShift);
   const displayScheduledShift = scheduledShift || selectDisplayScheduledShift(currentShift);
+  const shiftDetail = hasShift
+    ? `${currentShift.shift.start_time?.slice(0, 5)} - ${currentShift.shift.end_time?.slice(0, 5)}`
+    : displayScheduledShift
+      ? `Scheduled now: ${displayScheduledShift.shift_name} - ${displayScheduledShift.start_time?.slice(0, 5)}-${displayScheduledShift.end_time?.slice(0, 5)}`
+      : (currentShift?.reason || 'No shift schedule is defined for the current date/time');
 
   const btnStyle = (bg, col = '#000') => ({
     background: bg, color: col, border: 'none', borderRadius: 8,
@@ -1440,9 +1484,7 @@ function CleanPOSGateModal({ currentShift, onUnlocked }) {
         {row(
           hasShift,
           hasShift ? `Shift Active - ${currentShift.shift.shift_name}` : 'Shift Not Started',
-          hasShift ? `${currentShift.shift.start_time?.slice(0, 5)} - ${currentShift.shift.end_time?.slice(0, 5)}`
-            : displayScheduledShift ? `Scheduled: ${displayScheduledShift.shift_name} - ${displayScheduledShift.start_time?.slice(0, 5)}-${displayScheduledShift.end_time?.slice(0, 5)}`
-              : 'No shift scheduled for today - ask your manager',
+          shiftDetail,
           scheduledShift ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
               {showBalanceInput && (

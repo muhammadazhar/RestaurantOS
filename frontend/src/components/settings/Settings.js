@@ -72,6 +72,11 @@ const SectionHeader = ({ icon, title, subtitle }) => (
 );
 
 const Divider = () => <div style={{ borderTop: `1px solid ${T.border}`, margin: '28px 0' }} />;
+const DEFAULT_TAX_RATES = [
+  { id: 'gst', name: 'Sales Tax (GST)', rate: 8, applies_to: 'all', enabled: true },
+  { id: 'service', name: 'Service Charge', rate: 5, applies_to: 'dine_in', enabled: false },
+  { id: 'delivery', name: 'Delivery Fee', rate: 2.5, applies_to: 'delivery', enabled: false },
+];
 
 // ─── 1. General Info ──────────────────────────────────────────────────────────
 function GeneralInfo() {
@@ -238,14 +243,18 @@ function GeneralInfo() {
 
 // ─── 2. Tax Rates ─────────────────────────────────────────────────────────────
 function TaxRates() {
-  const [taxes, setTaxes] = useState([
-    { id: 1, name: 'Sales Tax (GST)',  rate: 8,   applies_to: 'all',      enabled: true  },
-    { id: 2, name: 'Service Charge',  rate: 5,   applies_to: 'dine_in',  enabled: true  },
-    { id: 3, name: 'Delivery Fee',    rate: 2.5, applies_to: 'delivery', enabled: false },
-  ]);
+  const [taxes, setTaxes] = useState(DEFAULT_TAX_RATES);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newTax, setNewTax] = useState({ name: '', rate: '', applies_to: 'all' });
+
+  useEffect(() => {
+    getRestaurantSettings()
+      .then(r => {
+        if (Array.isArray(r.data.tax_rates)) setTaxes(r.data.tax_rates);
+      })
+      .catch(() => {});
+  }, []);
 
   const toggle  = (id) => setTaxes(t => t.map(x => x.id === id ? { ...x, enabled: !x.enabled } : x));
   const remove  = (id) => setTaxes(t => t.filter(x => x.id !== id));
@@ -261,9 +270,14 @@ function TaxRates() {
 
   const save = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 800));
-    setSaving(false);
-    toast.success('Tax rates saved!');
+    try {
+      await updateRestaurantSettings({ tax_rates: taxes });
+      toast.success('Tax rates saved!');
+    } catch {
+      toast.error('Save failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const appliesToLabel = { all: 'All Orders', dine_in: 'Dine-in Only', delivery: 'Delivery Only', online: 'Online Only' };

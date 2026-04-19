@@ -7,6 +7,10 @@ const localDateString = (date = new Date()) => {
   return `${d.getFullYear()}-${mm}-${dd}`;
 };
 
+const DEFAULT_TAX_RATES = [
+  { id: 'gst', name: 'Sales Tax (GST)', rate: 8, applies_to: 'all', enabled: true },
+];
+
 // ─── Auto-journalize a paid order ─────────────────────────────────────────────
 async function autoJournalizeOrder(restaurantId, order) {
   // Get order items with category info
@@ -221,6 +225,69 @@ async function createAdjustment(client, restaurantId, order, type, reason, emplo
   return result.rows[0];
 }
 
+async function calculateOrderTotals(client, restaurantId, items, orderType, discountAmount) {
+  const subtotal = roundMoney(items.reduce((sum, item) => sum + numeric(item.unit_price) * numeric(item.quantity, 1), 0));
+  const discount = Math.min(numeric(discountAmount), subtotal);
+  const settingsRes = await client.query(`SELECT settings FROM restaurants WHERE id=$1`, [restaurantId]);
+  const settings = settingsRes.rows[0]?.settings || {};
+  const taxRates = (Array.isArray(settings.tax_rates) ? settings.tax_rates : DEFAULT_TAX_RATES)
+    .filter(rate => rate?.enabled !== false)
+    .filter(rate => ['all', orderType].includes(rate.applies_to || 'all'))
+    .map(rate => ({ ...rate, rate: numeric(rate.rate) }))
+    .filter(rate => rate.rate > 0);
+
+  if (!taxRates.length || !items.length) {
+    return { subtotal, discount, taxAmount: 0, totalAmount: roundMoney(subtotal - discount), taxBreakdown: [] };
+  }
+
+  const menuIds = [...new Set(items.map(item => item.menu_item_id).filter(Boolean))];
+  const taxFlags = {};
+  if (menuIds.length) {
+    const flagRes = await client.query(
+      `SELECT id, COALESCE(tax_applicable, false) AS tax_applicable, COALESCE(tax_included, true) AS tax_included
+       FROM menu_items
+       WHERE restaurant_id=$1 AND id = ANY($2::uuid[])`,
+      [restaurantId, menuIds]
+    );
+    for (const row of flagRes.rows) taxFlags[row.id] = row;
+  }
+
+  const combinedRate = taxRates.reduce((sum, rate) => sum + rate.rate, 0) / 100;
+  const discountRatio = subtotal > 0 ? discount / subtotal : 0;
+  const taxBreakdown = taxRates.map(rate => ({ ...rate, amount: 0 }));
+  let includedTax = 0;
+  let exclusiveTax = 0;
+
+  for (const item of items) {
+    const flags = item.menu_item_id ? taxFlags[item.menu_item_id] : null;
+    const taxApplicable = flags ? flags.tax_applicable !== false : item.tax_applicable === true;
+    if (!taxApplicable) continue;
+
+    const taxIncluded = flags ? flags.tax_included === true : item.tax_included === true;
+    const lineTotal = numeric(item.unit_price) * numeric(item.quantity, 1);
+    const discountedLine = lineTotal * (1 - discountRatio);
+    if (discountedLine <= 0) continue;
+
+    taxRates.forEach((rate, index) => {
+      const rateDecimal = numeric(rate.rate) / 100;
+      const amount = taxIncluded
+        ? discountedLine * (rateDecimal / (1 + combinedRate))
+        : discountedLine * rateDecimal;
+      taxBreakdown[index].amount += amount;
+      if (taxIncluded) includedTax += amount;
+      else exclusiveTax += amount;
+    });
+  }
+
+  return {
+    subtotal,
+    discount,
+    taxAmount: roundMoney(includedTax + exclusiveTax),
+    totalAmount: roundMoney(subtotal - discount + exclusiveTax),
+    taxBreakdown: taxBreakdown.map(t => ({ ...t, amount: roundMoney(t.amount) })).filter(t => t.amount > 0),
+  };
+}
+
 // GET /api/orders?status=pending  OR  ?status=pending,preparing,ready
 exports.getOrders = async (req, res) => {
   try {
@@ -403,10 +470,14 @@ exports.createOrder = async (req, res) => {
     );
     const orderNumber = `ORD-${numRes.rows[0].last_num + 1}`;
 
-    const subtotal   = items.reduce((s, i) => s + (i.unit_price * i.quantity), 0);
-    const discAmt    = Math.min(parseFloat(discount_amount) || 0, subtotal);
-    const taxAmount  = Math.round((subtotal - discAmt) * 0.08 * 100) / 100;
-    const totalAmount = subtotal - discAmt + taxAmount;
+    const totals = await calculateOrderTotals(client, restaurantId, items, order_type, discount_amount);
+    const subtotal = totals.subtotal;
+    const discAmt = totals.discount;
+    const taxAmount = totals.taxAmount;
+    const totalAmount = totals.totalAmount;
+    const taxBreakdownNote = totals.taxBreakdown.length
+      ? `Tax: ${totals.taxBreakdown.map(t => `${t.name || 'Tax'} ${numeric(t.rate)}% = ${numeric(t.amount).toFixed(2)}`).join(', ')}`
+      : null;
 
     const deliveryAddress = customer_address
       ? JSON.stringify({ address: customer_address })
@@ -422,7 +493,8 @@ exports.createOrder = async (req, res) => {
         guest_count, subtotal, discAmt, taxAmount, totalAmount,
         customer_name || null, customer_phone || null,
         customer_lat || null, customer_lng || null,
-        deliveryAddress, rider_id || null, waiter_id || null, notes || null]
+        deliveryAddress, rider_id || null, waiter_id || null,
+        [notes, taxBreakdownNote].filter(Boolean).join('\n') || null]
     );
     const order = orderRes.rows[0];
 
