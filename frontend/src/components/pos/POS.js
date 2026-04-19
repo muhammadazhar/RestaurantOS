@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getActiveTableOrder, replaceOrderItem, cancelOrderReturn, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
+import { getMenu, getTables, createOrder, getOrders, updateOrderStatus, getActiveTableOrder, replaceOrderItem, returnOrderItem, cancelOrderReturn, getCurrentShift, continueMyShift, closeMyShift, startMyShift, attClockIn, getRiders, getDiscountPresets, getShiftCashSummary, getEmployees } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, T, useT } from '../shared/UI';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -399,6 +399,37 @@ export default function POS() {
       load();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Cancellation failed');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const returnSingleItem = async (item) => {
+    if (!activeTableOrder || !item?.order_item_id) return;
+    const reason = window.prompt(`Reason for returning ${item.name}?`, 'Customer returned item');
+    if (!reason) return;
+    setSending(true);
+    try {
+      const res = await returnOrderItem(activeTableOrder.id, {
+        order_item_id: item.order_item_id,
+        reason,
+      });
+      if (res.data.order?.status === 'cancelled') {
+        toast.success('Item returned and order cancelled');
+        setCart([]);
+        setDiscount('');
+        clearLoadedOrder();
+        setTableId('');
+        load();
+      } else {
+        setActiveTableOrder(res.data.order);
+        setCart(cartFromOrder(res.data.order));
+        setReplaceTarget(null);
+        const refund = Math.abs(Number(res.data.total_adjustment || 0));
+        toast.success(refund ? `Item returned, refund PKR ${refund.toLocaleString()}` : 'Item returned');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Item return failed');
     } finally {
       setSending(false);
     }
@@ -1021,7 +1052,10 @@ export default function POS() {
                   )}
                   <button onClick={() => setNotesItem(item)} title="Add notes" style={{ width: 28, height: 20, borderRadius: 10, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, cursor: 'pointer', fontSize: 9, lineHeight: 1, flexShrink: 0 }}>Note</button>
                   {item.existing_order_item ? (
-                    <button onClick={() => setReplaceTarget(item)} title="Replace item" style={{ height: 22, borderRadius: 10, background: replaceTarget?.cart_key === item.cart_key ? T.red : T.redDim, border: `1px solid ${T.red}44`, color: replaceTarget?.cart_key === item.cart_key ? '#fff' : T.red, cursor: 'pointer', fontSize: 9, lineHeight: 1, flexShrink: 0, padding: '0 8px', fontWeight: 800 }}>Replace</button>
+                    <>
+                      <button onClick={() => setReplaceTarget(item)} title="Replace item" style={{ height: 22, borderRadius: 10, background: replaceTarget?.cart_key === item.cart_key ? T.red : T.redDim, border: `1px solid ${T.red}44`, color: replaceTarget?.cart_key === item.cart_key ? '#fff' : T.red, cursor: 'pointer', fontSize: 9, lineHeight: 1, flexShrink: 0, padding: '0 8px', fontWeight: 800 }}>Replace</button>
+                      <button onClick={() => returnSingleItem(item)} title="Cancel/return this item" style={{ height: 22, borderRadius: 10, background: T.surface, border: `1px solid ${T.red}44`, color: T.red, cursor: 'pointer', fontSize: 9, lineHeight: 1, flexShrink: 0, padding: '0 8px', fontWeight: 800 }}>Return</button>
+                    </>
                   ) : (
                     <button onClick={() => removeItem(item.cart_key)} title="Remove" style={{ width: 20, height: 20, borderRadius: '50%', background: T.redDim, border: `1px solid ${T.red}44`, color: T.red, cursor: 'pointer', fontSize: 11, lineHeight: 1, flexShrink: 0 }}>x</button>
                   )}
