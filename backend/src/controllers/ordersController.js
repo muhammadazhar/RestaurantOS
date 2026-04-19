@@ -1,7 +1,15 @@
 const db = require('../config/db');
 
-const localDateString = (date = new Date()) => {
+const DEFAULT_TIMEZONE = 'Asia/Karachi';
+
+const localDateString = (date = new Date(), timeZone = null) => {
   const d = date instanceof Date ? date : new Date(date);
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
@@ -10,6 +18,11 @@ const localDateString = (date = new Date()) => {
 const DEFAULT_TAX_RATES = [
   { id: 'gst', name: 'Sales Tax (GST)', rate: 8, applies_to: 'all', enabled: true },
 ];
+
+async function getRestaurantTimezone(client, restaurantId) {
+  const result = await client.query(`SELECT settings->>'timezone' AS timezone FROM restaurants WHERE id=$1`, [restaurantId]);
+  return result.rows[0]?.timezone || DEFAULT_TIMEZONE;
+}
 
 // ─── Auto-journalize a paid order ─────────────────────────────────────────────
 async function autoJournalizeOrder(restaurantId, order) {
@@ -396,7 +409,8 @@ exports.createOrder = async (req, res) => {
     let shiftId = null;
     let shiftSessionId = null;
     if (source === 'pos') {
-      const today = localDateString();
+      const timeZone = await getRestaurantTimezone(client, restaurantId);
+      const today = localDateString(new Date(), timeZone);
       // Find the employee's latest open session. A real open session can belong
       // to an overnight/continued shift, so do not require shift_date = today.
       const shiftRes = await client.query(

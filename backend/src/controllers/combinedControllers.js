@@ -1364,15 +1364,35 @@ const dateWindowSql = (alias = 's') => `
   AND EXTRACT(ISODOW FROM $DATE::date)::INT = ANY(COALESCE(${alias}.working_days, ARRAY[EXTRACT(ISODOW FROM COALESCE(${alias}.date_from, ${alias}.date))::INT]))
 `;
 
-const localDateString = (date = new Date()) => {
+const DEFAULT_TIMEZONE = 'Asia/Karachi';
+
+const getRestaurantTimezone = async (restaurantId) => {
+  const result = await db.query(`SELECT settings->>'timezone' AS timezone FROM restaurants WHERE id=$1`, [restaurantId]);
+  return result.rows[0]?.timezone || DEFAULT_TIMEZONE;
+};
+
+const localDateString = (date = new Date(), timeZone = null) => {
   const d = date instanceof Date ? date : new Date(date);
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
 };
 
-const localTimeString = (date = new Date()) => {
+const localTimeString = (date = new Date(), timeZone = null) => {
   const d = date instanceof Date ? date : new Date(date);
+  if (timeZone) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(d).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+    const hour = parts.hour === '24' ? '00' : parts.hour;
+    return `${hour}:${parts.minute}`;
+  }
   return d.toTimeString().slice(0, 5);
 };
 
@@ -1542,8 +1562,9 @@ exports.bulkCreateShifts = async (req, res) => {
 
 exports.getCurrentShift = async (req, res) => {
   try {
-    const today = localDateString();
-    const now   = localTimeString();
+    const timeZone = await getRestaurantTimezone(req.user.restaurantId);
+    const today = localDateString(new Date(), timeZone);
+    const now   = localTimeString(new Date(), timeZone);
 
     const [shiftResult, attendResult] = await Promise.all([
       db.query(
@@ -2254,9 +2275,10 @@ exports.getMyShifts = async (req, res) => {
 exports.startMyShift = async (req, res) => {
   try {
     const { id } = req.params;
-    const today = (req.body.shift_date || localDateString()).slice(0, 10);
-    const currentDate = localDateString();
-    const now = localTimeString();
+    const timeZone = await getRestaurantTimezone(req.user.restaurantId);
+    const today = (req.body.shift_date || localDateString(new Date(), timeZone)).slice(0, 10);
+    const currentDate = localDateString(new Date(), timeZone);
+    const now = localTimeString(new Date(), timeZone);
     const openingBalance = parseFloat(req.body.opening_balance) || 0;
     const canManageShifts = (req.user.permissions || []).some(p => ['shift_management', 'settings'].includes(p));
     const params = [id, req.user.restaurantId, today];
@@ -2345,9 +2367,10 @@ exports.startMyShift = async (req, res) => {
 exports.continueMyShift = async (req, res) => {
   try {
     const { id } = req.params;
-    const today = (req.body?.shift_date || localDateString()).slice(0, 10);
-    const currentDate = localDateString();
-    const now = localTimeString();
+    const timeZone = await getRestaurantTimezone(req.user.restaurantId);
+    const today = (req.body?.shift_date || localDateString(new Date(), timeZone)).slice(0, 10);
+    const currentDate = localDateString(new Date(), timeZone);
+    const now = localTimeString(new Date(), timeZone);
     const canManageShifts = (req.user.permissions || []).some(p => ['shift_management', 'settings'].includes(p));
     const params = [id, req.user.restaurantId, today];
     const employeeFilter = canManageShifts ? '' : 'AND employee_id=$4';
