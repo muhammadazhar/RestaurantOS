@@ -28,6 +28,19 @@ Do not stage local-only files unless explicitly requested:
 
 ## Recent Work And Status
 
+### Mobile Development Documentation
+
+Completed in this session:
+
+- Added `MOBILE_APP_FUNCTIONAL_SPEC.md` for mobile developers to understand the full RestaurantOS feature set already built in the web application.
+- Added `MOBILE_APP_UI_SPEC.md` for mobile developers to understand the recommended mobile navigation, screen layouts, shared components, and visual rules.
+- Documented the returned-item UI rule for mobile:
+  - Show label `Returned - not charged`.
+  - Show returned value as a negative amount, for example `-PKR 500`.
+  - Apply a thin red strike-through to returned item price/value.
+  - Keep order totals unchanged because returned rows are already excluded from totals.
+- These files are documentation only and do not affect build/deployment behavior.
+
 ### Database And Deployment
 
 - Switched app config toward NEON DB usage.
