@@ -42,7 +42,12 @@ const StatusPill = ({ status }) => {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const isReturnedItem = item => item?.status === 'cancelled';
-const itemChargeTotal = item => isReturnedItem(item) ? 0 : Number(item.total_price || 0);
+const itemChargeTotal = item => Number(item.total_price ?? (Number(item.unit_price || 0) * Number(item.quantity || 1)));
+const itemDisplayTotal = item => isReturnedItem(item) ? -Math.abs(itemChargeTotal(item)) : itemChargeTotal(item);
+const fmtLineTotal = value => {
+  const amount = Number(value || 0);
+  return `${amount < 0 ? '-PKR ' : ''}${Math.abs(amount).toLocaleString('en-PK', { minimumFractionDigits: 0 })}`;
+};
 
 export default function TableBill({ table, onClose, onPaid }) {
   useT();
@@ -327,7 +332,7 @@ export default function TableBill({ table, onClose, onPaid }) {
                       {Number(item.unit_price).toLocaleString()}
                     </div>
                     <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: returned ? T.red : T.text, fontFamily: 'monospace' }}>
-                      {Number(itemChargeTotal(item)).toLocaleString()}
+                      {fmtLineTotal(itemDisplayTotal(item))}
                     </div>
                   </div>
                 );})}

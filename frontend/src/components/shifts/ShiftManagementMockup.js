@@ -2,6 +2,7 @@ import React from 'react';
 import {
   getMyShifts, getShifts, getEmployees, createShift, updateShift, deleteShift,
   startMyShift, continueMyShift, closeMyShift, getShiftCashSummary, getShiftSalesReport,
+  getOpenShifts,
 } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, Input, Select, T, useT } from '../shared/UI';
 import { useAuth } from '../../context/AuthContext';
@@ -374,6 +375,7 @@ export default function ShiftManagementMockup() {
   const [reportLoading, setReportLoading] = React.useState(false);
   const [schedules, setSchedules] = React.useState([]);
   const [dayShifts, setDayShifts] = React.useState([]);
+  const [openShifts, setOpenShifts] = React.useState([]);
   const [employees, setEmployees] = React.useState([]);
   const [editing, setEditing] = React.useState(null);
   const [opening, setOpening] = React.useState({});
@@ -386,18 +388,21 @@ export default function ShiftManagementMockup() {
     setLoading(true);
     try {
       if (isManager) {
-        const [scheduleRes, dayRes, employeeRes] = await Promise.all([
+        const [scheduleRes, dayRes, openRes, employeeRes] = await Promise.all([
           getShifts({ schedule_view: '1' }),
           getShifts({ date: todayStr() }),
+          getOpenShifts(),
           getEmployees(),
         ]);
         setSchedules(scheduleRes.data || []);
         setDayShifts(dayRes.data || []);
+        setOpenShifts(openRes.data || []);
         setEmployees(employeeRes.data || []);
       } else {
         const myRes = await getMyShifts();
         setSchedules(myRes.data || []);
         setDayShifts((myRes.data || []).filter(s => dateOnly(s.date) === todayStr()));
+        setOpenShifts([]);
         setEmployees([]);
       }
     } catch {
@@ -427,7 +432,14 @@ export default function ShiftManagementMockup() {
   React.useEffect(() => { loadReport(); }, [loadReport]);
 
   const active = dayShifts.filter(s => ['active', 'in_process'].includes(s.status));
-  const cashOpen = active.reduce((sum, s) => sum + Number(s.opening_balance || 0), 0);
+  const closeableShifts = [
+    ...active,
+    ...openShifts.filter(openShift => !active.some(activeShift =>
+      (activeShift.session_id && activeShift.session_id === openShift.session_id)
+      || (activeShift.id === openShift.id && dateOnly(activeShift.date) === dateOnly(openShift.date))
+    )),
+  ];
+  const cashOpen = closeableShifts.reduce((sum, s) => sum + Number(s.opening_balance || 0), 0);
   const reportRows = report?.shifts || [];
   const totalVariance = reportRows.reduce((sum, row) => sum + Math.abs(Number(row.variance || 0)), 0);
 
@@ -500,7 +512,7 @@ export default function ShiftManagementMockup() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(130px, 1fr))', gap: 12, marginTop: 20 }}>
           <Metric title="Employees on Schedule" value={new Set(schedules.map(s => s.employee_id)).size} note="Assigned this week" />
-          <Metric title="Active Shifts" value={active.length} note="Currently open" />
+          <Metric title="Active Shifts" value={closeableShifts.length} note="Currently open" />
           <Metric title="Cash in Open Shifts" value={money(cashOpen)} note="Opening + running balance" />
           <Metric title="Total Variance" value={money(totalVariance)} note="Across selected reports" />
         </div>
@@ -522,8 +534,8 @@ export default function ShiftManagementMockup() {
           <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: 18 }}>
             <Card style={{ borderRadius: 16, ...ST.panel }}>
               <h2 style={{ margin: '0 0 12px', color: T.text }}>Today's Running Shifts</h2>
-              {active.length === 0 && <div style={{ color: T.textDim }}>No active shifts right now.</div>}
-              {active.map(s => <ShiftLine key={`${s.id}-${dateOnly(s.date)}`} shift={s} onSummary={() => loadSummary(s)} />)}
+              {closeableShifts.length === 0 && <div style={{ color: T.textDim }}>No active shifts right now.</div>}
+              {closeableShifts.map(s => <ShiftLine key={`${s.id}-${s.session_id || dateOnly(s.date)}`} shift={s} onSummary={() => loadSummary(s)} />)}
             </Card>
             <Card style={{ borderRadius: 16, ...ST.panel }}>
               <h2 style={{ margin: '0 0 12px', color: T.text }}>Example Weekly Assignment</h2>
@@ -590,8 +602,8 @@ export default function ShiftManagementMockup() {
           </Card>
           <Card style={{ borderRadius: 16, ...ST.panel }}>
             <h2 style={{ margin: '0 0 12px', color: T.text }}>Close Shift</h2>
-            {active.map(s => (
-              <div key={`${s.id}-${dateOnly(s.date)}`} style={{ ...ST.soft, borderRadius: 16, padding: 14, marginBottom: 10 }}>
+            {closeableShifts.map(s => (
+              <div key={`${s.id}-${s.session_id || dateOnly(s.date)}`} style={{ ...ST.soft, borderRadius: 16, padding: 14, marginBottom: 10 }}>
                 <ShiftLine shift={s} />
                 <Input
                   label="Cashier Collected Amount"
@@ -621,7 +633,7 @@ export default function ShiftManagementMockup() {
                 </div>
               </div>
             ))}
-            {active.length === 0 && <div style={{ color: T.textDim }}>No active shifts to close.</div>}
+            {closeableShifts.length === 0 && <div style={{ color: T.textDim }}>No active shifts to close.</div>}
           </Card>
         </div>
       )}

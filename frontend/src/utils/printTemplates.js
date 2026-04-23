@@ -62,6 +62,16 @@ const esc = value => String(value ?? '')
   .replace(/'/g, '&#39;');
 
 const isReturnedItem = item => item?.status === 'cancelled' || item?.returned === true;
+const receiptLineTotal = item => {
+  const unit = Number(item.unit_price ?? item.price ?? 0);
+  const qty = Number(item.quantity ?? item.qty ?? 1);
+  const amount = Number(item.total_price ?? (unit * qty));
+  return isReturnedItem(item) ? -Math.abs(amount) : amount;
+};
+const fmtReceiptAmount = value => {
+  const amount = Number(value || 0);
+  return `${amount < 0 ? '-PKR ' : 'PKR '}${Math.abs(amount).toLocaleString()}`;
+};
 
 const logoSrc = (template, restaurant = {}) => {
   const raw = template.logoUrl || restaurant.logo_url || '';
@@ -162,9 +172,9 @@ export function renderReceiptHtml({ template, restaurant, order, items, table, t
       const returned = isReturnedItem(i);
       const unit = Number(i.unit_price ?? i.price ?? 0);
       const qty = Number(i.quantity ?? i.qty ?? 1);
-      const lineTotal = returned ? 0 : Number(i.total_price ?? (unit * qty));
+      const lineTotal = receiptLineTotal(i);
       const returnedNote = returned ? '<br><span style="font-size:10px;font-weight:900">RETURNED - NOT CHARGED</span>' : '';
-      return `<div class="grid4"><span>${returned ? '<s>' : ''}${esc(i.name)}${returned ? '</s>' : ''}${returnedNote}${i.notes ? `<br><span style="font-size:10px;color:#888">${esc(i.notes)}</span>` : ''}</span><span style="text-align:center">x${esc(qty)}</span><span style="text-align:right">PKR ${unit.toLocaleString()}</span><span style="text-align:right" class="bold">PKR ${lineTotal.toLocaleString()}</span></div>`;
+      return `<div class="grid4"><span>${returned ? '<s>' : ''}${esc(i.name)}${returned ? '</s>' : ''}${returnedNote}${i.notes ? `<br><span style="font-size:10px;color:#888">${esc(i.notes)}</span>` : ''}</span><span style="text-align:center">x${esc(qty)}</span><span style="text-align:right">PKR ${unit.toLocaleString()}</span><span style="text-align:right" class="bold">${fmtReceiptAmount(lineTotal)}</span></div>`;
     }).join('')}
     <div class="line"></div>
     <div class="row"><span>Subtotal</span><span>PKR ${sub.toLocaleString()}</span></div>
