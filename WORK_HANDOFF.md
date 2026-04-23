@@ -15,9 +15,10 @@ The user wants every completed code change pushed to Git so Railway deploys it.
 After each completed change:
 
 1. Run the relevant checks.
-2. Stage only the touched source files.
-3. Commit with a clear message.
-4. Push to `origin main`.
+2. Update this `WORK_HANDOFF.md` file with any completed additions/modifications and any important follow-up notes.
+3. Stage only the touched source files, including `WORK_HANDOFF.md` when it was updated.
+4. Commit with a clear message.
+5. Push to `origin main`.
 
 Do not stage local-only files unless explicitly requested:
 
@@ -113,57 +114,37 @@ Paid-order journal entries exclude returned/cancelled item rows.
 
 Commit pushed: `0828c0c4 Show returned items on bills and reports`.
 
+### Returned Item Values And Shift Close Panel
+
+Completed and pushed:
+
+- Commit pushed: `ce6daaca Show returned values and open shifts`.
+- Returned bill items now show their returned value as a negative amount, for example `-PKR 500`, while order totals remain unchanged.
+- Receipt printing now shows returned line values as negative amounts and keeps `RETURNED - NOT CHARGED`.
+- Shift Management -> Open / Close Shift now loads `/shifts/open` and merges already-open/in-progress sessions into the Close Shift panel.
+- Close Shift panel de-duplicates sessions already present in today's active shifts.
+
+### Returned Item Strike-Through And Sales Return KPI
+
+Completed and pushed:
+
+- Commit pushed: `7ad8d130 Highlight returned item values`.
+- Returned item prices/values now get a thin red strike-through treatment in:
+  - Table bill.
+  - Printed receipt template.
+  - Orders detail modal.
+  - Sales report returned values.
+  - Menu performance returned values.
+- Sales Report now shows a top KPI card for `Returned Value` next to:
+  - `Total Revenue`
+  - `Paid Orders`
+  - `Avg Order Value`
+  - `Total Guests`
+- Sales and Menu print reports also show returned values with the red strike-through treatment.
+
 ## Important Next Task
 
-Latest active work items:
-
-1. Returned items should show with value and be clearly marked, either:
-   - A `returned` label, or
-   - A negative sign with value.
-
-   Current implementation shows returned line total as `0`, which the user wants changed.
-
-   Modify bill/receipt display so returned items show their value, likely as a negative amount:
-
-   ```text
-   Returned - not charged    -PKR 500
-   ```
-
-   Keep order totals unchanged because totals already exclude returned items.
-
-   Reports already have returned amount fields, but the UI may need clearer negative/returned display if required.
-
-2. Open/Close Shift panel in Shift Management should show already opened or in-progress shifts that can be closed.
-   - The same open/in-progress shift visibility exists in Staff -> Employees -> Shift Schedule for force close.
-   - Shift Management -> Open / Close Shift should show those open/in-progress shifts in the Close Shift panel.
-   - Likely fix: have `frontend/src/components/shifts/ShiftManagementMockup.js` load `getOpenShifts()` and merge those sessions into the Close Shift list, de-duplicating shifts already present in today `dayShifts`.
-
-## Likely Files For Next Task
-
-### `frontend/src/components/tables/TableBill.js`
-
-- `itemChargeTotal` currently returns `0` for returned items.
-- Change returned display to negative original value instead of `0`.
-
-### `frontend/src/utils/printTemplates.js`
-
-- `renderReceiptHtml` currently sets `lineTotal = returned ? 0 : ...`.
-- Change returned receipt line to negative original value.
-- Keep `RETURNED - NOT CHARGED`.
-
-### Possible Optional File
-
-`frontend/src/components/reports/Reports.js`
-
-- Only touch if the user also wants returned values shown more visibly in reports.
-
-### Shift Management File
-
-`frontend/src/components/shifts/ShiftManagementMockup.js`
-
-- Open/Close tab currently closes `active` derived from today `dayShifts`.
-- Staff schedule uses `getOpenShifts()` for force-close visibility.
-- Merge `getOpenShifts()` into the Close Shift panel so older active and in-progress sessions are visible.
+No active next task is pending right now. Wait for the user's next instruction.
 
 ## Verification To Run After Next Change
 
@@ -181,7 +162,7 @@ npm run build --prefix frontend
 
 Existing frontend build warnings from last run:
 
-- `src/components/orders/Orders.js Line 44:3 Unreachable code`
+- `src/components/orders/Orders.js Line 51:3 Unreachable code`
 - `src/components/tables/TableBill.js Line 116:5 Unreachable code`
 - Several unused variables elsewhere.
 
@@ -189,7 +170,7 @@ These warnings existed before and the build succeeds.
 
 ## Current Repository State From Last Known Push
 
-- HEAD was `0828c0c4`.
+- HEAD was `7ad8d130`.
 - Remaining unstaged local-only files were:
   - `.gitignore`
   - `backend/.env`
