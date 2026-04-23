@@ -16,6 +16,13 @@ const ORDER_TYPE_ICON = { dine_in: '🪑', takeaway: '🛍', online: '📲', del
 const fmt    = n => `PKR ${Number(n||0).toLocaleString()}`;
 const fmtDT  = d => new Date(d).toLocaleString('en-PK', { dateStyle:'short', timeStyle:'short' });
 const fmtDay = d => new Date(d).toLocaleDateString('en-PK', { weekday:'short', day:'numeric', month:'short' });
+const isReturnedItem = item => item?.status === 'cancelled' || item?.returned === true;
+const itemChargeTotal = item => Number(item.total_price ?? (Number(item.unit_price || 0) * Number(item.quantity || 1)));
+const itemDisplayTotal = item => isReturnedItem(item) ? -Math.abs(itemChargeTotal(item)) : itemChargeTotal(item);
+const fmtLineAmount = value => {
+  const amount = Number(value || 0);
+  return `${amount < 0 ? '-PKR ' : 'PKR '}${Math.abs(amount).toLocaleString('en-PK')}`;
+};
 
 // ─── Receipt printer ──────────────────────────────────────────────────────────
 function printReceipt(order, printSettings) {
@@ -150,18 +157,21 @@ function OrderDetailModal({ order, open, onClose, onStatusChange, printSettings 
       {/* Items */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 }}>Items</div>
-        {(order.items || []).filter(i => i?.name).map((item, idx) => (
+        {(order.items || []).filter(i => i?.name).map((item, idx) => {
+          const returned = isReturnedItem(item);
+          return (
           <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: `1px solid ${T.border}` }}>
             <div>
-              <span style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{item.name}</span>
+              <span style={{ fontSize: 13, color: returned ? T.red : T.text, fontWeight: 600, textDecoration: returned ? 'line-through' : 'none', textDecorationColor: T.red, textDecorationThickness: 1 }}>{item.name}</span>
+              {returned && <div style={{ fontSize: 10, color: T.red, fontWeight: 800, marginTop: 2 }}>Returned</div>}
               {item.notes && <div style={{ fontSize: 11, color: T.accent, marginTop: 2 }}>📝 {item.notes}</div>}
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 12, color: T.textMid }}>×{item.quantity} @ PKR {Number(item.unit_price).toLocaleString()}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: T.text, fontFamily: 'monospace' }}>PKR {Number(item.total_price).toLocaleString()}</div>
+              <div style={{ fontSize: 12, color: returned ? T.red : T.textMid, textDecoration: returned ? 'line-through' : 'none', textDecorationColor: T.red, textDecorationThickness: 1 }}>×{item.quantity} @ PKR {Number(item.unit_price).toLocaleString()}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: returned ? T.red : T.text, fontFamily: 'monospace', textDecoration: returned ? 'line-through' : 'none', textDecorationColor: T.red, textDecorationThickness: 1 }}>{fmtLineAmount(itemDisplayTotal(item))}</div>
             </div>
           </div>
-        ))}
+        );})}
       </div>
 
       {/* Totals */}

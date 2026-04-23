@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
 const fmt      = (n, dec = 0) => Number(n || 0).toLocaleString('en-PK', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 const fmtPKR   = (n) => `PKR ${fmt(n)}`;
+const fmtReturnPKR = (n) => `-PKR ${fmt(Math.abs(Number(n || 0)))}`;
 const today    = () => new Date().toISOString().slice(0, 10);
 const nDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
 const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); };
@@ -21,7 +22,7 @@ function printHTML(title, bodyHtml) {
     h1{font-size:20px;font-weight:bold;margin-bottom:4px}
     h2{font-size:14px;font-weight:bold;margin:22px 0 10px;padding-bottom:5px;border-bottom:2px solid #ccc}
     .meta{font-size:11px;color:#666;margin-bottom:20px}
-    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
     .kpi{border:1px solid #ddd;border-radius:6px;padding:12px 14px;background:#f9f9f9}
     .kpi-v{font-size:18px;font-weight:bold;margin-bottom:3px}
     .kpi-l{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px}
@@ -30,6 +31,7 @@ function printHTML(title, bodyHtml) {
     td{padding:7px 10px;border-bottom:1px solid #eee}
     tr:nth-child(even) td{background:#fafafa}
     .right{text-align:right} .center{text-align:center}
+    .return-amount{color:#d00;text-decoration:line-through;text-decoration-color:#d00;text-decoration-thickness:1px}
     @media print{body{padding:0 8px}.no-print{display:none}}
   </style></head><body>${bodyHtml}</body></html>`);
   w.document.close();
@@ -151,6 +153,7 @@ function SalesReport() {
   if (loading) return <Spinner />;
   const s = data?.summary || {};
   const totalRevenue  = Number(s.total_revenue  || 0);
+  const returnAmount  = Number(s.return_amount || 0);
   const maxDayRevenue = Math.max(...(data?.byPeriod || []).map(d => Number(d.revenue)), 1);
   const maxHour       = Math.max(...(data?.byHour   || []).map(d => Number(d.revenue)), 1);
 
@@ -163,7 +166,7 @@ function SalesReport() {
   const handlePrint = () => {
     const byPeriodRows = (data?.byPeriod || []).map(d => [d.period, d.orders, `PKR ${Number(d.revenue).toLocaleString()}`]);
     const byTypeRows   = (data?.byType   || []).map(t => [t.order_type?.replace('_',' '), t.orders, `PKR ${Number(t.revenue).toLocaleString()}`]);
-    const topRows      = (data?.topItems || []).slice(0,15).map((i,idx) => [idx+1, i.name, i.category_name||'—', fmt(i.qty_sold), fmt(i.returned_qty), `PKR ${fmt(i.total_revenue)}`, `PKR ${fmt(i.returned_amount)}`]);
+    const topRows      = (data?.topItems || []).slice(0,15).map((i,idx) => [idx+1, i.name, i.category_name||'—', fmt(i.qty_sold), fmt(i.returned_qty), `PKR ${fmt(i.total_revenue)}`, fmtReturnPKR(i.returned_amount), Number(i.returned_amount || 0) > 0]);
     const hourRows     = hourArray.filter(h=>h.orders>0).map(h => [h.hour, h.orders, `PKR ${fmt(h.revenue)}`]);
     printHTML(`Sales Report — ${from} to ${to}`, `
       <h1>Sales Report</h1>
@@ -173,7 +176,7 @@ function SalesReport() {
         <div class="kpi"><div class="kpi-v">${fmt(s.paid_orders)}</div><div class="kpi-l">Paid Orders</div></div>
         <div class="kpi"><div class="kpi-v">PKR ${fmt(s.avg_order_value)}</div><div class="kpi-l">Avg Order Value</div></div>
         <div class="kpi"><div class="kpi-v">${fmt(s.total_guests)}</div><div class="kpi-l">Total Guests</div></div>
-        <div class="kpi"><div class="kpi-v">${fmt(s.returned_items)}</div><div class="kpi-l">Returned Items</div></div>
+        <div class="kpi"><div class="kpi-v return-amount">${fmtReturnPKR(s.return_amount)}</div><div class="kpi-l">Returned Value</div></div>
       </div>
       <h2>Revenue by Day</h2>
       <table><thead><tr><th>Date</th><th class="right">Orders</th><th class="right">Revenue</th></tr></thead><tbody>
@@ -185,13 +188,13 @@ function SalesReport() {
       </tbody></table>
       <h2>Top Selling Items</h2>
       <table><thead><tr><th>#</th><th>Item</th><th>Category</th><th class="right">Qty Sold</th><th class="right">Returned</th><th class="right">Revenue</th><th class="right">Return Amt</th></tr></thead><tbody>
-        ${topRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="right">${r[3]}</td><td class="right">${r[4]}</td><td class="right">${r[5]}</td><td class="right">${r[6]}</td></tr>`).join('')}
+        ${topRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="right">${r[3]}</td><td class="right">${r[4]}</td><td class="right">${r[5]}</td><td class="right ${r[7] ? 'return-amount' : ''}">${r[6]}</td></tr>`).join('')}
       </tbody></table>
       <h2>Financial Summary</h2>
       <table><tbody>
         <tr><td>Subtotal</td><td class="right">PKR ${fmt(s.total_subtotal)}</td></tr>
         <tr><td>Discounts</td><td class="right">− PKR ${fmt(s.total_discount)}</td></tr>
-        <tr><td>Returns</td><td class="right">PKR ${fmt(s.return_amount)}</td></tr>
+        <tr><td>Returns</td><td class="right return-amount">${fmtReturnPKR(s.return_amount)}</td></tr>
         <tr><td>Tax (8%)</td><td class="right">PKR ${fmt(s.total_tax)}</td></tr>
         <tr><td><b>Net Revenue</b></td><td class="right"><b>PKR ${fmt(s.total_revenue)}</b></td></tr>
       </tbody></table>
@@ -235,6 +238,7 @@ function SalesReport() {
         <StatCard label="Paid Orders"      value={fmt(s.paid_orders)}        color={T.accent} icon="✅" sub={`${fmt(s.cancelled_orders)} cancelled`} />
         <StatCard label="Avg Order Value"  value={fmtPKR(s.avg_order_value)} color={T.blue}   icon="📊" />
         <StatCard label="Total Guests"     value={fmt(s.total_guests)}        color={T.purple} icon="👥" />
+        <StatCard label="Returned Value"   value={fmtReturnPKR(returnAmount)} color={T.red}    icon="↩" sub={`${fmt(s.returned_items)} returned`} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16, marginBottom: 16 }}>
@@ -327,6 +331,11 @@ function SalesReport() {
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: T.accent }}>{fmtPKR(item.total_revenue)}</div>
+                {Number(item.returned_amount || 0) > 0 && (
+                  <div style={{ fontSize: 10, color: T.red, fontFamily: 'monospace', fontWeight: 800, textDecoration: 'line-through', textDecorationColor: T.red, textDecorationThickness: 1 }}>
+                    {fmtReturnPKR(item.returned_amount)}
+                  </div>
+                )}
                 <div style={{ fontSize: 10, color: T.textDim }}>×{fmt(item.qty_sold)} sold</div>
               </div>
             </div>
@@ -374,10 +383,10 @@ function MenuReport() {
   const ABC_LABEL = { A: '⭐ Star', B: '🐎 Workhorse', C: '💤 Low Seller' };
 
   const handlePrint = () => {
-    const catRows  = (data?.byCategory||[]).map(c => [c.category, fmt(c.qty_sold), fmt(c.returned_qty), `PKR ${fmt(c.revenue)}`, `PKR ${fmt(c.returned_amount)}`]);
+    const catRows  = (data?.byCategory||[]).map(c => [c.category, fmt(c.qty_sold), fmt(c.returned_qty), `PKR ${fmt(c.revenue)}`, fmtReturnPKR(c.returned_amount), Number(c.returned_amount || 0) > 0]);
     const itemRows = withABC.map((item,i) => {
       const margin = Number(item.total_revenue)>0 ? Math.round(Number(item.gross_profit)/Number(item.total_revenue)*100) : 0;
-      return [i+1, item.name, item.category_name||'—', item.abc, fmt(item.qty_sold), fmt(item.returned_qty), `PKR ${fmt(item.total_revenue)}`, `PKR ${fmt(item.returned_amount)}`, `PKR ${fmt(item.estimated_cost)}`, `PKR ${fmt(item.gross_profit)}`, `${margin}%`];
+      return [i+1, item.name, item.category_name||'—', item.abc, fmt(item.qty_sold), fmt(item.returned_qty), `PKR ${fmt(item.total_revenue)}`, fmtReturnPKR(item.returned_amount), `PKR ${fmt(item.estimated_cost)}`, `PKR ${fmt(item.gross_profit)}`, `${margin}%`];
     });
     printHTML(`Menu Performance — ${from} to ${to}`, `
       <h1>Menu Performance Report</h1>
@@ -386,15 +395,16 @@ function MenuReport() {
         <div class="kpi"><div class="kpi-v">${items.length}</div><div class="kpi-l">Total Items</div></div>
         <div class="kpi"><div class="kpi-v">${fmt(items.reduce((s,i)=>s+Number(i.qty_sold),0))}</div><div class="kpi-l">Items Sold</div></div>
         <div class="kpi"><div class="kpi-v">PKR ${fmt(items.reduce((s,i)=>s+Number(i.total_revenue),0))}</div><div class="kpi-l">Menu Revenue</div></div>
+        <div class="kpi"><div class="kpi-v return-amount">${fmtReturnPKR(items.reduce((s,i)=>s+Number(i.returned_amount || 0),0))}</div><div class="kpi-l">Returned Value</div></div>
         <div class="kpi"><div class="kpi-v">PKR ${fmt(items.reduce((s,i)=>s+Number(i.gross_profit),0))}</div><div class="kpi-l">Est. Profit</div></div>
       </div>
       <h2>Revenue by Category</h2>
       <table><thead><tr><th>Category</th><th class="right">Qty Sold</th><th class="right">Returned</th><th class="right">Revenue</th><th class="right">Return Amt</th></tr></thead><tbody>
-        ${catRows.map(r=>`<tr><td>${r[0]}</td><td class="right">${r[1]}</td><td class="right">${r[2]}</td><td class="right">${r[3]}</td><td class="right">${r[4]}</td></tr>`).join('')}
+        ${catRows.map(r=>`<tr><td>${r[0]}</td><td class="right">${r[1]}</td><td class="right">${r[2]}</td><td class="right">${r[3]}</td><td class="right ${r[5] ? 'return-amount' : ''}">${r[4]}</td></tr>`).join('')}
       </tbody></table>
       <h2>All Menu Items</h2>
       <table><thead><tr><th>#</th><th>Item</th><th>Category</th><th class="center">ABC</th><th class="right">Qty</th><th class="right">Returned</th><th class="right">Revenue</th><th class="right">Return Amt</th><th class="right">Est. Cost</th><th class="right">Gross Profit</th><th class="right">Margin</th></tr></thead><tbody>
-        ${itemRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="center">${r[3]}</td><td class="right">${r[4]}</td><td class="right">${r[5]}</td><td class="right">${r[6]}</td><td class="right">${r[7]}</td><td class="right">${r[8]}</td><td class="right">${r[9]}</td><td class="right">${r[10]}</td></tr>`).join('')}
+        ${itemRows.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="center">${r[3]}</td><td class="right">${r[4]}</td><td class="right">${r[5]}</td><td class="right">${r[6]}</td><td class="right ${r[7] !== '-PKR 0' ? 'return-amount' : ''}">${r[7]}</td><td class="right">${r[8]}</td><td class="right">${r[9]}</td><td class="right">${r[10]}</td></tr>`).join('')}
       </tbody></table>
     `);
   };
@@ -424,6 +434,7 @@ function MenuReport() {
         <StatCard label="Total Items"   value={items.length}                                                       color={T.accent} icon="🍽" />
         <StatCard label="Items Sold"    value={fmt(items.reduce((s, i) => s + Number(i.qty_sold), 0))}             color={T.blue}   icon="📦" />
         <StatCard label="Menu Revenue"  value={fmtPKR(items.reduce((s, i) => s + Number(i.total_revenue), 0))}     color={T.green}  icon="💰" />
+        <StatCard label="Returned Value" value={fmtReturnPKR(items.reduce((s, i) => s + Number(i.returned_amount || 0), 0))} color={T.red} icon="↩" />
         <StatCard label="Est. Profit"   value={fmtPKR(items.reduce((s, i) => s + Number(i.gross_profit), 0))}      color={T.purple} icon="📈" />
       </div>
 
@@ -441,13 +452,18 @@ function MenuReport() {
                   <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{cat.category}</span>
                   <span style={{ fontSize: 11, color: T.textDim }}>{pct}% · {fmt(cat.qty_sold)} sold</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <HBar value={Number(cat.revenue)} max={totalRevenue} color={colors[i % colors.length]} />
-                  <span style={{ fontSize: 12, fontFamily: 'monospace', color: colors[i % colors.length], flexShrink: 0 }}>{fmtPKR(cat.revenue)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <HBar value={Number(cat.revenue)} max={totalRevenue} color={colors[i % colors.length]} />
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: colors[i % colors.length], flexShrink: 0 }}>{fmtPKR(cat.revenue)}</span>
+                  </div>
+                  {Number(cat.returned_amount || 0) > 0 && (
+                    <div style={{ fontSize: 11, fontFamily: 'monospace', color: T.red, marginTop: 3, textDecoration: 'line-through', textDecorationColor: T.red, textDecorationThickness: 1 }}>
+                      Returns {fmtReturnPKR(cat.returned_amount)}
+                    </div>
+                  )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </Card>
 
         {/* ABC Analysis */}
@@ -499,7 +515,7 @@ function MenuReport() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: T.surface }}>
-              {['#', 'Item', 'Category', 'ABC', 'Units Sold', 'Returned', 'Revenue', 'Est. Cost', 'Gross Profit', 'Margin'].map(h => (
+              {['#', 'Item', 'Category', 'ABC', 'Units Sold', 'Returned', 'Return Value', 'Revenue', 'Est. Cost', 'Gross Profit', 'Margin'].map(h => (
                 <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, color: T.textMid, letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
@@ -526,6 +542,7 @@ function MenuReport() {
                   <td style={{ padding: '10px 14px' }}><Badge color={ABC_COLOR[item.abc]} small>{item.abc}</Badge></td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: T.text }}>{fmt(item.qty_sold)}</td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: Number(item.returned_qty || 0) ? T.red : T.textDim }}>{fmt(item.returned_qty)}</td>
+                  <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 800, color: Number(item.returned_amount || 0) ? T.red : T.textDim, textDecoration: Number(item.returned_amount || 0) ? 'line-through' : 'none', textDecorationColor: T.red, textDecorationThickness: 1 }}>{Number(item.returned_amount || 0) ? fmtReturnPKR(item.returned_amount) : '-'}</td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 700, color: T.accent }}>{fmtPKR(item.total_revenue)}</td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: T.textMid }}>{fmtPKR(item.estimated_cost)}</td>
                   <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontWeight: 600, color: Number(item.gross_profit) >= 0 ? T.green : T.red }}>

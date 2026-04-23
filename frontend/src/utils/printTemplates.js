@@ -140,6 +140,7 @@ const baseCss = `
   .line { border-top: 1px dashed #000; margin: 8px 0; }
   .strong-line { border-top: 2px solid #000; margin: 8px 0; }
   .big { font-size: 15px; font-weight: 900; }
+  .return-amount { text-decoration: line-through; text-decoration-color: #d00; text-decoration-thickness: 1px; }
   .paid-stamp { border: 2px solid #000; border-radius: 4px; padding: 5px 14px; display: inline-block; font-size: 16px; font-weight: 900; letter-spacing: 2px; margin-top: 12px; }
   .cod-stamp { border: 2px solid #000; border-radius: 4px; padding: 5px 12px; display: inline-block; font-size: 13px; font-weight: 900; letter-spacing: 1px; margin-top: 12px; }
   @media print { html, body { width: 80mm; } body { padding: 2mm 3mm; } }
@@ -174,7 +175,7 @@ export function renderReceiptHtml({ template, restaurant, order, items, table, t
       const qty = Number(i.quantity ?? i.qty ?? 1);
       const lineTotal = receiptLineTotal(i);
       const returnedNote = returned ? '<br><span style="font-size:10px;font-weight:900">RETURNED - NOT CHARGED</span>' : '';
-      return `<div class="grid4"><span>${returned ? '<s>' : ''}${esc(i.name)}${returned ? '</s>' : ''}${returnedNote}${i.notes ? `<br><span style="font-size:10px;color:#888">${esc(i.notes)}</span>` : ''}</span><span style="text-align:center">x${esc(qty)}</span><span style="text-align:right">PKR ${unit.toLocaleString()}</span><span style="text-align:right" class="bold">${fmtReceiptAmount(lineTotal)}</span></div>`;
+      return `<div class="grid4"><span>${returned ? '<s>' : ''}${esc(i.name)}${returned ? '</s>' : ''}${returnedNote}${i.notes ? `<br><span style="font-size:10px;color:#888">${esc(i.notes)}</span>` : ''}</span><span style="text-align:center">x${esc(qty)}</span><span style="text-align:right" class="${returned ? 'return-amount' : ''}">PKR ${unit.toLocaleString()}</span><span style="text-align:right" class="bold ${returned ? 'return-amount' : ''}">${fmtReceiptAmount(lineTotal)}</span></div>`;
     }).join('')}
     <div class="line"></div>
     <div class="row"><span>Subtotal</span><span>PKR ${sub.toLocaleString()}</span></div>

@@ -328,10 +328,10 @@ export default function TableBill({ table, onClose, onPaid }) {
                     <div style={{ textAlign: 'center', fontSize: 13, color: T.textMid, fontFamily: 'monospace' }}>
                       ×{item.quantity}
                     </div>
-                    <div style={{ textAlign: 'right', fontSize: 12, color: T.textMid, fontFamily: 'monospace' }}>
+                    <div style={{ textAlign: 'right', fontSize: 12, color: returned ? T.red : T.textMid, fontFamily: 'monospace', textDecoration: returned ? 'line-through' : 'none', textDecorationColor: T.red, textDecorationThickness: 1 }}>
                       {Number(item.unit_price).toLocaleString()}
                     </div>
-                    <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: returned ? T.red : T.text, fontFamily: 'monospace' }}>
+                    <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: returned ? T.red : T.text, fontFamily: 'monospace', textDecoration: returned ? 'line-through' : 'none', textDecorationColor: T.red, textDecorationThickness: 1 }}>
                       {fmtLineTotal(itemDisplayTotal(item))}
                     </div>
                   </div>
