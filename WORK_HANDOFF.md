@@ -28,6 +28,16 @@ Do not stage local-only files unless explicitly requested:
 
 ## Recent Work And Status
 
+### Sidebar Notification Badges
+
+Completed in this session:
+
+- Added red bubble notification badges to the shared sidebar navigation.
+- POS / Orders badge counts active unpaid transactions that need review/action from POS orders and phone orders.
+- Support badge counts unresolved restaurant support tickets.
+- Admin Support badge counts open support tickets awaiting review.
+- Badge counts refresh on layout load, browser focus, and periodically while the app is open.
+
 ### Mobile Development Documentation
 
 Completed in this session:

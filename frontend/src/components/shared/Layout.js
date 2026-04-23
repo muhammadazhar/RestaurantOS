@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSocket } from '../../context/SocketContext';
 import { useTheme } from '../../context/ThemeContext';
-import { getRestaurantSettings } from '../../services/api';
+import {
+  getRestaurantSettings,
+  getOrders,
+  getPhoneOrders,
+  getMySupportTickets,
+  adminGetAllTickets,
+} from '../../services/api';
 import LicenseGate from './LicenseGate';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
@@ -21,9 +27,9 @@ const NAV_GROUPS = [
     label: 'POS / Orders',
     module: 'base',
     items: [
-      { to: '/pos',      icon: 'POS', label: 'POS / Orders',    perm: 'pos' },
+      { to: '/pos',      icon: 'POS', label: 'POS / Orders',    perm: 'pos', badgeKey: 'orders' },
       { to: '/kitchen',  icon: 'KDS', label: 'Kitchen Display', perm: 'kitchen' },
-      { to: '/orders',   icon: 'ORD', label: 'Order History',   perm: 'pos' },
+      { to: '/orders',   icon: 'ORD', label: 'Order History',   perm: 'pos', badgeKey: 'orders' },
     ],
   },
   {
@@ -94,7 +100,7 @@ const NAV_GROUPS = [
     label: 'Support',
     module: 'support',
     items: [
-      { to: '/support', icon: 'SUP', label: 'Support Tickets', perm: null },
+      { to: '/support', icon: 'SUP', label: 'Support Tickets', perm: null, badgeKey: 'support' },
     ],
   },
   {
@@ -109,13 +115,25 @@ const NAV_GROUPS = [
       { to: '/company-groups',     icon: 'CG',  label: 'Company Groups',   superAdmin: true },
       { to: '/module-pricing',     icon: 'MP', label: 'Module Pricing',   superAdmin: true },
       { to: '/subscription-mgmt',  icon: 'SMG', label: 'Subscriptions',    superAdmin: true },
-      { to: '/admin-support',      icon: 'AS', label: 'Support Tickets',  superAdmin: true },
+      { to: '/admin-support',      icon: 'AS', label: 'Support Tickets',  superAdmin: true, badgeKey: 'adminSupport' },
       { to: '/discount-presets', icon: 'DISC', label: 'Discount Presets',   perm: 'settings' },
       { to: '/system',           icon: 'SYS',  label: 'System',             perm: 'settings' },
       { to: '/settings',         icon: 'SET', label: 'Settings',           perm: 'settings' },
     ],
   },
 ];
+
+const ORDER_REVIEW_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready', 'served', 'picked', 'out_for_delivery']);
+const SUPPORT_REVIEW_STATUSES = new Set(['open', 'assigned', 'in_progress']);
+
+const needsOrderReview = (order) => {
+  if (!order || order.status === 'cancelled' || order.payment_status === 'paid') return false;
+  return ORDER_REVIEW_STATUSES.has(order.status);
+};
+
+const needsSupportReview = (ticket) => ticket && SUPPORT_REVIEW_STATUSES.has(ticket.status);
+
+const formatBadgeCount = (count) => count > 99 ? '99+' : String(count);
 
 export default function Layout({ children }) {
   const { user, logout, hasPermission, hasModule } = useAuth();
@@ -125,6 +143,7 @@ export default function Layout({ children }) {
   const [collapsed, setCollapsed]       = useState(false);
   const [logoUrl,   setLogoUrl]         = useState(null);
   const [basePricing, setBasePricing]   = useState([]);
+  const [badgeCounts, setBadgeCounts]   = useState({ orders: 0, support: 0, adminSupport: 0 });
 
   useEffect(() => {
     if (!user?.isSuperAdmin && hasPermission('settings')) {
@@ -144,6 +163,61 @@ export default function Layout({ children }) {
     }
   }, [baseExpired]);
 
+  const refreshBadgeCounts = useCallback(async () => {
+    if (!user || baseExpired) return;
+
+    const permissions = user.permissions || [];
+    const modules = user.modules || [];
+    const canLoadOrders = !user.isSuperAdmin
+      && modules.includes('base')
+      && (permissions.includes('pos') || permissions.includes('settings'));
+    const canLoadSupport = !user.isSuperAdmin && modules.includes('support');
+
+    const next = { orders: 0, support: 0, adminSupport: 0 };
+    const jobs = [];
+
+    if (canLoadOrders) {
+      jobs.push(
+        Promise.allSettled([getOrders(), getPhoneOrders()])
+          .then(([ordersRes, phoneRes]) => {
+            const orders = ordersRes.status === 'fulfilled' && Array.isArray(ordersRes.value.data) ? ordersRes.value.data : [];
+            const phoneOrders = phoneRes.status === 'fulfilled' && Array.isArray(phoneRes.value.data) ? phoneRes.value.data : [];
+            next.orders = [...orders, ...phoneOrders].filter(needsOrderReview).length;
+          })
+      );
+    }
+
+    if (canLoadSupport) {
+      jobs.push(
+        getMySupportTickets()
+          .then(r => { next.support = Array.isArray(r.data) ? r.data.filter(needsSupportReview).length : 0; })
+          .catch(() => {})
+      );
+    }
+
+    if (user.isSuperAdmin) {
+      jobs.push(
+        adminGetAllTickets({ status: 'open' })
+          .then(r => { next.adminSupport = Array.isArray(r.data) ? r.data.length : 0; })
+          .catch(() => {})
+      );
+    }
+
+    await Promise.all(jobs);
+    setBadgeCounts(next);
+  }, [user, baseExpired]);
+
+  useEffect(() => {
+    refreshBadgeCounts();
+    const onFocus = () => refreshBadgeCounts();
+    window.addEventListener('focus', onFocus);
+    const timer = setInterval(refreshBadgeCounts, 60000);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(timer);
+    };
+  }, [refreshBadgeCounts]);
+
   const handleLogout = async () => { await logout(); navigate('/login'); };
 
   const canSee = (item) => {
@@ -157,6 +231,12 @@ export default function Layout({ children }) {
     if (!group.module) return true;           // no module restriction
     if (user?.isSuperAdmin) return true;
     return hasModule(group.module);
+  };
+
+  const getBadgeCount = (item) => item.badgeKey ? Number(badgeCounts[item.badgeKey] || 0) : 0;
+  const getGroupBadgeCount = (group) => {
+    const keys = new Set(group.items.map(item => item.badgeKey).filter(Boolean));
+    return [...keys].reduce((sum, key) => sum + Number(badgeCounts[key] || 0), 0);
   };
 
   const visibleGroups = NAV_GROUPS
@@ -234,6 +314,7 @@ export default function Layout({ children }) {
         <nav style={{ flex: 1, padding: '8px 10px', overflowY: 'auto' }}>
           {visibleGroups.map((group, gi) => {
             const isOpen = !group.label || collapsed || openGroups[group.label] !== false;
+            const groupBadgeCount = getGroupBadgeCount(group);
             return (
               <div key={gi} style={{ marginBottom: 2 }}>
 
@@ -253,13 +334,39 @@ export default function Layout({ children }) {
                     onMouseEnter={e => e.currentTarget.style.background = T.card}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <span style={{
-                      fontSize: 11, fontWeight: 700,
-                      color: T.textMid,
-                      letterSpacing: 0.6,
-                      textTransform: 'uppercase',
-                    }}>
-                      {group.label}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700,
+                        color: T.textMid,
+                        letterSpacing: 0.6,
+                        textTransform: 'uppercase',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}>
+                        {group.label}
+                      </span>
+                      {groupBadgeCount > 0 && (
+                        <span
+                          title={`${groupBadgeCount} waiting for review`}
+                          style={{
+                            minWidth: 18,
+                            height: 18,
+                            padding: '0 5px',
+                            borderRadius: 999,
+                            background: T.red || '#E74C3C',
+                            color: '#fff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 10,
+                            fontWeight: 900,
+                            lineHeight: 1,
+                            boxShadow: isLight ? '0 4px 10px rgba(231,76,60,0.28)' : '0 0 0 1px rgba(255,255,255,0.14)',
+                          }}
+                        >
+                          {formatBadgeCount(groupBadgeCount)}
+                        </span>
+                      )}
                     </span>
                     <span style={{
                       fontSize: 10, color: T.textDim,
@@ -276,23 +383,55 @@ export default function Layout({ children }) {
                 )}
 
                 {/* Layout section */}
-                {isOpen && group.items.map(item => (
-                  <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: collapsed ? '10px 14px' : '7px 10px',
-                    borderRadius: 8, marginBottom: 1,
-                    background: isActive ? (isLight ? T.accent : T.accentGlow) : 'transparent',
-                    color: isActive ? (isLight ? '#fff' : T.accent) : T.textMid,
-                    fontSize: 13, fontWeight: isActive ? 700 : 500,
-                    border: `1px solid ${isActive ? (isLight ? T.accent : T.accent + '55') : 'transparent'}`,
-                    textDecoration: 'none', whiteSpace: 'nowrap',
-                    transition: 'all 0.15s',
-                    justifyContent: collapsed ? 'center' : 'flex-start',
-                  })}>
-                    <span style={{ fontSize: 10, flexShrink: 0, fontWeight: 900, minWidth: 28, textAlign: 'center' }}>{item.icon}</span>
-                    {!collapsed && item.label}
-                  </NavLink>
-                ))}
+                {isOpen && group.items.map(item => {
+                  const itemBadgeCount = getBadgeCount(item);
+                  return (
+                    <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: collapsed ? '10px 14px' : '7px 10px',
+                      borderRadius: 8, marginBottom: 1,
+                      background: isActive ? (isLight ? T.accent : T.accentGlow) : 'transparent',
+                      color: isActive ? (isLight ? '#fff' : T.accent) : T.textMid,
+                      fontSize: 13, fontWeight: isActive ? 700 : 500,
+                      border: `1px solid ${isActive ? (isLight ? T.accent : T.accent + '55') : 'transparent'}`,
+                      textDecoration: 'none', whiteSpace: 'nowrap',
+                      transition: 'all 0.15s',
+                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      position: 'relative',
+                    })}>
+                      <span style={{ fontSize: 10, flexShrink: 0, fontWeight: 900, minWidth: 28, textAlign: 'center' }}>{item.icon}</span>
+                      {!collapsed && (
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                      )}
+                      {itemBadgeCount > 0 && (
+                        <span
+                          title={`${itemBadgeCount} waiting for review`}
+                          style={{
+                            minWidth: collapsed ? 16 : 20,
+                            height: collapsed ? 16 : 20,
+                            padding: collapsed ? 0 : '0 6px',
+                            borderRadius: 999,
+                            background: T.red || '#E74C3C',
+                            color: '#fff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: collapsed ? 9 : 10,
+                            fontWeight: 900,
+                            lineHeight: 1,
+                            flexShrink: 0,
+                            position: collapsed ? 'absolute' : 'static',
+                            top: collapsed ? 2 : 'auto',
+                            right: collapsed ? 4 : 'auto',
+                            boxShadow: isLight ? '0 4px 10px rgba(231,76,60,0.28)' : '0 0 0 1px rgba(255,255,255,0.16)',
+                          }}
+                        >
+                          {formatBadgeCount(itemBadgeCount)}
+                        </span>
+                      )}
+                    </NavLink>
+                  );
+                })}
               </div>
             );
           })}
