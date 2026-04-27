@@ -42,6 +42,7 @@ Adjustment requested later:
 
 - POS / Orders badge should count only orders that are not completed yet.
 - Support badge should count tickets that are not resolved.
+- Sidebar order badge now queries incomplete order statuses directly from the API instead of loading all orders and filtering client-side.
 
 ### Mobile Development Documentation
 

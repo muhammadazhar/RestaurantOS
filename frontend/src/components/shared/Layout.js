@@ -123,14 +123,7 @@ const NAV_GROUPS = [
   },
 ];
 
-const ORDER_COMPLETED_STATUSES = new Set(['paid', 'cancelled', 'delivered']);
-
-const needsOrderReview = (order) => {
-  if (!order) return false;
-  if (order.payment_status === 'paid') return false;
-  return !ORDER_COMPLETED_STATUSES.has(order.status);
-};
-
+const INCOMPLETE_ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served', 'picked', 'out_for_delivery'];
 const needsSupportReview = (ticket) => ticket && ticket.status !== 'resolved';
 
 const formatBadgeCount = (count) => count > 99 ? '99+' : String(count);
@@ -178,11 +171,14 @@ export default function Layout({ children }) {
 
     if (canLoadOrders) {
       jobs.push(
-        Promise.allSettled([getOrders(), getPhoneOrders()])
+        Promise.allSettled([
+          getOrders({ status: INCOMPLETE_ORDER_STATUSES.join(',') }),
+          getPhoneOrders({ status: INCOMPLETE_ORDER_STATUSES.join(',') }),
+        ])
           .then(([ordersRes, phoneRes]) => {
             const orders = ordersRes.status === 'fulfilled' && Array.isArray(ordersRes.value.data) ? ordersRes.value.data : [];
             const phoneOrders = phoneRes.status === 'fulfilled' && Array.isArray(phoneRes.value.data) ? phoneRes.value.data : [];
-            next.orders = [...orders, ...phoneOrders].filter(needsOrderReview).length;
+            next.orders = orders.length + phoneOrders.length;
           })
       );
     }
@@ -197,8 +193,8 @@ export default function Layout({ children }) {
 
     if (user.isSuperAdmin) {
       jobs.push(
-        adminGetAllTickets({ status: 'open' })
-          .then(r => { next.adminSupport = Array.isArray(r.data) ? r.data.length : 0; })
+        adminGetAllTickets()
+          .then(r => { next.adminSupport = Array.isArray(r.data) ? r.data.filter(needsSupportReview).length : 0; })
           .catch(() => {})
       );
     }
