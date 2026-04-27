@@ -123,15 +123,15 @@ const NAV_GROUPS = [
   },
 ];
 
-const ORDER_REVIEW_STATUSES = new Set(['pending', 'confirmed', 'preparing', 'ready', 'served', 'picked', 'out_for_delivery']);
-const SUPPORT_REVIEW_STATUSES = new Set(['open', 'assigned', 'in_progress']);
+const ORDER_COMPLETED_STATUSES = new Set(['paid', 'cancelled', 'delivered']);
 
 const needsOrderReview = (order) => {
-  if (!order || order.status === 'cancelled' || order.payment_status === 'paid') return false;
-  return ORDER_REVIEW_STATUSES.has(order.status);
+  if (!order) return false;
+  if (order.payment_status === 'paid') return false;
+  return !ORDER_COMPLETED_STATUSES.has(order.status);
 };
 
-const needsSupportReview = (ticket) => ticket && SUPPORT_REVIEW_STATUSES.has(ticket.status);
+const needsSupportReview = (ticket) => ticket && ticket.status !== 'resolved';
 
 const formatBadgeCount = (count) => count > 99 ? '99+' : String(count);
 

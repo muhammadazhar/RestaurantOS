@@ -38,6 +38,11 @@ Completed in this session:
 - Admin Support badge counts open support tickets awaiting review.
 - Badge counts refresh on layout load, browser focus, and periodically while the app is open.
 
+Adjustment requested later:
+
+- POS / Orders badge should count only orders that are not completed yet.
+- Support badge should count tickets that are not resolved.
+
 ### Mobile Development Documentation
 
 Completed in this session:
