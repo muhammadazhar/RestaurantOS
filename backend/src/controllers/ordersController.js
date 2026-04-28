@@ -1184,13 +1184,13 @@ exports.cancelOnlineOrder = async (req, res) => {
     const updatedRes = await client.query(
       `UPDATE orders
        SET status=$2,
-           payment_status=$3,
-           refund_status=$4,
-           refund_amount=$5,
-           refund_reason=$6,
-           refund_required_action=$7,
-           refund_gateway_provider=$8,
-           refund_requested_at=CASE WHEN $5 > 0 THEN NOW() ELSE refund_requested_at END,
+           payment_status=$3::text,
+           refund_status=$4::text,
+           refund_amount=$5::numeric,
+           refund_reason=$6::text,
+           refund_required_action=$7::text,
+           refund_gateway_provider=$8::text,
+           refund_requested_at=CASE WHEN $5::numeric > 0 THEN NOW() ELSE refund_requested_at END,
            refund_updated_at=NOW(),
            updated_at=NOW()
        WHERE id=$1

@@ -292,6 +292,21 @@ Completed in this session:
 - `Cancel Online Order` now appears for eligible online orders in status `served` as well.
 - Backend online-cancellation rule now matches the frontend and accepts `served` for this workflow.
 
+### Online Cancel SQL Type Fix
+
+Completed in this session:
+
+- Fixed PostgreSQL parameter type ambiguity in the online cancellation refund update query.
+- Explicit casts are now used for:
+  - `payment_status`
+  - `refund_status`
+  - `refund_amount`
+  - `refund_reason`
+  - `refund_required_action`
+  - `refund_gateway_provider`
+- This resolves the runtime error:
+  - `inconsistent types deduced for parameter $5`
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
