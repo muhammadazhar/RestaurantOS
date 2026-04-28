@@ -369,7 +369,7 @@ exports.getOrders = async (req, res) => {
   try {
     const { restaurantId, id: userId, permissions = [] } = req.user;
     const isManager = permissions.includes('settings');
-    const { status, order_type, date } = req.query;
+    const { status, order_type, date, payment_status, refund_status } = req.query;
 
     let where = ['o.restaurant_id = $1'];
     const params = [restaurantId];
@@ -390,6 +390,26 @@ exports.getOrders = async (req, res) => {
       } else {
         where.push(`o.status = ANY($${idx++}::text[])`);
         params.push(statuses);
+      }
+    }
+    if (payment_status) {
+      const paymentStatuses = payment_status.split(',').map(s => s.trim()).filter(Boolean);
+      if (paymentStatuses.length === 1) {
+        where.push(`o.payment_status = $${idx++}`);
+        params.push(paymentStatuses[0]);
+      } else if (paymentStatuses.length > 1) {
+        where.push(`o.payment_status = ANY($${idx++}::text[])`);
+        params.push(paymentStatuses);
+      }
+    }
+    if (refund_status) {
+      const refundStatuses = refund_status.split(',').map(s => s.trim()).filter(Boolean);
+      if (refundStatuses.length === 1) {
+        where.push(`COALESCE(o.refund_status, 'not_required') = $${idx++}`);
+        params.push(refundStatuses[0]);
+      } else if (refundStatuses.length > 1) {
+        where.push(`COALESCE(o.refund_status, 'not_required') = ANY($${idx++}::text[])`);
+        params.push(refundStatuses);
       }
     }
     if (order_type) { where.push(`o.order_type = $${idx++}`); params.push(order_type); }

@@ -24,6 +24,7 @@ import Settings          from './components/settings/Settings';
 import DiscountPresets   from './components/settings/DiscountPresets';
 import MenuManagement  from './components/menu/MenuManagementV2';
 import Orders          from './components/orders/Orders';
+import RefundHistory   from './components/orders/RefundHistory';
 import Reservations    from './components/reservations/Reservations';
 import Reports         from './components/reports/Reports';
 import ShiftSalesReport from './components/reports/ShiftSalesReport';
@@ -99,6 +100,7 @@ function AppRoutes() {
       <Route path="/admin"     element={<PrivateRoute><Layout><Admin /></Layout></PrivateRoute>} />
       <Route path="/menu-mgmt"    element={<PrivateRoute><Layout><MenuManagement /></Layout></PrivateRoute>} />
       <Route path="/orders"       element={<PrivateRoute><Layout><Orders /></Layout></PrivateRoute>} />
+      <Route path="/refund-history" element={<PrivateRoute><Layout><RefundHistory /></Layout></PrivateRoute>} />
       <Route path="/reservations" element={<PrivateRoute><Layout><Reservations /></Layout></PrivateRoute>} />
       <Route path="/reports"         element={<PrivateRoute><Layout><Reports /></Layout></PrivateRoute>} />
       <Route path="/shift-sales-report" element={<PrivateRoute><Layout><ShiftSalesReport /></Layout></PrivateRoute>} />

@@ -85,6 +85,7 @@ const NAV_GROUPS = [
     module: 'reports',
     items: [
       { to: '/reports',            icon: 'RPT', label: 'Reports',            perm: 'pos' },
+      { to: '/refund-history',     icon: 'RF',  label: 'Refund History',     perm: 'settings' },
     ],
   },
   {

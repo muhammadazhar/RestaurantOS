@@ -230,6 +230,31 @@ Completed in this session:
   - `Mark Refund Complete` action
   - refund badges / refund amount / manual refund required state in order detail and list rows
 
+### Refund Pending Filter, Summary Card, And Refund History
+
+Completed in this session:
+
+- Extended `GET /orders` filtering so the UI can query by:
+  - `payment_status`
+  - `refund_status`
+- Orders screen now includes a dedicated refund filter with options for:
+  - pending refunds
+  - manual refund required
+  - refund pending
+  - refund failed
+  - refunded
+  - no refund
+- Orders screen now includes a quick `Refund Pending` filter chip similar to `Needs Review`.
+- Orders screen now shows a top summary card for:
+  - pending refund count
+  - pending refund total value
+- Added separate finance/admin refund history screen:
+  - route: `/refund-history`
+  - navigation: `Reports -> Refund History`
+  - visible to settings/admin-level users
+  - shows refund records, refund status, refund amount, timeline, reason, required action, and refund reference
+  - includes filters for date, refund status, order type, and search
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

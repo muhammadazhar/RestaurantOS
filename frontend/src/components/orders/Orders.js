@@ -16,6 +16,7 @@ const STATUS_COLOR = {
 const ORDER_TYPE_ICON = { dine_in: '🪑', takeaway: '🛍', online: '📲', delivery: '🛵' };
 
 const REVIEW_ORDER_STATUSES = ['pending','confirmed','preparing','ready','served','picked','out_for_delivery'];
+const REFUND_PENDING_STATUSES = ['refund_pending','manual_refund_required','refund_failed'];
 const fmt    = n => `PKR ${Number(n||0).toLocaleString()}`;
 const fmtDT  = d => new Date(d).toLocaleString('en-PK', { dateStyle:'short', timeStyle:'short' });
 const fmtDay = d => new Date(d).toLocaleDateString('en-PK', { weekday:'short', day:'numeric', month:'short' });
@@ -424,6 +425,7 @@ export default function Orders() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const reviewRequested = searchParams.get('review') === '1';
+  const refundPendingRequested = searchParams.get('refund') === 'pending';
   const [mainTab,  setMainTab]  = useState('all'); // 'all' | 'phone'
   const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -431,12 +433,14 @@ export default function Orders() {
   const [search,   setSearch]   = useState('');
   const [statusF,  setStatusF]  = useState(reviewRequested ? REVIEW_ORDER_STATUSES.join(',') : 'all');
   const [typeF,    setTypeF]    = useState('all');
+  const [refundF,  setRefundF]  = useState(refundPendingRequested ? REFUND_PENDING_STATUSES.join(',') : 'all');
   const [dateFrom, setDateFrom] = useState(today());
   const [dateTo,   setDateTo]   = useState(today());
   const [printSettings, setPrintSettings] = useState(null);
   const [cancelModal, setCancelModal] = useState({ open: false, order: null, reason: '', saving: false });
   const [refundModal, setRefundModal] = useState({ open: false, order: null, reference: '', note: '', saving: false });
   const reviewOnly = statusF === REVIEW_ORDER_STATUSES.join(',');
+  const refundPendingOnly = refundF === REFUND_PENDING_STATUSES.join(',');
   const canManageRefunds = user?.isSuperAdmin || (user?.permissions || []).includes('settings');
 
   useEffect(() => {
@@ -445,12 +449,19 @@ export default function Orders() {
     }
   }, [reviewRequested]);
 
+  useEffect(() => {
+    if (refundPendingRequested) {
+      setRefundF(REFUND_PENDING_STATUSES.join(','));
+    }
+  }, [refundPendingRequested]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
       if (statusF !== 'all') params.status = statusF;
       if (typeF   !== 'all') params.order_type = typeF;
+      if (refundF !== 'all') params.refund_status = refundF;
       const res = await getOrders(params);
       // Filter by date client-side for flexibility
       const from = new Date(dateFrom + 'T00:00:00');
@@ -461,7 +472,7 @@ export default function Orders() {
       }));
     } catch { toast.error('Failed to load orders'); }
     finally { setLoading(false); }
-  }, [statusF, typeF, dateFrom, dateTo]);
+  }, [statusF, typeF, refundF, dateFrom, dateTo]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
@@ -474,6 +485,15 @@ export default function Orders() {
     const nextParams = new URLSearchParams(searchParams);
     if (nextReviewOnly) nextParams.set('review', '1');
     else nextParams.delete('review');
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const toggleRefundPendingOnly = () => {
+    const nextRefundOnly = !refundPendingOnly;
+    setRefundF(nextRefundOnly ? REFUND_PENDING_STATUSES.join(',') : 'all');
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextRefundOnly) nextParams.set('refund', 'pending');
+    else nextParams.delete('refund');
     setSearchParams(nextParams, { replace: true });
   };
 
@@ -526,6 +546,8 @@ export default function Orders() {
   const totalRevenue = filtered.filter(o => o.payment_status === 'paid').reduce((s,o) => s + Number(o.total_amount), 0);
   const paidCount    = filtered.filter(o => o.payment_status === 'paid').length;
   const unpaidCount  = filtered.filter(o => o.payment_status !== 'paid' && o.status !== 'cancelled').length;
+  const pendingRefundOrders = filtered.filter(o => REFUND_PENDING_STATUSES.includes(o.refund_status) || o.payment_status === 'refund_pending');
+  const pendingRefundValue = pendingRefundOrders.reduce((sum, order) => sum + Number(order.refund_amount || order.total_amount || 0), 0);
 
   // Group by date for display
   const grouped = filtered.reduce((acc, o) => {
@@ -572,12 +594,52 @@ export default function Orders() {
         }}>
           {reviewOnly ? 'Needs Review On' : 'Needs Review'}
         </button>
+        <button onClick={toggleRefundPendingOnly} style={{
+          background: refundPendingOnly ? T.redDim : T.surface,
+          color: refundPendingOnly ? T.red : T.textMid,
+          border: `1px solid ${refundPendingOnly ? T.red + '55' : T.border}`,
+          borderRadius: 999,
+          padding: '7px 14px',
+          fontSize: 12,
+          fontWeight: 800,
+          cursor: 'pointer',
+          fontFamily: "'Inter', sans-serif",
+        }}>
+          {refundPendingOnly ? 'Refund Pending On' : 'Refund Pending'}
+        </button>
         {reviewOnly && (
           <div style={{ alignSelf: 'center', fontSize: 12, color: T.textMid }}>
             Showing only incomplete orders that still need action.
           </div>
         )}
+        {refundPendingOnly && (
+          <div style={{ alignSelf: 'center', fontSize: 12, color: T.textMid }}>
+            Showing only cancelled online orders waiting for refund action.
+          </div>
+        )}
       </div>
+      <Card style={{ marginBottom: 16, padding: '16px 18px', border: `1px solid ${T.red}33` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 11, color: T.textMid, fontWeight: 700, textTransform: 'uppercase' }}>Pending Refunds</div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: T.red, fontFamily: 'monospace', marginTop: 4 }}>
+              {pendingRefundOrders.length}
+            </div>
+            <div style={{ fontSize: 12, color: T.textMid, marginTop: 4 }}>
+              Cancelled online orders still waiting for refund completion.
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 11, color: T.textMid, fontWeight: 700, textTransform: 'uppercase' }}>Pending Refund Value</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: T.red, fontFamily: 'monospace', marginTop: 4 }}>
+              {fmt(pendingRefundValue)}
+            </div>
+            <div style={{ fontSize: 12, color: T.textMid, marginTop: 4 }}>
+              Includes refund pending, manual refund required, and refund failed.
+            </div>
+          </div>
+        </div>
+      </Card>
       {/* Summary pills */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         {[['Total', filtered.length, T.accent], ['Paid', paidCount, T.green], ['Unpaid', unpaidCount, T.red], ['Revenue', `PKR ${totalRevenue.toLocaleString()}`, T.accent]].map(([l,v,c]) => (
@@ -613,6 +675,19 @@ export default function Orders() {
               {['pending','confirmed','preparing','ready','served','paid','cancelled'].map(s => (
                 <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
               ))}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: T.textMid, marginBottom: 5, fontWeight: 600 }}>Refund</div>
+            <select value={refundF} onChange={e => setRefundF(e.target.value)}
+              style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
+              <option value="all">All Refund States</option>
+              <option value={REFUND_PENDING_STATUSES.join(',')}>Refund Pending</option>
+              <option value="manual_refund_required">Manual Refund Required</option>
+              <option value="refund_pending">Refund Pending (Gateway Ready)</option>
+              <option value="refund_failed">Refund Failed</option>
+              <option value="refunded">Refunded</option>
+              <option value="not_required">No Refund</option>
             </select>
           </div>
           {/* Type filter */}
