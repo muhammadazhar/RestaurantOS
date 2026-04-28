@@ -10,6 +10,19 @@ const signToken = (payload, secret, expiresIn) =>
 const hashResetToken = (token) =>
   crypto.createHash('sha256').update(token).digest('hex');
 
+const normalizePermissions = (permissions) => {
+  if (Array.isArray(permissions)) return permissions;
+  if (typeof permissions === 'string') {
+    try {
+      const parsed = JSON.parse(permissions);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
 const resetResponse = {
   message: 'If an active account matches those details, password reset instructions have been sent.',
 };
@@ -21,21 +34,44 @@ exports.login = async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ error: 'Email and password required' });
 
+    const normalizedSlug = String(restaurantSlug || '').trim().toLowerCase();
     const result = await db.query(
       `SELECT e.*, r.name as restaurant_name, r.slug, r.status as restaurant_status,
               r.company_group_id, r.branch_code, r.is_branch,
               ro.name as role_name, ro.permissions
        FROM employees e
        JOIN restaurants r ON e.restaurant_id = r.id
-       JOIN roles ro ON e.role_id = ro.id
-       WHERE LOWER(e.email) = LOWER($1) AND LOWER(r.slug) = LOWER($2) AND e.status = 'active'`,
-      [email, restaurantSlug]
+       LEFT JOIN roles ro ON e.role_id = ro.id
+       WHERE LOWER(e.email) = LOWER($1) AND e.status = 'active'
+       ORDER BY e.created_at DESC NULLS LAST`,
+      [email]
     );
 
     if (!result.rows.length)
       return res.status(401).json({ error: 'Invalid credentials' });
 
-    const emp = result.rows[0];
+    const matchingEmployees = result.rows;
+    let emp = null;
+
+    if (normalizedSlug) {
+      emp = matchingEmployees.find((row) => {
+        const slug = String(row.slug || '').trim().toLowerCase();
+        const branchCode = String(row.branch_code || '').trim().toLowerCase();
+        return slug === normalizedSlug || branchCode === normalizedSlug;
+      }) || null;
+    }
+
+    if (!emp && matchingEmployees.length === 1) {
+      emp = matchingEmployees[0];
+    }
+
+    if (!emp) {
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        detail: 'Use the correct restaurant slug or branch code for this account.',
+      });
+    }
+
     if (!emp.password_hash) return res.status(401).json({ error: 'Invalid credentials' });
 
     const valid = await bcrypt.compare(password, emp.password_hash);
@@ -44,7 +80,11 @@ exports.login = async (req, res) => {
     if (emp.restaurant_status === 'suspended')
       return res.status(403).json({ error: 'Restaurant account suspended' });
 
-    const modules = await getActiveModuleKeys(emp.restaurant_id).catch(() => []);
+    const modules = await getActiveModuleKeys(emp.restaurant_id).catch((moduleErr) => {
+      console.warn('Login module lookup failed:', moduleErr.message);
+      return [];
+    });
+    const permissions = normalizePermissions(emp.permissions);
 
     const payload = {
       id: emp.id,
@@ -54,8 +94,8 @@ exports.login = async (req, res) => {
       companyGroupId: emp.company_group_id || null,
       branchCode: emp.branch_code || null,
       isBranch: emp.is_branch || false,
-      role: emp.role_name,
-      permissions: emp.permissions,
+      role: emp.role_name || 'Staff',
+      permissions,
       modules,
       isSuperAdmin: false,
     };
@@ -63,10 +103,14 @@ exports.login = async (req, res) => {
     const accessToken = signToken(payload, process.env.JWT_SECRET, process.env.JWT_EXPIRES_IN);
     const refreshToken = signToken({ id: emp.id }, process.env.JWT_REFRESH_SECRET, process.env.JWT_REFRESH_EXPIRES_IN);
 
-    await db.query(
-      `INSERT INTO refresh_tokens(employee_id, token, expires_at) VALUES($1,$2, NOW() + INTERVAL '7 days')`,
-      [emp.id, refreshToken]
-    );
+    try {
+      await db.query(
+        `INSERT INTO refresh_tokens(employee_id, token, expires_at) VALUES($1,$2, NOW() + INTERVAL '7 days')`,
+        [emp.id, refreshToken]
+      );
+    } catch (tokenErr) {
+      console.warn('Refresh token persistence failed during login:', tokenErr.message);
+    }
 
     // last_login tracking: add column via migration if needed
 
@@ -74,7 +118,7 @@ exports.login = async (req, res) => {
       accessToken, refreshToken,
       user: {
         id: emp.id, name: emp.full_name, email: emp.email,
-        role: emp.role_name, permissions: emp.permissions,
+        role: emp.role_name || 'Staff', permissions,
         modules,
         restaurantId: emp.restaurant_id, restaurantName: emp.restaurant_name,
         companyGroupId: emp.company_group_id || null,

@@ -172,6 +172,21 @@ Completed and pushed:
   - `Total Guests`
 - Sales and Menu print reports also show returned values with the red strike-through treatment.
 
+### Login Reliability
+
+Completed in this session:
+
+- Investigated a login failure affecting multiple users even with correct passwords.
+- Confirmed active employees, role links, password hashes, JWT secrets, subscriptions, and refresh token table all exist in the current database.
+- Hardened employee login in `backend/src/controllers/authController.js`:
+  - Login now looks up active employees by email first, then matches the entered restaurant value against either restaurant slug or branch code.
+  - If an email belongs to only one active restaurant, login can still resolve that account cleanly even when the restaurant field is brittle.
+  - Role lookup is now `LEFT JOIN` based so a missing role row does not block valid credentials from signing in.
+  - Permissions are normalized safely to an array before returning the user payload.
+  - Active module lookup is now best-effort and no longer breaks login if subscription lookup has an issue.
+  - Refresh token persistence is now best-effort and no longer blocks successful login if that insert fails.
+- Add future auth/login changes here as well so login-related regressions are easy to trace.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
@@ -182,6 +197,12 @@ If backend is touched:
 
 ```powershell
 node --check backend/src/controllers/ordersController.js
+```
+
+For auth-specific backend changes, also run:
+
+```powershell
+node --check backend/src/controllers/authController.js
 ```
 
 Always run frontend build if frontend is touched:
