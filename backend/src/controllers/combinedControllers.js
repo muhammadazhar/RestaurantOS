@@ -798,7 +798,7 @@ exports.deleteCategory = async (req, res) => {
 exports.getRecipes = async (req, res) => {
   try {
     const recipes = await db.query(
-      `SELECT r.*, mi.name as menu_item_name, mi.price as selling_price
+      `SELECT r.*, mi.name as menu_item_name, mi.price as selling_price, mi.image_url as menu_item_image_url
        FROM recipes r LEFT JOIN menu_items mi ON r.menu_item_id = mi.id
        WHERE r.restaurant_id=$1 ORDER BY r.name`,
       [req.user.restaurantId]
@@ -1329,11 +1329,11 @@ exports.updateRole = async (req, res) => {
     const { permissions } = req.body;
     const result = await db.query(
       `UPDATE roles SET permissions=$1
-       WHERE id=$2 AND restaurant_id=$3 AND is_system=false
+       WHERE id=$2 AND restaurant_id=$3
        RETURNING id, name, permissions, is_system`,
       [JSON.stringify(permissions), id, req.user.restaurantId]
     );
-    if (!result.rows.length) return res.status(404).json({ error: 'Role not found or is a system role' });
+    if (!result.rows.length) return res.status(404).json({ error: 'Role not found' });
     res.json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }
 };

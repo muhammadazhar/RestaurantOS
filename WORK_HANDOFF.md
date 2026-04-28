@@ -276,6 +276,14 @@ Completed in this session:
   - cancel eligible online orders into the refund workflow
   - mark manual refunds as completed
 
+### System Roles Can Now Be Edited
+
+Completed in this session:
+
+- Removed the read-only restriction on built-in system roles in `Settings -> Roles & Permissions`.
+- Backend role update endpoint now allows permission updates for system roles as well as custom roles.
+- Settings UI messaging now explains that built-in roles can be edited for the current restaurant.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

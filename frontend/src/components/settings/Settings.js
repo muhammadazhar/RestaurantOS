@@ -436,7 +436,6 @@ function RolesPermissions() {
   const role = roles.find(r => r.id === selected);
 
   const togglePerm = (key) => {
-    if (role?.system) return; // system roles are read-only
     setRoles(rs => rs.map(r => r.id === selected
       ? { ...r, permissions: r.permissions.includes(key) ? r.permissions.filter(p => p !== key) : [...r.permissions, key] }
       : r
@@ -459,7 +458,6 @@ function RolesPermissions() {
 
   const save = async () => {
     if (!role) return;
-    if (role.system) return toast.error('System roles cannot be modified');
     setSaving(true);
     try {
       await updateRole(role.id, { permissions: role.permissions });
@@ -475,7 +473,7 @@ function RolesPermissions() {
 
   return (
     <div>
-      <SectionHeader icon="🔐" title="Roles & Permissions" subtitle="Control what each role can access. System roles cannot be modified." />
+      <SectionHeader icon="🔐" title="Roles & Permissions" subtitle="Control what each role can access, including built-in system roles." />
       <div style={{ display: 'flex', gap: 16 }}>
         {/* Role list */}
         <div style={{ width: 200, flexShrink: 0 }}>
@@ -510,21 +508,20 @@ function RolesPermissions() {
           </div>
           {role?.system && (
             <div style={{ background: '#3498db11', border: '1px solid #3498db44', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: '#3498db' }}>
-              🔒 System roles are read-only and cannot be modified.
+              Built-in system role. Changes here update the default role permissions for this restaurant.
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {ALL_PERMS.map(p => {
               const active = role?.permissions.includes(p.key);
-              const readonly = role?.system;
               return (
                 <div key={p.key} onClick={() => togglePerm(p.key)} style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '12px 14px', borderRadius: 10,
                   background: active ? T.accentGlow : T.surface,
                   border: `1px solid ${active ? T.accent + '55' : T.border}`,
-                  cursor: readonly ? 'not-allowed' : 'pointer',
-                  opacity: readonly ? 0.6 : 1,
+                  cursor: 'pointer',
+                  opacity: 1,
                   transition: 'all 0.15s',
                 }}>
                   <span style={{ fontSize: 16 }}>{p.icon}</span>
