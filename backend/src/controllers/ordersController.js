@@ -1143,7 +1143,7 @@ exports.cancelOnlineOrder = async (req, res) => {
       return res.status(400).json({ error: 'Only online orders can be cancelled here' });
     }
 
-    const cancellableStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'picked', 'out_for_delivery', 'paid'];
+    const cancellableStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'served', 'picked', 'out_for_delivery', 'paid'];
     if (!cancellableStatuses.includes(order.status)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Only incomplete online orders can be cancelled' });

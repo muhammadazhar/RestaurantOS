@@ -284,6 +284,14 @@ Completed in this session:
 - Backend role update endpoint now allows permission updates for system roles as well as custom roles.
 - Settings UI messaging now explains that built-in roles can be edited for the current restaurant.
 
+### Served Plus Paid Online Orders Can Be Cancelled
+
+Completed in this session:
+
+- Fixed online refund action visibility for orders whose lifecycle status is still `served` while payment status is already `paid`.
+- `Cancel Online Order` now appears for eligible online orders in status `served` as well.
+- Backend online-cancellation rule now matches the frontend and accepts `served` for this workflow.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

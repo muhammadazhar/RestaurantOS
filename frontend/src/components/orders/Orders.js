@@ -24,7 +24,7 @@ const isReturnedItem = item => item?.status === 'cancelled' || item?.returned ==
 const itemChargeTotal = item => Number(item.total_price ?? (Number(item.unit_price || 0) * Number(item.quantity || 1)));
 const itemDisplayTotal = item => isReturnedItem(item) ? -Math.abs(itemChargeTotal(item)) : itemChargeTotal(item);
 const isOnlineManagedOrder = order => order?.source === 'online' || order?.order_type === 'online' || !!order?.platform || !!order?.platform_order_id;
-const canCancelOnlineOrder = order => isOnlineManagedOrder(order) && ['pending','confirmed','preparing','ready','picked','out_for_delivery','paid'].includes(order?.status);
+const canCancelOnlineOrder = order => isOnlineManagedOrder(order) && ['pending','confirmed','preparing','ready','served','picked','out_for_delivery','paid'].includes(order?.status);
 const canCompleteManualRefund = order => order?.status === 'cancelled' && ['refund_pending','manual_refund_required','refund_failed'].includes(order?.refund_status);
 const fmtLineAmount = value => {
   const amount = Number(value || 0);
