@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import {
   adminGetAllTickets, adminGetTicketMessages,
@@ -26,9 +27,11 @@ const ALL_STATUSES = ['', 'open', 'assigned', 'in_progress', 'resolved', 'closed
 
 export default function AdminSupport() {
   const { theme: T } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewRequested = searchParams.get('review') === '1';
   const [tickets, setTickets]       = React.useState([]);
   const [loading, setLoading]       = React.useState(true);
-  const [filter, setFilter]         = React.useState('');
+  const [filter, setFilter]         = React.useState(reviewRequested ? 'review' : '');
   const [selected, setSelected]     = React.useState(null);
   const [messages, setMessages]     = React.useState([]);
   const [msgInput, setMsgInput]     = React.useState('');
@@ -43,6 +46,9 @@ export default function AdminSupport() {
 
   React.useEffect(() => { load(); }, [filter]);
   React.useEffect(() => {
+    if (reviewRequested) setFilter('review');
+  }, [reviewRequested]);
+  React.useEffect(() => {
     if (selected) loadMessages(selected.id);
   }, [selected]);
   React.useEffect(() => {
@@ -52,10 +58,19 @@ export default function AdminSupport() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await adminGetAllTickets(filter ? { status: filter } : {});
-      setTickets(r.data);
+      const apiFilter = filter && filter !== 'review' ? { status: filter } : {};
+      const r = await adminGetAllTickets(apiFilter);
+      setTickets(filter === 'review' ? r.data.filter(t => t.status !== 'resolved') : r.data);
     } catch { toast.error('Failed to load tickets'); }
     finally { setLoading(false); }
+  };
+  const applyFilter = (nextFilter) => {
+    setFilter(nextFilter);
+    setSelected(null);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextFilter === 'review') nextParams.set('review', '1');
+    else nextParams.delete('review');
+    setSearchParams(nextParams, { replace: true });
   };
 
   const loadMessages = async (id) => {
@@ -129,19 +144,19 @@ export default function AdminSupport() {
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {ALL_STATUSES.map(s => (
+        {[['review', 'Needs Review'], ...ALL_STATUSES.map(s => [s, s ? STATUS_LABEL[s] : 'All'])].map(([key, label]) => (
           <button
-            key={s}
-            onClick={() => { setFilter(s); setSelected(null); }}
+            key={key}
+            onClick={() => applyFilter(key)}
             style={{
-              background: filter === s ? T.accent : T.surface,
-              color: filter === s ? '#000' : T.textMid,
-              border: `1px solid ${filter === s ? T.accent : T.border}`,
+              background: filter === key ? (key === 'review' ? T.redDim : T.accent) : T.surface,
+              color: filter === key ? (key === 'review' ? T.red : '#000') : T.textMid,
+              border: `1px solid ${filter === key ? (key === 'review' ? T.red + '55' : T.accent) : T.border}`,
               borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 700,
               cursor: 'pointer', fontFamily: "'Inter', sans-serif",
             }}
           >
-            {s ? STATUS_LABEL[s] : 'All'}
+            {label}
           </button>
         ))}
       </div>
@@ -162,7 +177,7 @@ export default function AdminSupport() {
               onClick={() => setSelected(t)}
               style={{
                 ...card, padding: '14px 16px', cursor: 'pointer',
-                borderColor: selected?.id === t.id ? T.accent : T.border,
+                borderColor: selected?.id === t.id ? T.accent : (filter === 'review' && t.status !== 'resolved' ? T.red : T.border),
                 transition: 'border-color 0.15s',
               }}
             >
@@ -180,6 +195,9 @@ export default function AdminSupport() {
                   {STATUS_LABEL[t.status] || t.status}
                 </span>
               </div>
+              {filter === 'review' && t.status !== 'resolved' && (
+                <div style={{ fontSize: 10, color: T.red, fontWeight: 800, marginTop: 4 }}>Needs Review</div>
+              )}
               {t.assigned_to_name && (
                 <p style={{ margin: '4px 0 0', fontSize: 11, color: T.textMid }}>
                   Assigned to: <strong style={{ color: T.text }}>{t.assigned_to_name}</strong>

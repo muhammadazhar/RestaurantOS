@@ -127,6 +127,13 @@ const INCOMPLETE_ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'ready',
 const needsSupportReview = (ticket) => ticket && ticket.status !== 'resolved';
 
 const formatBadgeCount = (count) => count > 99 ? '99+' : String(count);
+const reviewLink = (item, count) => {
+  if (!count) return item.to;
+  if (item.badgeKey === 'orders' && item.to === '/orders') return `${item.to}?review=1`;
+  if (item.badgeKey === 'support' && item.to === '/support') return `${item.to}?review=1`;
+  if (item.badgeKey === 'adminSupport' && item.to === '/admin-support') return `${item.to}?review=1`;
+  return item.to;
+};
 
 export default function Layout({ children }) {
   const { user, logout, hasPermission, hasModule } = useAuth();
@@ -382,7 +389,7 @@ export default function Layout({ children }) {
                 {isOpen && group.items.map(item => {
                   const itemBadgeCount = getBadgeCount(item);
                   return (
-                    <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
+                    <NavLink key={item.to} to={reviewLink(item, itemBadgeCount)} style={({ isActive }) => ({
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: collapsed ? '10px 14px' : '7px 10px',
                       borderRadius: 8, marginBottom: 1,

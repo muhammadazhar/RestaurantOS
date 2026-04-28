@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getOrders, updateOrderStatus, getPhoneOrders, assignRider, getRiders, getRestaurantSettings } from '../../services/api';
 import { Card, Badge, Spinner, Btn, Modal, Select, PageHeader, T, useT } from '../shared/UI';
 import { mergePrintTemplates, renderReceiptHtml } from '../../utils/printTemplates';
@@ -13,6 +14,7 @@ const STATUS_COLOR = {
 
 const ORDER_TYPE_ICON = { dine_in: '🪑', takeaway: '🛍', online: '📲', delivery: '🛵' };
 
+const REVIEW_ORDER_STATUSES = ['pending','confirmed','preparing','ready','served','picked','out_for_delivery'];
 const fmt    = n => `PKR ${Number(n||0).toLocaleString()}`;
 const fmtDT  = d => new Date(d).toLocaleString('en-PK', { dateStyle:'short', timeStyle:'short' });
 const fmtDay = d => new Date(d).toLocaleDateString('en-PK', { weekday:'short', day:'numeric', month:'short' });
@@ -375,16 +377,25 @@ const today = () => new Date().toISOString().slice(0,10);
 
 export default function Orders() {
   useT();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewRequested = searchParams.get('review') === '1';
   const [mainTab,  setMainTab]  = useState('all'); // 'all' | 'phone'
   const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [detail,   setDetail]   = useState(null);
   const [search,   setSearch]   = useState('');
-  const [statusF,  setStatusF]  = useState('all');
+  const [statusF,  setStatusF]  = useState(reviewRequested ? REVIEW_ORDER_STATUSES.join(',') : 'all');
   const [typeF,    setTypeF]    = useState('all');
   const [dateFrom, setDateFrom] = useState(today());
   const [dateTo,   setDateTo]   = useState(today());
   const [printSettings, setPrintSettings] = useState(null);
+  const reviewOnly = statusF === REVIEW_ORDER_STATUSES.join(',');
+
+  useEffect(() => {
+    if (reviewRequested) {
+      setStatusF(REVIEW_ORDER_STATUSES.join(','));
+    }
+  }, [reviewRequested]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -408,6 +419,15 @@ export default function Orders() {
   useEffect(() => {
     getRestaurantSettings().then(r => setPrintSettings(r.data)).catch(() => {});
   }, []);
+
+  const toggleReviewOnly = () => {
+    const nextReviewOnly = !reviewOnly;
+    setStatusF(nextReviewOnly ? REVIEW_ORDER_STATUSES.join(',') : 'all');
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextReviewOnly) nextParams.set('review', '1');
+    else nextParams.delete('review');
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const handleStatus = async (id, status) => {
     try { await updateOrderStatus(id, status); toast.success(`Order → ${status}`); load(); }
@@ -457,6 +477,26 @@ export default function Orders() {
       {mainTab === 'phone' && <PhoneOrdersPanel />}
 
       {mainTab === 'all' && <>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+        <button onClick={toggleReviewOnly} style={{
+          background: reviewOnly ? T.redDim : T.surface,
+          color: reviewOnly ? T.red : T.textMid,
+          border: `1px solid ${reviewOnly ? T.red + '55' : T.border}`,
+          borderRadius: 999,
+          padding: '7px 14px',
+          fontSize: 12,
+          fontWeight: 800,
+          cursor: 'pointer',
+          fontFamily: "'Inter', sans-serif",
+        }}>
+          {reviewOnly ? 'Needs Review On' : 'Needs Review'}
+        </button>
+        {reviewOnly && (
+          <div style={{ alignSelf: 'center', fontSize: 12, color: T.textMid }}>
+            Showing only incomplete orders that still need action.
+          </div>
+        )}
+      </div>
       {/* Summary pills */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         {[['Total', filtered.length, T.accent], ['Paid', paidCount, T.green], ['Unpaid', unpaidCount, T.red], ['Revenue', `PKR ${totalRevenue.toLocaleString()}`, T.accent]].map(([l,v,c]) => (
@@ -488,6 +528,7 @@ export default function Orders() {
             <select value={statusF} onChange={e => setStatusF(e.target.value)}
               style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '7px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
               <option value="all">All Statuses</option>
+              <option value={REVIEW_ORDER_STATUSES.join(',')}>Needs Review</option>
               {['pending','confirmed','preparing','ready','served','paid','cancelled'].map(s => (
                 <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
               ))}
@@ -549,7 +590,7 @@ export default function Orders() {
               <div key={order.id} onClick={() => setDetail(order)} style={{
                 display: 'flex', alignItems: 'center', gap: 14,
                 background: T.card, border: `1px solid ${T.border}`,
-                borderLeft: `3px solid ${STATUS_COLOR[order.status] || T.textDim}`,
+                borderLeft: `3px solid ${reviewOnly ? T.red : (STATUS_COLOR[order.status] || T.textDim)}`,
                 borderRadius: 12, padding: '12px 16px', marginBottom: 8,
                 cursor: 'pointer', transition: 'all 0.15s',
               }}>
@@ -560,6 +601,7 @@ export default function Orders() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <span style={{ fontWeight: 800, fontFamily: 'monospace', fontSize: 13, color: T.text }}>{order.order_number}</span>
+                    {reviewOnly && <Badge color={T.red} small>Needs Review</Badge>}
                     <Badge color={STATUS_COLOR[order.status] || T.textDim} small>{order.status}</Badge>
                     {order.payment_status === 'paid' && <Badge color={T.green} small>✓ Paid</Badge>}
                   </div>

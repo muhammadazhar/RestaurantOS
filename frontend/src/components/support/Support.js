@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import {
   getMySupportTickets, createSupportTicket,
@@ -24,7 +25,10 @@ const STATUS_LABEL = {
 
 export default function Support() {
   const { theme: T } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewRequested = searchParams.get('review') === '1';
   const [tickets, setTickets]           = useState([]);
+  const [filter, setFilter]             = useState(reviewRequested ? 'review' : 'all');
   const [loading, setLoading]           = useState(true);
   const [selected, setSelected]         = useState(null);
   const [messages, setMessages]         = useState([]);
@@ -42,6 +46,9 @@ export default function Support() {
     || (window.location.protocol + '//' + window.location.hostname + ':5000');
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (reviewRequested) setFilter('review');
+  }, [reviewRequested]);
   useEffect(() => {
     if (selected) loadMessages(selected.id);
   }, [selected]);
@@ -102,6 +109,19 @@ export default function Support() {
 
   const card = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 12 };
   const inp  = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: '10px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', width: '100%', boxSizing: 'border-box' };
+  const filteredTickets = tickets.filter((ticket) => {
+    if (filter === 'review') return ticket.status !== 'resolved';
+    if (filter === 'resolved') return ticket.status === 'resolved';
+    if (filter === 'closed') return ticket.status === 'closed';
+    return true;
+  });
+  const applyFilter = (nextFilter) => {
+    setFilter(nextFilter);
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextFilter === 'review') nextParams.set('review', '1');
+    else nextParams.delete('review');
+    setSearchParams(nextParams, { replace: true });
+  };
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif", color: T.text }}>
@@ -118,18 +138,41 @@ export default function Support() {
         </button>
       </div>
 
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {[
+          ['all', 'All'],
+          ['review', 'Needs Review'],
+          ['resolved', 'Resolved'],
+          ['closed', 'Closed'],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => { applyFilter(key); setSelected(null); }}
+            style={{
+              background: filter === key ? (key === 'review' ? T.redDim : T.accent) : T.surface,
+              color: filter === key ? (key === 'review' ? T.red : '#000') : T.textMid,
+              border: `1px solid ${filter === key ? (key === 'review' ? T.red + '55' : T.accent) : T.border}`,
+              borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '340px 1fr' : '1fr', gap: 16 }}>
 
         {/* ── Ticket list ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {loading ? (
             <p style={{ color: T.textMid }}>Loading…</p>
-          ) : tickets.length === 0 ? (
+          ) : filteredTickets.length === 0 ? (
             <div style={{ ...card, padding: 32, textAlign: 'center' }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>🎫</div>
               <p style={{ color: T.textMid, margin: 0 }}>No tickets yet. Create one if you need help.</p>
             </div>
-          ) : tickets.map(t => (
+          ) : filteredTickets.map(t => (
             <div
               key={t.id}
               onClick={() => setSelected(t)}
@@ -137,7 +180,7 @@ export default function Support() {
                 ...card,
                 padding: '14px 16px',
                 cursor: 'pointer',
-                borderColor: selected?.id === t.id ? T.accent : T.border,
+                borderColor: selected?.id === t.id ? T.accent : (t.status !== 'resolved' && filter === 'review' ? T.red : T.border),
                 transition: 'border-color 0.15s',
               }}
             >
@@ -152,6 +195,9 @@ export default function Support() {
                   {STATUS_LABEL[t.status] || t.status}
                 </span>
               </div>
+              {filter === 'review' && t.status !== 'resolved' && (
+                <div style={{ fontSize: 10, color: T.red, fontWeight: 800, marginTop: 4 }}>Needs Review</div>
+              )}
               {t.assigned_to_name && t.status === 'assigned' && (
                 <p style={{ margin: '4px 0 0', fontSize: 11, color: T.textMid }}>
                   Assigned to: <strong style={{ color: T.text }}>{t.assigned_to_name}</strong>
