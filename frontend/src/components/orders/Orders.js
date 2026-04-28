@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getOrders, updateOrderStatus, getPhoneOrders, assignRider, getRiders, getRestaurantSettings } from '../../services/api';
+import { getOrders, updateOrderStatus, getPhoneOrders, assignRider, getRiders, getRestaurantSettings, cancelOnlineOrder, completeOnlineRefund } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { Card, Badge, Spinner, Btn, Modal, Select, PageHeader, T, useT } from '../shared/UI';
 import { mergePrintTemplates, renderReceiptHtml } from '../../utils/printTemplates';
 import toast from 'react-hot-toast';
@@ -21,6 +22,9 @@ const fmtDay = d => new Date(d).toLocaleDateString('en-PK', { weekday:'short', d
 const isReturnedItem = item => item?.status === 'cancelled' || item?.returned === true;
 const itemChargeTotal = item => Number(item.total_price ?? (Number(item.unit_price || 0) * Number(item.quantity || 1)));
 const itemDisplayTotal = item => isReturnedItem(item) ? -Math.abs(itemChargeTotal(item)) : itemChargeTotal(item);
+const isOnlineManagedOrder = order => order?.source === 'online' || order?.order_type === 'online' || !!order?.platform || !!order?.platform_order_id;
+const canCancelOnlineOrder = order => isOnlineManagedOrder(order) && ['pending','confirmed','preparing','ready','picked','out_for_delivery'].includes(order?.status);
+const canCompleteManualRefund = order => order?.status === 'cancelled' && ['refund_pending','manual_refund_required','refund_failed'].includes(order?.refund_status);
 const fmtLineAmount = value => {
   const amount = Number(value || 0);
   return `${amount < 0 ? '-PKR ' : 'PKR '}${Math.abs(amount).toLocaleString('en-PK')}`;
@@ -118,7 +122,7 @@ function printReceipt(order, printSettings) {
 }
 
 // ─── Order detail modal ───────────────────────────────────────────────────────
-function OrderDetailModal({ order, open, onClose, onStatusChange, printSettings }) {
+function OrderDetailModal({ order, open, onClose, onStatusChange, onCancelOnline, onCompleteRefund, canManageRefunds, printSettings }) {
   if (!order) return null;
   const canAdvance = !['paid','cancelled','served'].includes(order.status);
   const NEXT = { pending:'confirmed', confirmed:'preparing', preparing:'ready', ready:'served', served:'paid' };
@@ -198,6 +202,30 @@ function OrderDetailModal({ order, open, onClose, onStatusChange, printSettings 
           <span style={{ fontSize: 12, color: T.textMid }}>Payment</span>
           <Badge color={order.payment_status === 'paid' ? T.green : T.textDim} small>{order.payment_status}</Badge>
         </div>
+        {order.refund_status && order.refund_status !== 'not_required' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <span style={{ fontSize: 12, color: T.textMid }}>Refund</span>
+              <Badge color={order.refund_status === 'refunded' ? T.green : T.red} small>{order.refund_status.replace(/_/g, ' ')}</Badge>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <span style={{ fontSize: 12, color: T.textMid }}>Refund Amount</span>
+              <span style={{ fontSize: 12, fontFamily: 'monospace', color: order.refund_status === 'refunded' ? T.green : T.red }}>
+                {fmt(Number(order.refund_amount || order.total_amount || 0))}
+              </span>
+            </div>
+            {order.refund_required_action && (
+              <div style={{ marginTop: 8, fontSize: 11, color: T.red, fontWeight: 700 }}>
+                Action required: {order.refund_required_action.replace(/_/g, ' ')}
+              </div>
+            )}
+            {order.refund_reference && (
+              <div style={{ marginTop: 6, fontSize: 11, color: T.textMid }}>
+                Refund ref: <span style={{ color: T.text, fontFamily: 'monospace' }}>{order.refund_reference}</span>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Actions */}
@@ -226,6 +254,22 @@ function OrderDetailModal({ order, open, onClose, onStatusChange, printSettings 
             style={{ width: '100%', background: T.redDim, color: T.red, border: `1px solid ${T.red}44` }}
           >
             ✕ Cancel Order
+          </Btn>
+        )}
+        {canManageRefunds && canCancelOnlineOrder(order) && (
+          <Btn
+            onClick={() => { onCancelOnline(order); onClose(); }}
+            style={{ width: '100%', background: T.redDim, color: T.red, border: `1px solid ${T.red}55` }}
+          >
+            Cancel Online Order
+          </Btn>
+        )}
+        {canManageRefunds && canCompleteManualRefund(order) && (
+          <Btn
+            onClick={() => { onCompleteRefund(order); onClose(); }}
+            style={{ width: '100%', background: `${T.green}22`, color: T.green, border: `1px solid ${T.green}55` }}
+          >
+            Mark Refund Complete
           </Btn>
         )}
       </div>
@@ -377,6 +421,7 @@ const today = () => new Date().toISOString().slice(0,10);
 
 export default function Orders() {
   useT();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const reviewRequested = searchParams.get('review') === '1';
   const [mainTab,  setMainTab]  = useState('all'); // 'all' | 'phone'
@@ -389,7 +434,10 @@ export default function Orders() {
   const [dateFrom, setDateFrom] = useState(today());
   const [dateTo,   setDateTo]   = useState(today());
   const [printSettings, setPrintSettings] = useState(null);
+  const [cancelModal, setCancelModal] = useState({ open: false, order: null, reason: '', saving: false });
+  const [refundModal, setRefundModal] = useState({ open: false, order: null, reference: '', note: '', saving: false });
   const reviewOnly = statusF === REVIEW_ORDER_STATUSES.join(',');
+  const canManageRefunds = user?.isSuperAdmin || (user?.permissions || []).includes('settings');
 
   useEffect(() => {
     if (reviewRequested) {
@@ -432,6 +480,39 @@ export default function Orders() {
   const handleStatus = async (id, status) => {
     try { await updateOrderStatus(id, status); toast.success(`Order → ${status}`); load(); }
     catch { toast.error('Update failed'); }
+  };
+
+  const submitCancelOnline = async () => {
+    if (!cancelModal.order) return;
+    const reason = cancelModal.reason.trim();
+    if (!reason) return toast.error('Cancellation reason is required');
+    setCancelModal(current => ({ ...current, saving: true }));
+    try {
+      await cancelOnlineOrder(cancelModal.order.id, { reason });
+      toast.success('Online order cancelled');
+      setCancelModal({ open: false, order: null, reason: '', saving: false });
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to cancel online order');
+      setCancelModal(current => ({ ...current, saving: false }));
+    }
+  };
+
+  const submitRefundComplete = async () => {
+    if (!refundModal.order) return;
+    setRefundModal(current => ({ ...current, saving: true }));
+    try {
+      await completeOnlineRefund(refundModal.order.id, {
+        refund_reference: refundModal.reference.trim(),
+        note: refundModal.note.trim(),
+      });
+      toast.success('Refund marked as completed');
+      setRefundModal({ open: false, order: null, reference: '', note: '', saving: false });
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to complete refund');
+      setRefundModal(current => ({ ...current, saving: false }));
+    }
   };
 
   const filtered = orders.filter(o =>
@@ -604,6 +685,11 @@ export default function Orders() {
                     {reviewOnly && <Badge color={T.red} small>Needs Review</Badge>}
                     <Badge color={STATUS_COLOR[order.status] || T.textDim} small>{order.status}</Badge>
                     {order.payment_status === 'paid' && <Badge color={T.green} small>✓ Paid</Badge>}
+                    {order.refund_status && order.refund_status !== 'not_required' && (
+                      <Badge color={order.refund_status === 'refunded' ? T.green : T.red} small>
+                        {order.refund_status === 'manual_refund_required' ? 'Manual Refund Required' : order.refund_status.replace(/_/g, ' ')}
+                      </Badge>
+                    )}
                   </div>
                   <div style={{ fontSize: 11, color: T.textMid }}>
                     {order.table_label ? `Table ${order.table_label}` : ''}
@@ -637,8 +723,62 @@ export default function Orders() {
         open={!!detail}
         onClose={() => setDetail(null)}
         onStatusChange={handleStatus}
+        onCancelOnline={(order) => setCancelModal({ open: true, order, reason: '', saving: false })}
+        onCompleteRefund={(order) => setRefundModal({ open: true, order, reference: '', note: '', saving: false })}
+        canManageRefunds={canManageRefunds}
         printSettings={printSettings}
       />
+
+      <Modal open={cancelModal.open} onClose={() => !cancelModal.saving && setCancelModal({ open: false, order: null, reason: '', saving: false })} title="Cancel Online Order" width={460}>
+        <div style={{ fontSize: 12, color: T.textMid, marginBottom: 12 }}>
+          {cancelModal.order?.order_number} will be cancelled. Paid online orders will move to <b style={{ color: T.red }}>refund pending</b> and stay marked <b style={{ color: T.red }}>manual refund required</b> until staff returns the amount.
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, color: T.textMid, fontWeight: 700, marginBottom: 6 }}>Cancellation Reason</label>
+          <textarea
+            value={cancelModal.reason}
+            onChange={(e) => setCancelModal(current => ({ ...current, reason: e.target.value }))}
+            placeholder="Why is this online order being cancelled?"
+            style={{ width: '100%', minHeight: 110, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical' }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn variant="ghost" onClick={() => setCancelModal({ open: false, order: null, reason: '', saving: false })} disabled={cancelModal.saving}>Close</Btn>
+          <Btn onClick={submitCancelOnline} disabled={cancelModal.saving} style={{ background: T.red, color: '#fff', border: 'none' }}>
+            {cancelModal.saving ? 'Cancelling...' : 'Cancel Online Order'}
+          </Btn>
+        </div>
+      </Modal>
+
+      <Modal open={refundModal.open} onClose={() => !refundModal.saving && setRefundModal({ open: false, order: null, reference: '', note: '', saving: false })} title="Mark Refund Complete" width={460}>
+        <div style={{ fontSize: 12, color: T.textMid, marginBottom: 12 }}>
+          Record the manual refund for {refundModal.order?.order_number}. This will update the payment status to <b style={{ color: T.green }}>refunded</b>.
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, color: T.textMid, fontWeight: 700, marginBottom: 6 }}>Refund Reference</label>
+          <input
+            value={refundModal.reference}
+            onChange={(e) => setRefundModal(current => ({ ...current, reference: e.target.value }))}
+            placeholder="Transaction ID, bank ref, wallet ref..."
+            style={{ width: '100%', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none' }}
+          />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, color: T.textMid, fontWeight: 700, marginBottom: 6 }}>Note</label>
+          <textarea
+            value={refundModal.note}
+            onChange={(e) => setRefundModal(current => ({ ...current, note: e.target.value }))}
+            placeholder="Optional note about how the refund was completed."
+            style={{ width: '100%', minHeight: 90, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', color: T.text, fontSize: 13, fontFamily: "'Inter', sans-serif", outline: 'none', resize: 'vertical' }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn variant="ghost" onClick={() => setRefundModal({ open: false, order: null, reference: '', note: '', saving: false })} disabled={refundModal.saving}>Close</Btn>
+          <Btn onClick={submitRefundComplete} disabled={refundModal.saving} style={{ background: T.green, color: '#fff', border: 'none' }}>
+            {refundModal.saving ? 'Saving...' : 'Mark Refunded'}
+          </Btn>
+        </div>
+      </Modal>
       </>}
     </div>
   );

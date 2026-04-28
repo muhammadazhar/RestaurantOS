@@ -55,6 +55,8 @@ export const addOrderItems       = (id, data) => API.post(`/orders/${id}/items`,
 export const replaceOrderItem    = (id, data) => API.post(`/orders/${id}/replace-item`, data);
 export const returnOrderItem     = (id, data) => API.post(`/orders/${id}/return-item`, data);
 export const cancelOrderReturn   = (id, data) => API.post(`/orders/${id}/cancel-return`, data);
+export const cancelOnlineOrder   = (id, data) => API.post(`/orders/${id}/cancel-online`, data);
+export const completeOnlineRefund = (id, data) => API.post(`/orders/${id}/complete-online-refund`, data);
 
 // ── Tables ────────────────────────────────────────────────────────────────────
 export const getTables           = ()           => API.get('/tables');

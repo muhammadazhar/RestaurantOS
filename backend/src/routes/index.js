@@ -43,6 +43,8 @@ router.post('/orders/:id/items',            requirePermission('pos'), orders.add
 router.post('/orders/:id/replace-item',     requirePermission('pos'), orders.replaceOrderItem);
 router.post('/orders/:id/return-item',      requirePermission('pos'), orders.returnOrderItem);
 router.post('/orders/:id/cancel-return',    requirePermission('pos'), orders.cancelOrderReturn);
+router.post('/orders/:id/cancel-online',    requirePermission('pos'), orders.cancelOnlineOrder);
+router.post('/orders/:id/complete-online-refund', requirePermission('pos'), orders.completeOnlineRefund);
 router.patch('/orders/:id/status', requirePermission('pos', 'kitchen'), orders.updateOrderStatus);
 
 // ── Tables ────────────────────────────────────────────────────────────────────

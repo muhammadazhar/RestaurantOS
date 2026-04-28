@@ -184,8 +184,51 @@ Completed in this session:
   - Role lookup is now `LEFT JOIN` based so a missing role row does not block valid credentials from signing in.
   - Permissions are normalized safely to an array before returning the user payload.
   - Active module lookup is now best-effort and no longer breaks login if subscription lookup has an issue.
-  - Refresh token persistence is now best-effort and no longer blocks successful login if that insert fails.
+- Refresh token persistence is now best-effort and no longer blocks successful login if that insert fails.
 - Add future auth/login changes here as well so login-related regressions are easy to trace.
+
+### Online Order Cancellation And Refund Workflow
+
+Completed in this session:
+
+- Added admin-only online order cancellation workflow for incomplete online orders.
+- New backend action allows cancellation for online-managed orders in statuses:
+  - `pending`
+  - `confirmed`
+  - `preparing`
+  - `ready`
+  - `picked`
+  - `out_for_delivery`
+- Cancellation now requires a reason.
+- Online cancellation creates a full cancellation adjustment audit trail using the existing `order_adjustments` and `order_adjustment_items` tables.
+- Added order-level refund tracking fields on `orders`:
+  - `refund_status`
+  - `refund_amount`
+  - `refund_reason`
+  - `refund_required_action`
+  - `refund_gateway_provider`
+  - `refund_reference`
+  - `refund_note`
+  - `refund_requested_at`
+  - `refunded_at`
+  - `refunded_by`
+  - `refund_updated_at`
+- Extended order `payment_status` workflow to allow `refund_pending`.
+- Because no payment gateway refund API exists yet:
+  - cancelling a paid online order sets `payment_status='refund_pending'`
+  - sets `refund_status='manual_refund_required'`
+  - clearly marks that staff must return the amount manually outside the app
+- Added future-ready gateway hook logic:
+  - backend checks restaurant `settings.payment_gateway`
+  - later a real gateway API can be activated from settings without redesigning the order refund flow
+- Added second admin action to mark a manual refund as completed:
+  - sets `payment_status='refunded'`
+  - sets `refund_status='refunded'`
+  - stores optional refund reference and note
+- Orders UI now shows:
+  - `Cancel Online Order` action
+  - `Mark Refund Complete` action
+  - refund badges / refund amount / manual refund required state in order detail and list rows
 
 ## Important Next Task
 

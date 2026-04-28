@@ -245,6 +245,62 @@ async function createAdjustment(client, restaurantId, order, type, reason, emplo
   return result.rows[0];
 }
 
+function isOnlineOrder(order) {
+  return order?.source === 'online'
+    || order?.order_type === 'online'
+    || !!order?.platform
+    || !!order?.platform_order_id;
+}
+
+function canAutoRefund(settings) {
+  const gateway = settings?.payment_gateway || {};
+  return gateway.refund_api_enabled === true
+    && !!gateway.provider
+    && !!gateway.api_key;
+}
+
+async function createFullCancellationAdjustment(client, restaurantId, order, reason, employeeId, metadata = {}) {
+  const activeItems = await client.query(
+    `SELECT * FROM order_items WHERE order_id=$1 AND status <> 'cancelled' ORDER BY created_at`,
+    [order.id]
+  );
+
+  const adjustment = await createAdjustment(client, restaurantId, order, 'full_cancellation', reason, employeeId, {
+    original_subtotal: order.subtotal,
+    replacement_subtotal: 0,
+    refund_amount: order.payment_status === 'paid' ? order.total_amount : 0,
+    additional_amount: 0,
+    net_amount: -numeric(order.subtotal),
+    tax_adjustment: -numeric(order.tax_amount),
+    total_adjustment: -numeric(order.total_amount),
+  }, {
+    cancelled_order_number: order.order_number,
+    ...metadata,
+  });
+
+  for (const item of activeItems.rows) {
+    await client.query(
+      `INSERT INTO order_adjustment_items(
+         adjustment_id, order_item_id, menu_item_id, name, action, quantity, unit_price, total_amount, notes
+       )
+       VALUES($1,$2,$3,$4,'return',$5,$6,$7,$8)`,
+      [
+        adjustment.id,
+        item.id,
+        item.menu_item_id,
+        item.name,
+        item.quantity,
+        item.unit_price,
+        -numeric(item.total_price),
+        `Full order cancellation: ${reason}`,
+      ]
+    );
+  }
+
+  await client.query(`UPDATE order_items SET status='cancelled' WHERE order_id=$1 AND status <> 'cancelled'`, [order.id]);
+  return adjustment;
+}
+
 async function calculateOrderTotals(client, restaurantId, items, orderType, discountAmount) {
   const subtotal = roundMoney(items.reduce((sum, item) => sum + numeric(item.unit_price) * numeric(item.quantity, 1), 0));
   const discount = Math.min(numeric(discountAmount), subtotal);
@@ -1004,43 +1060,7 @@ exports.cancelOrderReturn = async (req, res) => {
       return res.status(400).json({ error: 'Order is already cancelled or refunded' });
     }
 
-    const activeItems = await client.query(
-      `SELECT * FROM order_items WHERE order_id=$1 AND status <> 'cancelled' ORDER BY created_at`,
-      [id]
-    );
-
-    const adjustment = await createAdjustment(client, restaurantId, order, 'full_cancellation', reason, employeeId, {
-      original_subtotal: order.subtotal,
-      replacement_subtotal: 0,
-      refund_amount: order.payment_status === 'paid' ? order.total_amount : 0,
-      additional_amount: 0,
-      net_amount: -numeric(order.subtotal),
-      tax_adjustment: -numeric(order.tax_amount),
-      total_adjustment: -numeric(order.total_amount),
-    }, {
-      cancelled_order_number: order.order_number,
-    });
-
-    for (const item of activeItems.rows) {
-      await client.query(
-        `INSERT INTO order_adjustment_items(
-           adjustment_id, order_item_id, menu_item_id, name, action, quantity, unit_price, total_amount, notes
-         )
-         VALUES($1,$2,$3,$4,'return',$5,$6,$7,$8)`,
-        [
-          adjustment.id,
-          item.id,
-          item.menu_item_id,
-          item.name,
-          item.quantity,
-          item.unit_price,
-          -numeric(item.total_price),
-          `Full order cancellation: ${reason}`,
-        ]
-      );
-    }
-
-    await client.query(`UPDATE order_items SET status='cancelled' WHERE order_id=$1 AND status <> 'cancelled'`, [id]);
+    const adjustment = await createFullCancellationAdjustment(client, restaurantId, order, reason, employeeId);
     const updatedRes = await client.query(
       `UPDATE orders
        SET status='cancelled',
@@ -1066,6 +1086,184 @@ exports.cancelOrderReturn = async (req, res) => {
     console.error('cancelOrderReturn error:', err.message, err.detail || '');
     res.status(500).json({ error: err.message || 'Server error' });
   } finally { client.release(); }
+};
+
+// POST /api/orders/:id/cancel-online
+exports.cancelOnlineOrder = async (req, res) => {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const { restaurantId, id: employeeId } = req.user;
+    const canManageRefunds = req.user?.isSuperAdmin || (req.user?.permissions || []).includes('settings');
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!canManageRefunds) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Only admins can cancel online orders' });
+    }
+
+    if (!reason || !String(reason).trim()) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cancellation reason is required' });
+    }
+
+    const orderRes = await client.query(
+      `SELECT * FROM orders WHERE id=$1 AND restaurant_id=$2 FOR UPDATE`,
+      [id, restaurantId]
+    );
+    if (!orderRes.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orderRes.rows[0];
+    if (!isOnlineOrder(order)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Only online orders can be cancelled here' });
+    }
+
+    const cancellableStatuses = ['pending', 'confirmed', 'preparing', 'ready', 'picked', 'out_for_delivery'];
+    if (!cancellableStatuses.includes(order.status)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Only incomplete online orders can be cancelled' });
+    }
+
+    const settingsRes = await client.query(
+      `SELECT settings FROM restaurants WHERE id=$1`,
+      [restaurantId]
+    );
+    const settings = settingsRes.rows[0]?.settings || {};
+    const autoRefundEnabled = canAutoRefund(settings);
+    const refundAmount = roundMoney(order.payment_status === 'paid' ? numeric(order.total_amount) : 0);
+    const nextPaymentStatus = refundAmount > 0
+      ? (autoRefundEnabled ? 'refund_pending' : 'refund_pending')
+      : order.payment_status;
+    const refundStatus = refundAmount > 0
+      ? (autoRefundEnabled ? 'refund_pending' : 'manual_refund_required')
+      : 'not_required';
+    const requiredAction = refundAmount > 0 && !autoRefundEnabled ? 'manual_refund_required' : null;
+    const gatewayProvider = settings?.payment_gateway?.provider || null;
+
+    const adjustment = await createFullCancellationAdjustment(
+      client,
+      restaurantId,
+      order,
+      reason,
+      employeeId,
+      {
+        workflow: 'online_admin_cancel',
+        refund_status: refundStatus,
+        refund_amount: refundAmount,
+        refund_required_action: requiredAction,
+        payment_gateway_provider: gatewayProvider,
+        auto_refund_enabled: autoRefundEnabled,
+      }
+    );
+
+    const updatedRes = await client.query(
+      `UPDATE orders
+       SET status=$2,
+           payment_status=$3,
+           refund_status=$4,
+           refund_amount=$5,
+           refund_reason=$6,
+           refund_required_action=$7,
+           refund_gateway_provider=$8,
+           refund_requested_at=CASE WHEN $5 > 0 THEN NOW() ELSE refund_requested_at END,
+           refund_updated_at=NOW(),
+           updated_at=NOW()
+       WHERE id=$1
+       RETURNING *`,
+      [
+        id,
+        'cancelled',
+        nextPaymentStatus,
+        refundStatus,
+        refundAmount,
+        String(reason).trim(),
+        requiredAction,
+        gatewayProvider,
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    const updatedOrder = updatedRes.rows[0];
+    const io = req.app.get('io');
+    if (io) {
+      io.to(restaurantId).emit('order_updated', { orderId: id, status: 'cancelled', tableId: updatedOrder.table_id || null });
+    }
+
+    res.json({
+      order: updatedOrder,
+      adjustment,
+      refund: {
+        amount: refundAmount,
+        payment_status: updatedOrder.payment_status,
+        refund_status: updatedOrder.refund_status,
+        required_action: updatedOrder.refund_required_action,
+        gateway_provider: updatedOrder.refund_gateway_provider,
+        auto_refund_enabled: autoRefundEnabled,
+      },
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('cancelOnlineOrder error:', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Server error' });
+  } finally { client.release(); }
+};
+
+// POST /api/orders/:id/complete-online-refund
+exports.completeOnlineRefund = async (req, res) => {
+  try {
+    const { restaurantId, id: employeeId } = req.user;
+    const canManageRefunds = req.user?.isSuperAdmin || (req.user?.permissions || []).includes('settings');
+    const { id } = req.params;
+    const { refund_reference, note } = req.body;
+
+    if (!canManageRefunds) {
+      return res.status(403).json({ error: 'Only admins can complete refunds' });
+    }
+
+    const result = await db.query(
+      `UPDATE orders
+       SET payment_status='refunded',
+           refund_status='refunded',
+           refund_reference=COALESCE($4, refund_reference),
+           refund_note=COALESCE($5, refund_note),
+           refunded_at=NOW(),
+           refunded_by=$3,
+           refund_updated_at=NOW(),
+           updated_at=NOW()
+       WHERE id=$1
+         AND restaurant_id=$2
+         AND status='cancelled'
+         AND refund_status IN ('refund_pending','manual_refund_required','refund_failed')
+       RETURNING *`,
+      [
+        id,
+        restaurantId,
+        employeeId,
+        refund_reference ? String(refund_reference).trim() : null,
+        note ? String(note).trim() : null,
+      ]
+    );
+
+    if (!result.rows.length) {
+      return res.status(400).json({ error: 'Only cancelled online orders with pending refunds can be marked refunded' });
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(restaurantId).emit('order_updated', { orderId: id, status: result.rows[0].status, tableId: result.rows[0].table_id || null });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('completeOnlineRefund error:', err.message, err.detail || '');
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
 };
 
 // GET /api/reports/performance

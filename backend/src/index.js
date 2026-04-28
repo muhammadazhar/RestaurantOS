@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path       = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const express    = require('express');
 const http       = require('http');
 const { Server } = require('socket.io');
@@ -7,7 +8,6 @@ const helmet     = require('helmet');
 const morgan     = require('morgan');
 const compression = require('compression');
 const rateLimit  = require('express-rate-limit');
-const path       = require('path');
 
 const routes = require('./routes');
 const db     = require('./config/db');
@@ -146,6 +146,28 @@ db.query('SELECT NOW()').then(async () => {
         'picked','out_for_delivery','delivered'
       ));
   `).catch(e => console.warn('Status constraint note:', e.message));
+
+  // Migration: online order refund workflow fields + extended payment statuses.
+  await db.query(`
+    ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_payment_status_check;
+    ALTER TABLE orders ADD CONSTRAINT orders_payment_status_check
+      CHECK (payment_status IN (
+        'unpaid','paid','refunded','partial','refund_pending'
+      ));
+    ALTER TABLE orders
+      ADD COLUMN IF NOT EXISTS refund_status VARCHAR(30) NOT NULL DEFAULT 'not_required'
+        CHECK (refund_status IN ('not_required','refund_pending','manual_refund_required','refunded','refund_failed')),
+      ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS refund_reason TEXT,
+      ADD COLUMN IF NOT EXISTS refund_required_action VARCHAR(40),
+      ADD COLUMN IF NOT EXISTS refund_gateway_provider VARCHAR(60),
+      ADD COLUMN IF NOT EXISTS refund_reference VARCHAR(120),
+      ADD COLUMN IF NOT EXISTS refund_note TEXT,
+      ADD COLUMN IF NOT EXISTS refund_requested_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS refunded_by UUID REFERENCES employees(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS refund_updated_at TIMESTAMPTZ;
+  `).catch(e => console.warn('Refund workflow migration note:', e.message));
 
   // Migration 007: extend incentive payment statuses + add received_at/updated_at
   await db.query(`
