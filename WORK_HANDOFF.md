@@ -255,6 +255,14 @@ Completed in this session:
   - shows refund records, refund status, refund amount, timeline, reason, required action, and refund reference
   - includes filters for date, refund status, order type, and search
 
+### Prepaid Online Order Cancellation Visibility
+
+Completed in this session:
+
+- Fixed the online refund/cancellation action visibility for prepaid online orders.
+- `Cancel Online Order` now remains available when an eligible online order has status `paid`, so admin can still move it into the refund workflow when delivery/action has not been completed.
+- Backend cancellation rule was updated to match the frontend so the button and API follow the same allowed-status rule.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
