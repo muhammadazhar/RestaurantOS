@@ -441,7 +441,7 @@ export default function Orders() {
   const [refundModal, setRefundModal] = useState({ open: false, order: null, reference: '', note: '', saving: false });
   const reviewOnly = statusF === REVIEW_ORDER_STATUSES.join(',');
   const refundPendingOnly = refundF === REFUND_PENDING_STATUSES.join(',');
-  const canManageRefunds = user?.isSuperAdmin || (user?.permissions || []).includes('settings');
+  const canManageRefunds = user?.isSuperAdmin || (user?.permissions || []).some(p => ['settings', 'refunds'].includes(p));
 
   useEffect(() => {
     if (reviewRequested) {

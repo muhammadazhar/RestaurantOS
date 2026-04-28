@@ -1114,7 +1114,7 @@ exports.cancelOnlineOrder = async (req, res) => {
   try {
     await client.query('BEGIN');
     const { restaurantId, id: employeeId } = req.user;
-    const canManageRefunds = req.user?.isSuperAdmin || (req.user?.permissions || []).includes('settings');
+    const canManageRefunds = req.user?.isSuperAdmin || (req.user?.permissions || []).some(p => ['settings', 'refunds'].includes(p));
     const { id } = req.params;
     const { reason } = req.body;
 
@@ -1238,7 +1238,7 @@ exports.cancelOnlineOrder = async (req, res) => {
 exports.completeOnlineRefund = async (req, res) => {
   try {
     const { restaurantId, id: employeeId } = req.user;
-    const canManageRefunds = req.user?.isSuperAdmin || (req.user?.permissions || []).includes('settings');
+    const canManageRefunds = req.user?.isSuperAdmin || (req.user?.permissions || []).some(p => ['settings', 'refunds'].includes(p));
     const { id } = req.params;
     const { refund_reference, note } = req.body;
 

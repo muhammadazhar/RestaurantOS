@@ -400,6 +400,7 @@ const ALL_PERMS = [
   { key: 'shift_management', label: 'Shift Management', icon: 'SM' },
   { key: 'dashboard',  label: 'Dashboard',      icon: '⬛' },
   { key: 'pos',        label: 'POS / Orders',   icon: '📲' },
+  { key: 'refunds',    label: 'Refund Management', icon: '↩' },
   { key: 'kitchen',    label: 'Kitchen Display',icon: '👨‍🍳' },
   { key: 'tables',     label: 'Tables',         icon: '🪑' },
   { key: 'inventory',  label: 'Inventory',      icon: '📦' },

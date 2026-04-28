@@ -263,6 +263,19 @@ Completed in this session:
 - `Cancel Online Order` now remains available when an eligible online order has status `paid`, so admin can still move it into the refund workflow when delivery/action has not been completed.
 - Backend cancellation rule was updated to match the frontend so the button and API follow the same allowed-status rule.
 
+### Refund Permission In Settings UI
+
+Completed in this session:
+
+- Added a dedicated `Refund Management` permission in `Settings -> Roles & Permissions`.
+- Refund actions in `POS / Orders` no longer require full `settings` access only.
+- Users with either:
+  - `settings`, or
+  - `refunds`
+  can now:
+  - cancel eligible online orders into the refund workflow
+  - mark manual refunds as completed
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
