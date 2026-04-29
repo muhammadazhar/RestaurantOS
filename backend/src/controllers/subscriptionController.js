@@ -10,6 +10,26 @@ const sendEmail = async (to, subject, html) => {
   }
 };
 
+const expireStaleSubscriptions = async (restaurantId, moduleKey = null) => {
+  const params = [restaurantId];
+  let moduleFilter = '';
+  if (moduleKey) {
+    params.push(moduleKey);
+    moduleFilter = ` AND module_key = $2`;
+  }
+
+  await db.query(
+    `UPDATE subscriptions
+     SET status = 'expired'
+     WHERE restaurant_id = $1
+       ${moduleFilter}
+       AND status IN ('trial', 'active')
+       AND expires_at IS NOT NULL
+       AND expires_at <= NOW()`,
+    params
+  );
+};
+
 // ── Public: list modules + pricing ───────────────────────────────────────────
 exports.getModules = async (req, res) => {
   try {
@@ -74,6 +94,7 @@ exports.saveModulePricing = async (req, res) => {
 exports.getMySubscriptions = async (req, res) => {
   try {
     const { restaurantId } = req.user;
+    await expireStaleSubscriptions(restaurantId);
     const rows = await db.query(
       `SELECT s.*, m.name as module_name, m.description as module_description
        FROM subscriptions s JOIN modules m ON m.key = s.module_key
@@ -100,6 +121,8 @@ exports.requestSubscription = async (req, res) => {
     const { restaurantId } = req.user;
     const { module_key, plan_type } = req.body;
 
+    await expireStaleSubscriptions(restaurantId, module_key);
+
     // Validate
     const modCheck = await db.query(`SELECT key FROM modules WHERE key=$1`, [module_key]);
     if (!modCheck.rows.length) return res.status(400).json({ error: 'Invalid module' });
@@ -114,8 +137,17 @@ exports.requestSubscription = async (req, res) => {
 
     // Check for already active subscription
     const existing = await db.query(
-      `SELECT * FROM subscriptions WHERE restaurant_id=$1 AND module_key=$2
-       AND status IN ('trial','active','pending_payment') ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM subscriptions
+       WHERE restaurant_id=$1 AND module_key=$2
+         AND (
+           status = 'pending_payment'
+           OR (
+             status IN ('trial','active')
+             AND (expires_at IS NULL OR expires_at > NOW())
+           )
+         )
+       ORDER BY created_at DESC
+       LIMIT 1`,
       [restaurantId, module_key]
     );
     if (existing.rows.length) {
@@ -342,6 +374,7 @@ exports.getActiveModuleKeys = async (restaurantId) => {
 exports.checkModuleAccess = async (req, res) => {
   try {
     const { restaurantId } = req.user;
+    await expireStaleSubscriptions(restaurantId);
     const modules = await exports.getActiveModuleKeys(restaurantId);
     res.json({ modules });
   } catch (err) {

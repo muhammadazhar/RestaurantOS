@@ -307,6 +307,25 @@ Completed in this session:
 - This resolves the runtime error:
   - `inconsistent types deduced for parameter $5`
 
+### Subscription Renewal After Expired Trial
+
+Completed in this session:
+
+- Fixed subscription renewal logic so expired `trial` / `active` rows no longer block new renewal requests.
+- Added automatic normalization of stale subscription rows:
+  - any `trial` or `active` subscription whose `expires_at` is already past is now updated to `expired`
+- Applied this normalization in:
+  - `getMySubscriptions`
+  - `requestSubscription`
+  - `checkModuleAccess`
+- Updated renewal blocker query so only these count as blocking:
+  - `pending_payment`
+  - still-active `trial`
+  - still-active `active`
+- Verified live data for restaurant `Shahi Rasoi`:
+  - the expired base trial ending on `2026-04-28` was stale in DB
+  - after normalization it no longer blocks renewal
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
