@@ -22,7 +22,12 @@ export default function LicenseGate({ moduleKey = 'base', moduleName = 'Restaura
     try {
       await requestSubscription({ module_key: moduleKey, plan_type: selectedPlan });
       toast.success('Payment request submitted! Your subscription will be activated once payment is confirmed.');
-      await refreshModules();
+      try {
+        await refreshModules();
+      } catch {
+        // A pending renewal does not activate the module immediately, so a
+        // refresh failure should not replace the success message.
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Request failed');
     } finally {

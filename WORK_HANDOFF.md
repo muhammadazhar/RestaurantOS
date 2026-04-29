@@ -326,6 +326,17 @@ Completed in this session:
   - the expired base trial ending on `2026-04-28` was stale in DB
   - after normalization it no longer blocks renewal
 
+### Renewal Request False Error After Success
+
+Completed in this session:
+
+- Fixed backend subscription request flow to import `getConfig` correctly before sending admin renewal notifications.
+- This resolves the case where the first renewal request inserted a pending subscription but then threw a server error afterward.
+- Updated the license-expired frontend gate so `refreshModules()` is best-effort after a successful request.
+- Result:
+  - successful renewal requests now keep the success message
+  - the user will not see a false generic failure after the pending request has already been created
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

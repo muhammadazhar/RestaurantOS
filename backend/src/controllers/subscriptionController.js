@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { getConfig } = require('../utils/config');
 
 // ── Email helper (uses shared utils/email — supports SMTP, Resend, Mailgun, SendGrid)
 const sendEmail = async (to, subject, html) => {
