@@ -557,3 +557,28 @@ npm run build --prefix frontend
 ```
 
 Build passed with the same existing warnings.
+
+## Latest Completed Change
+
+- Replaced the old left sidebar with a new premium top-navigation shell inspired by the provided reference design.
+- Main menu now uses:
+  - rounded horizontal module rail
+  - custom outline icons
+  - amber active-state card
+  - secondary rounded sub-navigation panel under the active module
+  - active screen chip on the right
+- Dark mode uses deep charcoal / blue-black panels with amber highlight.
+- Light mode keeps the same structure with bright panels and the same amber active accent.
+- Existing permissions, module visibility, badge counts, review links, and workflow-based KDS hiding were preserved.
+- File changed for this redesign:
+  - `frontend/src/components/shared/Layout.js`
+
+Verification run for this change:
+
+```powershell
+npm run build --prefix frontend
+node --check backend/src/controllers/ordersController.js
+node --check backend/src/controllers/combinedControllers.js
+```
+
+Build passed with the same existing warnings.
