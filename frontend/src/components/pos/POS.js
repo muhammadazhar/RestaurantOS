@@ -851,7 +851,7 @@ export default function POS() {
           </Badge>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '128px minmax(0,1fr)', gap: 6, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '122px minmax(0,1fr)', gap: 4, overflow: 'hidden' }}>
           <aside style={{ borderRadius: 12, padding: 8, ...S.panel, minHeight: 0, overflowY: 'auto' }}>
             <div style={{ fontSize: 11, fontWeight: 900, color: T.text, marginBottom: 8 }}>Categories</div>
             <div style={{ display: 'grid', gap: 5 }}>
@@ -880,7 +880,7 @@ export default function POS() {
           </aside>
 
           {/* Menu grid */}
-          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, 168px)', gridAutoRows: 'max-content', alignItems: 'start', justifyContent: 'start', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
+          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, 166px)', gridAutoRows: 'max-content', alignItems: 'start', justifyContent: 'start', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
             {filtered.map(item => {
               const variants = getItemVariants(item);
               const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
@@ -888,7 +888,7 @@ export default function POS() {
               return (
                 <div key={item.id} style={{
                   ...(itemCartQty ? S.cardSelected : S.card),
-                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 194, width: 168, justifySelf: 'stretch',
+                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 194, width: 166, justifySelf: 'stretch',
                 }}>
                   {/* Image */}
                   <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 92, minHeight: 92, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
@@ -949,7 +949,7 @@ export default function POS() {
       </div>
 
       {/* POS section */}
-      <div style={{ width: 592, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', paddingTop: 40 }}>
+      <div style={{ width: 700, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', paddingTop: 42 }}>
         <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
             Order - {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}

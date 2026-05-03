@@ -425,6 +425,14 @@ Completed in this session:
 - Increased menu-card height while keeping compact card width so prices and variant rows stay visible.
 - Increased item title and price text slightly again to improve readability inside the compact card layout.
 
+### POS Empty Menu Lane Shifted Into Cart Width
+
+Completed in this session:
+
+- Reduced the category rail and fixed menu-tile width slightly again so the wide blank lane beside the three-column menu is reclaimed.
+- Increased the cart column width substantially again so that previously unused menu-side whitespace is now handed to the order/cart area.
+- Kept the cart top aligned with the category/menu block while widening the right panel.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
