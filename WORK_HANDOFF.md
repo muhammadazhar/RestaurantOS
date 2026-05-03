@@ -361,6 +361,21 @@ Completed in this session:
 - Added a clear Railway build guard message for the failure case where Railway is pointed at the wrong root directory and cannot see both `/backend` and `/frontend`.
 - If Railway still reports missing `/backend` after this push, check the Railway service `Root Directory` setting and keep it at repository root / blank.
 
+### Railway Split-Service Correction
+
+Completed in this session:
+
+- Confirmed the app is deployed as split Railway services, with frontend and backend using their own folder roots.
+- Removed the root-level `railway.json` and root-level `nixpacks.toml` because those overrides were forcing single-service root deployment behavior and breaking the frontend service at `/frontend`.
+- Reverted the temporary root package deploy scripts that were added for single-service Railway deployment.
+- Keep Railway deployment aligned like this:
+  - frontend service -> root directory `/frontend`
+  - backend service -> root directory `/backend`
+  - each service uses its own local `nixpacks.toml`
+- If frontend Railway settings still show custom root-level build/start commands, use the frontend-local ones only:
+  - build: `npm install && npm run build`
+  - start: `node server.js`
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

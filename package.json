@@ -3,17 +3,13 @@
   "version": "1.0.0",
   "description": "RestaurantOS SaaS Restaurant Management Platform",
   "scripts": {
-    "postinstall": "npm install --prefix backend --legacy-peer-deps && npm install --prefix frontend --legacy-peer-deps",
     "install:all": "npm install --prefix backend && npm install --prefix frontend",
     "setup:db": "npm run migrate --prefix backend && npm run seed --prefix backend",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm start --prefix frontend",
-    "build": "CI=false npm run build --prefix frontend",
     "build:frontend": "npm run build --prefix frontend",
     "start:backend": "npm start --prefix backend",
-    "railway:build": "npm run build",
-    "railway:start": "node backend/src/index.js",
-    "start": "node backend/src/index.js"
+    "start": "npm install --prefix backend && node backend/src/index.js"
   },
   "engines": {
     "node": ">=18.0.0",

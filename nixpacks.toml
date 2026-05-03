@@ -1,8 +1,0 @@
-[phases.install]
-cmds = ['if [ ! -f package.json ] || [ ! -f backend/package.json ] || [ ! -f frontend/package.json ]; then echo "Railway must build from the repository root so backend and frontend are both available." && exit 1; fi', 'npm install --legacy-peer-deps']
-
-[phases.build]
-cmds = ['npm run railway:build']
-
-[start]
-cmd = 'npm run railway:start'
