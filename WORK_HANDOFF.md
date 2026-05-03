@@ -560,6 +560,26 @@ Build passed with the same existing warnings.
 
 ## Latest Completed Change
 
+- Tightened the new top navigation and child submenu layout:
+  - smaller top module cards
+  - smaller module icons/text
+  - smaller active child panel
+  - smaller child navigation chips
+- Adjusted POS cart column top alignment so `Order - Dine In` sits closer to the categories/menu panel line instead of starting too low.
+- Files changed:
+  - `frontend/src/components/shared/Layout.js`
+  - `frontend/src/components/pos/POS.js`
+
+Verification run for this change:
+
+```powershell
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.
+
+## Latest Completed Change
+
 - Replaced the old left sidebar with a new premium top-navigation shell inspired by the provided reference design.
 - Main menu now uses:
   - rounded horizontal module rail

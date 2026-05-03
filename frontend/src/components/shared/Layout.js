@@ -439,49 +439,49 @@ export default function Layout({ children }) {
 
   return (
     <div style={{ minHeight: '100vh', background: isLight ? shellBg : `radial-gradient(circle at top left, rgba(255,182,97,0.08), transparent 24%), radial-gradient(circle at top right, rgba(68,183,255,0.08), transparent 22%), ${shellBg}`, fontFamily: "'Inter', sans-serif" }}>
-      <div style={{ maxWidth: '100%', padding: isLight ? '14px 18px 24px' : '14px 18px 28px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ maxWidth: '100%', padding: isLight ? '10px 16px 18px' : '10px 16px 22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 14, background: isLight ? '#fff' : 'rgba(255,255,255,0.04)', border: `1px solid ${panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: isLight ? '0 10px 30px rgba(15,23,42,0.06)' : '0 14px 34px rgba(0,0,0,0.25)' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 12, background: isLight ? '#fff' : 'rgba(255,255,255,0.04)', border: `1px solid ${panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: isLight ? '0 10px 30px rgba(15,23,42,0.06)' : '0 14px 34px rgba(0,0,0,0.25)' }}>
               {logoUrl
                 ? <img src={logoUrl.startsWith('http') ? logoUrl : `${IMG_BASE}${logoUrl}`} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : <span style={{ fontWeight: 900, color: moduleText }}>RO</span>
               }
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: moduleText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: moduleText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user?.restaurantName || 'RestaurantOS'}
               </div>
-              <div style={{ fontSize: 11, color: mutedText }}>
+              <div style={{ fontSize: 10, color: mutedText }}>
                 {connected ? 'Live' : 'Offline'} / {user?.role || 'User'}
               </div>
             </div>
           </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button
               onClick={toggle}
               title={`Switch to ${isLight ? 'dark' : 'light'} mode`}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 999,
-                padding: '8px 14px', cursor: 'pointer', color: moduleText,
+                padding: '7px 12px', cursor: 'pointer', color: moduleText,
                 boxShadow: isLight ? '0 10px 26px rgba(15,23,42,0.05)' : '0 12px 30px rgba(0,0,0,0.18)',
               }}
             >
               <div style={{ width: 34, height: 18, borderRadius: 999, background: isLight ? accent : 'rgba(255,255,255,0.12)', position: 'relative' }}>
                 <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isLight ? 19 : 3, transition: 'left 0.2s' }} />
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700 }}>{isLight ? 'Light Mode' : 'Dark Mode'}</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}>{isLight ? 'Light Mode' : 'Dark Mode'}</span>
             </button>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 999, padding: '8px 10px 8px 8px', boxShadow: isLight ? '0 10px 26px rgba(15,23,42,0.05)' : '0 12px 30px rgba(0,0,0,0.18)' }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: accent, color: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 900 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 999, padding: '6px 9px 6px 6px', boxShadow: isLight ? '0 10px 26px rgba(15,23,42,0.05)' : '0 12px 30px rgba(0,0,0,0.18)' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: accent, color: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900 }}>
                 {user?.name?.[0] || 'U'}
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: moduleText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
-                <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: mutedText, padding: 0, cursor: 'pointer', fontSize: 11, fontFamily: "'Inter', sans-serif" }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: moduleText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
+                <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: mutedText, padding: 0, cursor: 'pointer', fontSize: 10, fontFamily: "'Inter', sans-serif" }}>
                   Sign out →
                 </button>
               </div>
@@ -489,8 +489,8 @@ export default function Layout({ children }) {
           </div>
         </div>
 
-        <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 26, padding: 10, boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', overflowX: 'auto', marginBottom: 14 }}>
-          <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
+        <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 22, padding: 8, boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', overflowX: 'auto', marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 6, minWidth: 'max-content' }}>
             {visibleGroups.map(group => {
               const groupActive = activeGroup?.label === group.label;
               const badgeCount = getGroupBadgeCount(group);
@@ -504,9 +504,9 @@ export default function Layout({ children }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 12,
-                    minWidth: 154,
-                    padding: '14px 18px',
-                    borderRadius: 20,
+                    minWidth: 132,
+                    padding: '10px 13px',
+                    borderRadius: 16,
                     border: `1px solid ${groupActive ? accentDeep : 'transparent'}`,
                     background: groupActive
                       ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`
@@ -521,12 +521,12 @@ export default function Layout({ children }) {
                     flexShrink: 0,
                   }}
                 >
-                  <div style={{ width: 34, height: 34, borderRadius: 12, background: groupActive ? 'rgba(255,255,255,0.24)' : (isLight ? '#f8fafc' : 'rgba(255,255,255,0.04)'), border: `1px solid ${groupActive ? 'rgba(255,255,255,0.2)' : panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon name={group.items[0]?.icon} color={groupActive ? '#111827' : '#dbe4f0'} size={18} stroke={1.85} />
+                  <div style={{ width: 30, height: 30, borderRadius: 10, background: groupActive ? 'rgba(255,255,255,0.24)' : (isLight ? '#f8fafc' : 'rgba(255,255,255,0.04)'), border: `1px solid ${groupActive ? 'rgba(255,255,255,0.2)' : panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon name={group.items[0]?.icon} color={groupActive ? '#111827' : '#dbe4f0'} size={16} stroke={1.85} />
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: groupActive ? '#111827' : moduleText, whiteSpace: 'nowrap' }}>{group.label}</div>
-                    <div style={{ fontSize: 11, color: groupActive ? 'rgba(17,24,39,0.78)' : mutedText }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: groupActive ? '#111827' : moduleText, whiteSpace: 'nowrap' }}>{group.label}</div>
+                    <div style={{ fontSize: 10, color: groupActive ? 'rgba(17,24,39,0.78)' : mutedText }}>
                       {group.items.length} screen{group.items.length === 1 ? '' : 's'}
                     </div>
                   </div>
@@ -542,26 +542,26 @@ export default function Layout({ children }) {
         </div>
 
         {activeGroup && (
-          <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 28, padding: '18px 18px 16px', boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', marginBottom: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 16, background: `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 16px 32px rgba(255,182,97,0.25)', flexShrink: 0 }}>
-                  <Icon name={activeGroup.items[0]?.icon} color="#111827" size={22} stroke={1.9} />
+          <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 22, padding: '12px 14px 12px', boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 14, background: `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 16px 32px rgba(255,182,97,0.25)', flexShrink: 0 }}>
+                  <Icon name={activeGroup.items[0]?.icon} color="#111827" size={18} stroke={1.9} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 17, fontWeight: 900, color: moduleText }}>{activeGroup.label}</div>
-                  <div style={{ fontSize: 13, color: mutedText }}>{activeGroup.description}</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: moduleText }}>{activeGroup.label}</div>
+                  <div style={{ fontSize: 12, color: mutedText }}>{activeGroup.description}</div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)', border: `1px solid ${panelBorder}`, borderRadius: 16, padding: '9px 14px' }}>
-                <Icon name="shift" color={mutedText} size={15} stroke={1.85} />
-                <span style={{ fontSize: 12, color: mutedText }}>Active screen:</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: accent }}>{activeItem?.label || activeGroup.label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)', border: `1px solid ${panelBorder}`, borderRadius: 14, padding: '7px 11px' }}>
+                <Icon name="shift" color={mutedText} size={13} stroke={1.85} />
+                <span style={{ fontSize: 11, color: mutedText }}>Active:</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: accent }}>{activeItem?.label || activeGroup.label}</span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {activeGroup.items.map(item => {
                 const itemBadgeCount = getBadgeCount(item);
                 const target = reviewLink(item, itemBadgeCount);
@@ -572,22 +572,22 @@ export default function Layout({ children }) {
                     style={({ isActive }) => ({
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 14px',
-                      borderRadius: 16,
+                      gap: 8,
+                      padding: '8px 12px',
+                      borderRadius: 14,
                       textDecoration: 'none',
                       background: isActive ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)` : (isLight ? '#ffffff' : 'rgba(255,255,255,0.03)'),
                       border: `1px solid ${isActive ? accentDeep : panelBorder}`,
                       color: isActive ? '#111827' : moduleText,
                       boxShadow: isActive ? '0 14px 28px rgba(255,182,97,0.24)' : 'none',
                       transition: 'all 0.18s ease',
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: 800,
                     })}
                   >
                     {({ isActive }) => (
                       <>
-                        <Icon name={item.icon} color={isActive ? '#111827' : '#cbd5e1'} size={16} stroke={1.85} />
+                        <Icon name={item.icon} color={isActive ? '#111827' : '#cbd5e1'} size={14} stroke={1.85} />
                         <span>{item.label}</span>
                         {itemBadgeCount > 0 && (
                           <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: isActive ? '#111827' : '#ef4444', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, lineHeight: 1 }}>
