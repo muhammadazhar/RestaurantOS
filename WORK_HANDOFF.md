@@ -469,6 +469,14 @@ Completed in this session:
 - Increased the auto-fit menu tile minimum width slightly so cards feel less cramped while still filling the row automatically.
 - Increased item title, price, prep-time, and variant text sizing to match the slightly wider tile layout.
 
+### POS Menu Tiles Widened Again For Full Variant Labels
+
+Completed in this session:
+
+- Increased the auto-fit menu tile minimum width again so short labels like `Regular` can remain fully visible without shrinking the cart area.
+- Adjusted the variant action row to a `minmax(0,1fr) auto` layout so the label and price share space more predictably inside each tile.
+- Increased item card height, image height, and main text sizing slightly again to match the wider tile footprint.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
