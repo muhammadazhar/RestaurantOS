@@ -455,6 +455,13 @@ Completed in this session:
 - Increased the POS menu grid again from four columns to five compact columns so the remaining empty menu-side gap is filled with items.
 - Reduced tile width, image height, and internal spacing carefully to fit the fifth column while keeping titles, prices, and variant actions visible.
 
+### POS Menu Grid Switched To Auto-Fit Columns
+
+Completed in this session:
+
+- Replaced the fixed menu-column count with an auto-fit `minmax(...)` grid so the POS menu automatically fills available width instead of leaving a fixed empty lane.
+- Allowed item cards to stretch to the width of each generated grid slot rather than staying locked to a hardcoded tile width.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

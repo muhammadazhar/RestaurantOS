@@ -871,7 +871,7 @@ export default function POS() {
           </aside>
 
           {/* Menu grid */}
-          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(5, 100px)', gridAutoRows: 'max-content', alignItems: 'start', justifyContent: 'start', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
+          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gridAutoRows: 'max-content', alignItems: 'start', justifyContent: 'stretch', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
             {filtered.map(item => {
               const variants = getItemVariants(item);
               const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
@@ -879,7 +879,7 @@ export default function POS() {
               return (
                 <div key={item.id} style={{
                   ...(itemCartQty ? S.cardSelected : S.card),
-                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 188, width: 100, justifySelf: 'stretch',
+                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 188, width: '100%', minWidth: 0, justifySelf: 'stretch',
                 }}>
                   {/* Image */}
                   <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 62, minHeight: 62, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
