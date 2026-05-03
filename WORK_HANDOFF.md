@@ -399,6 +399,14 @@ Completed in this session:
 - Reduced category rail width again so more usable width is handed to the main POS area.
 - Increased the cart panel width further so the right-side order area is visibly larger, not just slightly adjusted.
 
+### POS Grid Gaps Reduced And Cart Expanded Again
+
+Completed in this session:
+
+- Reduced horizontal spacing around the POS layout and between menu-item columns.
+- Forced menu cards to fully stretch within each of the three columns so no dead horizontal gutter remains between tiles.
+- Reduced category rail width again and increased cart column width again so the order panel gains more real space.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

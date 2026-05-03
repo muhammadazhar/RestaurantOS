@@ -674,7 +674,7 @@ export default function POS() {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 12, height: 'calc(100vh - 56px)', position: 'relative' }}>
+    <div style={{ display: 'flex', gap: 8, height: 'calc(100vh - 56px)', position: 'relative' }}>
 
       {/* POS section */}
       {shiftBlocked && <CleanPOSGateModal currentShift={currentShift} onUnlocked={() => loadShift()} />}
@@ -851,7 +851,7 @@ export default function POS() {
           </Badge>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '150px minmax(0,1fr)', gap: 8, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '136px minmax(0,1fr)', gap: 6, overflow: 'hidden' }}>
           <aside style={{ borderRadius: 12, padding: 8, ...S.panel, minHeight: 0, overflowY: 'auto' }}>
             <div style={{ fontSize: 11, fontWeight: 900, color: T.text, marginBottom: 8 }}>Categories</div>
             <div style={{ display: 'grid', gap: 5 }}>
@@ -880,7 +880,7 @@ export default function POS() {
           </aside>
 
           {/* Menu grid */}
-          <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gridAutoRows: '1fr', alignItems: 'stretch', gap: 8, alignContent: 'start', paddingBottom: 10 }}>
+          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gridAutoRows: 'max-content', alignItems: 'stretch', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
             {filtered.map(item => {
               const variants = getItemVariants(item);
               const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
@@ -888,10 +888,10 @@ export default function POS() {
               return (
                 <div key={item.id} style={{
                   ...(itemCartQty ? S.cardSelected : S.card),
-                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 0, aspectRatio: '1 / 1',
+                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 210, width: '100%', justifySelf: 'stretch',
                 }}>
                   {/* Image */}
-                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: '42%', minHeight: 82, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 92, minHeight: 92, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
                     {item.image_url ? (
                       <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
                         alt={item.name} onError={e => e.target.style.display='none'}
@@ -949,7 +949,7 @@ export default function POS() {
       </div>
 
       {/* POS section */}
-      <div style={{ width: 400, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+      <div style={{ width: 470, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
         <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
             Order - {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
