@@ -831,21 +831,12 @@ export default function POS() {
             ))}
           </div>
 
-          {/* Table selector (dine-in only) */}
-          {orderType === 'dine_in' && (
-            <select value={tableId} onChange={e => handleTableSelect(e.target.value)} style={{ background: T.card, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 8, padding: '6px 12px', fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none' }}>
-              <option value="">Select Table</option>
-              {tables.filter(t => t.status !== 'cleaning').map(t => (
-                <option key={t.id} value={t.id}>{t.label} - {t.section} ({t.status})</option>
-              ))}
-            </select>
-          )}
           {loadingTableOrder && <Badge color={T.accent} small>Loading table order</Badge>}
           {replaceTarget && <Badge color={T.red} small>Replacing: {replaceTarget.name}</Badge>}
 
           {/* Search */}
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu..."
-            style={{ marginLeft: 'auto', background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', width: 160 }} />
+            style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '6px 12px', color: T.text, fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', width: 160 }} />
           <Badge color={smartMenuSortEnabled ? T.accent : T.textDim} small>
             {smartMenuSortEnabled ? 'Smart order' : 'Manual order'}
           </Badge>
@@ -880,7 +871,7 @@ export default function POS() {
           </aside>
 
           {/* Menu grid */}
-          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, 166px)', gridAutoRows: 'max-content', alignItems: 'start', justifyContent: 'start', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
+          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(4, 126px)', gridAutoRows: 'max-content', alignItems: 'start', justifyContent: 'start', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
             {filtered.map(item => {
               const variants = getItemVariants(item);
               const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
@@ -888,10 +879,10 @@ export default function POS() {
               return (
                 <div key={item.id} style={{
                   ...(itemCartQty ? S.cardSelected : S.card),
-                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 194, width: 166, justifySelf: 'stretch',
+                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 194, width: 126, justifySelf: 'stretch',
                 }}>
                   {/* Image */}
-                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 92, minHeight: 92, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 76, minHeight: 76, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
                     {item.image_url ? (
                       <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
                         alt={item.name} onError={e => e.target.style.display='none'}
@@ -902,12 +893,12 @@ export default function POS() {
                     {item.is_popular && <div style={{ position: 'absolute', top: 4, right: 4 }}><Badge color={T.accent} small>Popular</Badge></div>}
                     {inCart && <div style={{ position: 'absolute', top: 4, left: 4, background: T.accent, color: '#fff', borderRadius: 20, padding: '1px 6px', fontSize: 9, fontWeight: 800 }}>x{inCart.qty}</div>}
                   </div>
-                  <div style={{ padding: '9px 9px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
+                  <div style={{ padding: '8px 8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
                     <div>
-                      <div title={item.name} style={{ fontSize: 14, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.28, marginBottom: 6, minHeight: 36, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.name}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 13 }}>From PKR {Number(item.price).toLocaleString()}</span>
-                        <span style={{ fontSize: 10, color: T.textDim }}>{item.prep_time_min ? `~${item.prep_time_min}m` : ''}</span>
+                      <div title={item.name} style={{ fontSize: 13, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.24, marginBottom: 6, minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.name}</div>
+                      <div style={{ display: 'grid', gap: 2 }}>
+                        <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 12 }}>From PKR {Number(item.price).toLocaleString()}</span>
+                        <span style={{ fontSize: 10, color: T.textDim }}>{item.prep_time_min ? `~${item.prep_time_min}m prep` : ''}</span>
                       </div>
                     </div>
                     <div style={{ display: 'grid', gap: 5, marginTop: 8 }}>
@@ -918,7 +909,7 @@ export default function POS() {
                           <button key={cartKey} onClick={() => handleMenuItemClick(item, variant)} style={{
                             borderRadius: 8,
                             ...(selected ? S.active : S.inactive),
-                            padding: '5px 7px',
+                            padding: '5px 6px',
                             minHeight: 26,
                             cursor: 'pointer',
                             display: 'flex',
@@ -926,7 +917,7 @@ export default function POS() {
                             gap: 10,
                             fontWeight: 800,
                             width: '100%',
-                            fontSize: 11.5,
+                            fontSize: 10.5,
                           }}>
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{variant.name}</span>
                             <span>PKR {Number(variant.price).toLocaleString()}</span>
@@ -1011,6 +1002,16 @@ export default function POS() {
           {/* Guest count + Waiter (dine-in) */}
           {orderType === 'dine_in' && (
             <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Table</span>
+                <select value={tableId} onChange={e => handleTableSelect(e.target.value)}
+                  style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
+                  <option value="">Select table</option>
+                  {tables.filter(t => t.status !== 'cleaning').map(t => (
+                    <option key={t.id} value={t.id}>{t.label} - {t.section} ({t.status})</option>
+                  ))}
+                </select>
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Guests</span>
                 <button onClick={() => setGuestCount(g => Math.max(1, g-1))} style={{ width: 24, height: 24, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>-</button>

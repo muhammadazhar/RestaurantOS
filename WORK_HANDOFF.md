@@ -440,6 +440,14 @@ Completed in this session:
 - Increased the cart column top offset so the cart now aligns with the top of the categories/menu panel instead of visually starting near the search row.
 - This keeps the cart and menu panels on the same horizontal start line and better reflects the user's marked alignment reference.
 
+### POS Menu Expanded To Four Columns And Table Selector Moved Into Cart
+
+Completed in this session:
+
+- Changed the POS menu grid from three columns to four compact columns so the empty lane in the menu area is used by actual items.
+- Moved the dine-in `Select Table` dropdown out of the top bar and into the cart panel above the `Waiter` selector.
+- Left-aligned the menu search field in the top bar after removing the table selector from that row.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
