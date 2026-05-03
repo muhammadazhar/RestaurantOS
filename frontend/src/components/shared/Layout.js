@@ -5,12 +5,14 @@ import { useSocket } from '../../context/SocketContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
   getRestaurantSettings,
+  getMenu,
   getOrders,
   getPhoneOrders,
   getMySupportTickets,
   adminGetAllTickets,
 } from '../../services/api';
 import LicenseGate from './LicenseGate';
+import { normalizeWorkflowSettings } from '../../utils/workflowSettings';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
   || (window.location.protocol + '//' + window.location.hostname + ':5000');
@@ -145,6 +147,7 @@ export default function Layout({ children }) {
   const [logoUrl,   setLogoUrl]         = useState(null);
   const [basePricing, setBasePricing]   = useState([]);
   const [badgeCounts, setBadgeCounts]   = useState({ orders: 0, support: 0, adminSupport: 0 });
+  const [workflowSettings, setWorkflowSettings] = useState(normalizeWorkflowSettings());
 
   useEffect(() => {
     if (!user?.isSuperAdmin && hasPermission('settings')) {
@@ -153,6 +156,14 @@ export default function Layout({ children }) {
       }).catch(() => {});
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!user?.isSuperAdmin && hasModule('base')) {
+      getMenu()
+        .then(r => setWorkflowSettings(normalizeWorkflowSettings(r.data?.settings?.workflow_settings)))
+        .catch(() => {});
+    }
+  }, [user, hasModule]);
 
   // Load pricing for LicenseGate if base is expired
   const baseExpired = !user?.isSuperAdmin && user && !hasModule('base');
@@ -245,7 +256,10 @@ export default function Layout({ children }) {
 
   const visibleGroups = NAV_GROUPS
     .filter(canSeeGroup)
-    .map(g => ({ ...g, items: g.items.filter(canSee) }))
+    .map(g => ({
+      ...g,
+      items: g.items.filter(item => canSee(item) && (item.to !== '/kitchen' || workflowSettings.use_kitchen_workflow)),
+    }))
     .filter(g => g.items.length > 0);
 
   // Track which groups are open; default all open

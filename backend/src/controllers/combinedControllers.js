@@ -1,5 +1,6 @@
 // ── tables.js ─────────────────────────────────────────────────────────────────
 const db = require('../config/db');
+const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
 
 const DEFAULT_TAX_RATES = [
   { id: 'gst', name: 'Sales Tax (GST)', rate: 8, applies_to: 'all', enabled: true },
@@ -427,6 +428,7 @@ exports.getMenu = async (req, res) => {
         pos_smart_menu_sort_enabled: settings.pos_smart_menu_sort_enabled === true,
         tax_rates: Array.isArray(settings.tax_rates) ? settings.tax_rates : DEFAULT_TAX_RATES,
         print_templates: settings.print_templates || null,
+        workflow_settings: normalizeWorkflowSettings(settings.workflow_settings),
       },
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
@@ -1808,7 +1810,7 @@ exports.completeSetup = async (req, res) => {
   try {
     await client.query('BEGIN');
     const { restaurantId } = req.user;
-    const { tables, categories, restaurant_info } = req.body;
+    const { tables, categories, restaurant_info, workflow_settings } = req.body;
 
     // Update restaurant info if provided
     if (restaurant_info) {
@@ -1861,6 +1863,15 @@ exports.completeSetup = async (req, res) => {
           );
         }
       }
+    }
+
+    if (workflow_settings) {
+      await client.query(
+        `UPDATE restaurants
+         SET settings = COALESCE(settings,'{}'::jsonb) || jsonb_build_object('workflow_settings', $1::jsonb)
+         WHERE id=$2`,
+        [JSON.stringify(normalizeWorkflowSettings(workflow_settings)), restaurantId]
+      );
     }
 
     // Mark setup as complete
@@ -1916,17 +1927,31 @@ exports.getRestaurantSettings = async (req, res) => {
       `SELECT settings, logo_url, name FROM restaurants WHERE id=$1`, [req.user.restaurantId]
     );
     const row = result.rows[0] || {};
-    res.json({ ...(row.settings || {}), logo_url: row.logo_url, name: row.name });
+    const settings = row.settings || {};
+    res.json({
+      ...settings,
+      workflow_settings: normalizeWorkflowSettings(settings.workflow_settings),
+      logo_url: row.logo_url,
+      name: row.name,
+    });
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
 
 exports.updateRestaurantSettings = async (req, res) => {
   try {
+    const nextSettings = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(nextSettings, 'workflow_settings')) {
+      nextSettings.workflow_settings = normalizeWorkflowSettings(nextSettings.workflow_settings);
+    }
     const result = await db.query(
       `UPDATE restaurants SET settings = settings || $1::jsonb WHERE id=$2 RETURNING settings`,
-      [JSON.stringify(req.body), req.user.restaurantId]
+      [JSON.stringify(nextSettings), req.user.restaurantId]
     );
-    res.json(result.rows[0]?.settings || {});
+    const settings = result.rows[0]?.settings || {};
+    res.json({
+      ...settings,
+      workflow_settings: normalizeWorkflowSettings(settings.workflow_settings),
+    });
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
 

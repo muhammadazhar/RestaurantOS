@@ -5,6 +5,7 @@ import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { mergePrintTemplates, renderKotHtml, renderReceiptHtml } from '../../utils/printTemplates';
+import { getEnabledOrderTypes, getPosInitialStatus, normalizeWorkflowSettings } from '../../utils/workflowSettings';
 import toast from 'react-hot-toast';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
@@ -211,6 +212,22 @@ export default function POS() {
     const timer = setInterval(check, 30000);
     return () => clearInterval(timer);
   }, [currentShift]);
+
+  const workflowSettings = normalizeWorkflowSettings(menu.settings?.workflow_settings);
+  const enabledOrderTypes = getEnabledOrderTypes(workflowSettings);
+  const showTableSelection = orderType === 'dine_in' && workflowSettings.require_table_selection;
+  const showWaiterSelection = orderType === 'dine_in' && workflowSettings.require_waiter_selection;
+
+  useEffect(() => {
+    if (!enabledOrderTypes.includes(orderType)) {
+      const fallbackOrderType = enabledOrderTypes[0] || 'dine_in';
+      setOrderType(fallbackOrderType);
+      if (fallbackOrderType !== 'dine_in') {
+        setTableId('');
+        clearLoadedOrder();
+      }
+    }
+  }, [enabledOrderTypes, orderType]);
 
   const cats = [{ id: 'all', name: 'All' }, ...menu.categories];
   const categoryCounts = menu.items.reduce((acc, item) => {
@@ -478,7 +495,8 @@ export default function POS() {
 
   const sendToKitchen = async () => {
     if (!cart.length)                             return toast.error('Cart is empty');
-    if (orderType === 'dine_in' && !tableId)      return toast.error('Select a table');
+    if (showTableSelection && !tableId)           return toast.error('Select a table');
+    if (showWaiterSelection && !waiterId)         return toast.error('Assign a waiter');
     if (['takeaway','delivery'].includes(orderType) && !custName) return toast.error('Customer name required');
     const orderItems = activeTableOrder ? cart.filter(c => !c.existing_order_item) : cart;
     if (activeTableOrder && !orderItems.length) return toast.error('Add a new item, or use Return/Replace on existing items.');
@@ -493,17 +511,20 @@ export default function POS() {
             notes: c.notes || undefined,
           })),
         });
-        printKOT(res.data.order, orderItems);
+        if (workflowSettings.use_kitchen_workflow) {
+          printKOT(res.data.order, orderItems);
+        }
         setActiveTableOrder(res.data.order);
         setCart(cartFromOrder(res.data.order));
         setReplaceTarget(null);
-        toast.success('Items added to order and sent to kitchen');
+        toast.success(workflowSettings.use_kitchen_workflow ? 'Items added to order and sent to kitchen' : 'Items added to order');
         load();
         return;
       }
       const res = await createOrder({
-        table_id:          tableId || null,
+        table_id:          showTableSelection ? tableId || null : null,
         order_type:        orderType,
+        initial_status:    getPosInitialStatus(orderType, workflowSettings),
         guest_count:       parseInt(guestCount) || 1,
         shift_id:          currentShift?.shift?.id || undefined,
         shift_session_id:  currentShift?.shift?.session_id || undefined,
@@ -513,7 +534,7 @@ export default function POS() {
         customer_lat:      orderType === 'delivery' ? custLat  || undefined : undefined,
         customer_lng:      orderType === 'delivery' ? custLng  || undefined : undefined,
         rider_id:          orderType === 'delivery' ? delivRiderId || undefined : undefined,
-        waiter_id:         orderType === 'dine_in'  ? waiterId    || undefined : undefined,
+        waiter_id:         showWaiterSelection ? waiterId || undefined : undefined,
         notes:             orderNotes || undefined,
         discount_amount:   discountAmt || undefined,
         items: cart.map(c => ({
@@ -522,8 +543,9 @@ export default function POS() {
           notes: c.notes || undefined,
         })),
       });
-      // Print KOT first for all order types
-      printKOT(res.data, cart);
+      if (workflowSettings.use_kitchen_workflow) {
+        printKOT(res.data, cart);
+      }
 
       if (['takeaway', 'delivery'].includes(orderType)) {
         // Store order + local totals for pay/print modal
@@ -543,7 +565,7 @@ export default function POS() {
         setTakePrintRdy(false);
         setShowPayModal(true);
       } else {
-        toast.success('Order sent to kitchen!');
+        toast.success(workflowSettings.use_kitchen_workflow ? 'Order sent to kitchen!' : 'Order placed!');
         setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); setGuestCount(1);
       }
     } catch (err) {
@@ -822,6 +844,7 @@ export default function POS() {
           {/* Order type */}
           <div style={{ display: 'flex', gap: 6 }}>
             {[['dine_in','Dine In'],['takeaway','Takeaway'],['delivery','Delivery'],['online','Online']]
+              .filter(([value]) => enabledOrderTypes.includes(value))
               .map(([v,lbl]) => (
               <button key={v} onClick={() => { setOrderType(v); if (v !== 'dine_in') { setTableId(''); clearLoadedOrder(); } }} style={{
                 ...(orderType === v ? S.active : S.inactive),
@@ -944,7 +967,9 @@ export default function POS() {
       <div style={{ width: 700, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', paddingTop: 78 }}>
         <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
-            Order - {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
+            Order - {orderType === 'dine_in'
+              ? (showTableSelection ? (tables.find(t => t.id === tableId)?.label || 'No table') : 'Dine In')
+              : orderType.replace('_',' ')}
           </div>
           <div style={{ fontSize: 11, color: T.textMid, marginBottom: 12 }}>
             {cart.length} item{cart.length !== 1 ? 's' : ''} - tap to add
@@ -1003,32 +1028,36 @@ export default function POS() {
           {/* Guest count + Waiter (dine-in) */}
           {orderType === 'dine_in' && (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Table</span>
-                <select value={tableId} onChange={e => handleTableSelect(e.target.value)}
-                  style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
-                  <option value="">Select table</option>
-                  {tables.filter(t => t.status !== 'cleaning').map(t => (
-                    <option key={t.id} value={t.id}>{t.label} - {t.section} ({t.status})</option>
-                  ))}
-                </select>
-              </div>
+              {showTableSelection && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Table</span>
+                  <select value={tableId} onChange={e => handleTableSelect(e.target.value)}
+                    style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: tableId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
+                    <option value="">Select table</option>
+                    {tables.filter(t => t.status !== 'cleaning').map(t => (
+                      <option key={t.id} value={t.id}>{t.label} - {t.section} ({t.status})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Guests</span>
                 <button onClick={() => setGuestCount(g => Math.max(1, g-1))} style={{ width: 24, height: 24, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>-</button>
                 <span style={{ fontWeight: 800, fontFamily: 'monospace', minWidth: 20, textAlign: 'center', color: T.text }}>{guestCount}</span>
                 <button onClick={() => setGuestCount(g => g+1)} style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>+</button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Waiter</span>
-                <select value={waiterId} onChange={e => setWaiterId(e.target.value)}
-                  style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: waiterId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
-                  <option value="">Assign waiter</option>
-                  {employees.filter(e => ['server','waiter'].includes((e.role_name||'').toLowerCase())).map(e => (
-                    <option key={e.id} value={e.id}>{e.full_name}</option>
-                  ))}
-                </select>
-              </div>
+              {showWaiterSelection && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Waiter</span>
+                  <select value={waiterId} onChange={e => setWaiterId(e.target.value)}
+                    style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: waiterId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
+                    <option value="">Assign waiter</option>
+                    {employees.filter(e => ['server','waiter'].includes((e.role_name||'').toLowerCase())).map(e => (
+                      <option key={e.id} value={e.id}>{e.full_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           )}
 
@@ -1142,7 +1171,7 @@ export default function POS() {
               {activeTableOrder ? (
                 <>
                   <Btn onClick={sendToKitchen} disabled={sending || !newCartItems.length} style={{ width: '100%', padding: '13px' }}>
-                    {sending ? 'Sending...' : newCartItems.length ? `Send Added Items (${newCartItems.length})` : 'Add Items to Send'}
+                    {sending ? 'Sending...' : newCartItems.length ? `${workflowSettings.use_kitchen_workflow ? 'Send' : 'Add'} Added Items (${newCartItems.length})` : 'Add Items'}
                   </Btn>
                   <Btn variant="ghost" onClick={() => setReplaceTarget(null)} disabled={!replaceTarget || sending} style={{ width: '100%', marginTop: 6 }}>
                     {replaceTarget ? 'Cancel Replacement Selection' : 'Select an Item to Replace'}
@@ -1153,7 +1182,7 @@ export default function POS() {
               ) : (
                 <>
                   <Btn onClick={sendToKitchen} disabled={sending} style={{ width: '100%', padding: '13px' }}>
-                    {sending ? 'Sending...' : orderType === 'delivery' ? 'Place Delivery Order' : 'Send to Kitchen'}
+                    {sending ? 'Sending...' : orderType === 'delivery' ? 'Place Delivery Order' : (workflowSettings.use_kitchen_workflow ? 'Send to Kitchen' : 'Place Order')}
                   </Btn>
                   <Btn variant="ghost" onClick={() => { setCart([]); setDiscount(''); setCustName(''); setCustPhone(''); setCustAddr(''); setCustLat(''); setCustLng(''); setDelivRiderId(''); setWaiterId(''); setOrderNotes(''); }} style={{ width: '100%', marginTop: 6 }}>Clear Cart</Btn>
                 </>

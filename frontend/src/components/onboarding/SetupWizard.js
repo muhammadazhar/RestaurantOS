@@ -2,13 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { getSetupStatus, completeSetup, createMenuItem } from '../../services/api';
+import { getSetupStatus, completeSetup, createMenuItem, getRestaurantSettings } from '../../services/api';
+import { DEFAULT_WORKFLOW_SETTINGS, normalizeWorkflowSettings } from '../../utils/workflowSettings';
 import toast from 'react-hot-toast';
 import API from '../../services/api';
 
 // ─── Step definitions ─────────────────────────────────────────────────────────
 const WIZARD_STEPS = [
   { id: 'welcome',    icon: '👋', title: 'Welcome',          subtitle: 'Quick overview of what we\'ll set up' },
+  { id: 'workflow',   icon: 'WF', title: 'POS Workflow',       subtitle: 'Choose how your restaurant takes and processes orders' },
   { id: 'tables',     icon: '🪑', title: 'Dining Tables',    subtitle: 'Configure your floor plan' },
   { id: 'categories', icon: '📋', title: 'Menu Categories',  subtitle: 'Organise your menu sections' },
   { id: 'menu',       icon: '🍽', title: 'First Menu Items',  subtitle: 'Add a few dishes to get started' },
@@ -64,11 +66,13 @@ export default function SetupWizard() {
   const [staffList,    setStaffList]    = useState([{ full_name:'', email:'', role_id:'', phone:'' }]);
   const [roles,        setRoles]        = useState([]);
   const [skipSteps,    setSkipSteps]    = useState({});
+  const [workflow,     setWorkflow]     = useState(DEFAULT_WORKFLOW_SETTINGS);
 
   // Load setup status + roles
   useEffect(() => {
     getSetupStatus().then(r => setStatus(r.data)).catch(console.error);
     getRoles().then(r => setRoles(r.data)).catch(console.error);
+    getRestaurantSettings().then(r => setWorkflow(normalizeWorkflowSettings(r.data?.workflow_settings))).catch(() => {});
   }, []);
 
   const cur = WIZARD_STEPS[step];
@@ -103,11 +107,24 @@ export default function SetupWizard() {
   const setStaff = (i, k, v) => setStaffList(list => list.map((s, idx) => idx === i ? { ...s, [k]: v } : s));
   const addStaff = () => setStaffList(list => [...list, { full_name:'', email:'', role_id:'', phone:'' }]);
   const removeStaff = (i) => setStaffList(list => list.filter((_,idx) => idx !== i));
+  const setWorkflowField = (k, v) => setWorkflow(current => ({ ...current, [k]: v }));
+  const setOrderTypeEnabled = (k, v) => setWorkflow(current => ({
+    ...current,
+    enabled_order_types: {
+      ...current.enabled_order_types,
+      [k]: v,
+    },
+  }));
 
   // ── Save each step and advance ─────────────────────────────────────────────
   const saveAndNext = async () => {
     setSaving(true);
     try {
+      if (cur.id === 'workflow') {
+        await completeSetup({ workflow_settings: workflow, tables: [], categories: [], restaurant_info: null });
+        toast.success('Workflow settings saved!');
+      }
+
       if (cur.id === 'tables' && !skipSteps.tables) {
         if (tables.length === 0) return toast.error('Add at least one table, or skip this step');
         await completeSetup({ tables, categories: [], restaurant_info: null });
@@ -155,7 +172,12 @@ export default function SetupWizard() {
         return;
       }
 
-      setStep(s => s + 1);
+      if (cur.id === 'workflow' && workflow.require_table_selection === false) {
+        setSkipSteps(s => ({ ...s, tables: true }));
+        setStep(s => Math.min(s + 2, WIZARD_STEPS.length - 1));
+      } else {
+        setStep(s => s + 1);
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Save failed');
     } finally { setSaving(false); }
@@ -239,6 +261,49 @@ export default function SetupWizard() {
           )}
 
           {/* ── Tables ── */}
+          {cur.id === 'workflow' && (
+            <div>
+              <div style={{ background: T.accentGlow, border:`1px solid ${T.accent}44`, borderRadius:12, padding:'12px 16px', marginBottom:16, fontSize:12, color:T.textMid }}>
+                Configure the order workflow this restaurant actually uses. These choices will control what appears in POS / Orders later.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Workflow Rules</div>
+                  {[
+                    ['use_kitchen_workflow', 'Use kitchen workflow', 'Send orders through kitchen statuses before service.'],
+                    ['require_table_selection', 'Require table for dine-in', 'Show and enforce table selection in POS.'],
+                    ['require_waiter_selection', 'Require waiter for dine-in', 'Show and enforce waiter selection in POS.'],
+                  ].map(([key, label, hint]) => (
+                    <label key={key} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 14px', marginBottom: 10, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={workflow[key] !== false} onChange={e => setWorkflowField(key, e.target.checked)} style={{ marginTop: 2 }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{label}</div>
+                        <div style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>{hint}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Order Modes</div>
+                  {[
+                    ['dine_in', 'Dine In'],
+                    ['takeaway', 'Takeaway'],
+                    ['delivery', 'Delivery'],
+                    ['online', 'Online'],
+                  ].map(([key, label]) => (
+                    <label key={key} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 14px', marginBottom: 10, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={workflow.enabled_order_types?.[key] !== false} onChange={e => setOrderTypeEnabled(key, e.target.checked)} style={{ marginTop: 2 }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{label}</div>
+                        <div style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>Available inside POS / Orders.</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {cur.id === 'tables' && (
             <div>
               {/* Presets */}

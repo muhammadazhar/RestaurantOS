@@ -4,6 +4,7 @@ import { getOrders, updateOrderStatus, getPhoneOrders, assignRider, getRiders, g
 import { useAuth } from '../../context/AuthContext';
 import { Card, Badge, Spinner, Btn, Modal, Select, PageHeader, T, useT } from '../shared/UI';
 import { mergePrintTemplates, renderReceiptHtml } from '../../utils/printTemplates';
+import { getNextOrderStatus, normalizeWorkflowSettings } from '../../utils/workflowSettings';
 import toast from 'react-hot-toast';
 
 const STATUS_COLOR = {
@@ -123,10 +124,10 @@ function printReceipt(order, printSettings) {
 }
 
 // ─── Order detail modal ───────────────────────────────────────────────────────
-function OrderDetailModal({ order, open, onClose, onStatusChange, onCancelOnline, onCompleteRefund, canManageRefunds, printSettings }) {
+function OrderDetailModal({ order, open, onClose, onStatusChange, onCancelOnline, onCompleteRefund, canManageRefunds, printSettings, workflowSettings }) {
   if (!order) return null;
-  const canAdvance = !['paid','cancelled','served'].includes(order.status);
-  const NEXT = { pending:'confirmed', confirmed:'preparing', preparing:'ready', ready:'served', served:'paid' };
+  const nextStatus = getNextOrderStatus(order.status, workflowSettings);
+  const canAdvance = !!nextStatus && !['paid','cancelled'].includes(order.status);
 
   return (
     <Modal open={open} onClose={onClose} title={`Order ${order.order_number}`} width={520}>
@@ -232,11 +233,11 @@ function OrderDetailModal({ order, open, onClose, onStatusChange, onCancelOnline
       {/* Actions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {canAdvance && (
-          <Btn onClick={() => { onStatusChange(order.id, NEXT[order.status]); onClose(); }} style={{ width: '100%' }}>
-            Advance → {NEXT[order.status]}
+          <Btn onClick={() => { onStatusChange(order.id, nextStatus); onClose(); }} style={{ width: '100%' }}>
+            Advance → {nextStatus}
           </Btn>
         )}
-        {order.status === 'served' && order.payment_status !== 'paid' && (
+        {order.status === 'served' && order.payment_status !== 'paid' && !canAdvance && (
           <Btn onClick={() => { onStatusChange(order.id, 'paid'); onClose(); }} style={{ width: '100%', background: T.green, color: '#fff', border: 'none' }}>
             ✓ Mark as Paid
           </Btn>
@@ -437,6 +438,7 @@ export default function Orders() {
   const [dateFrom, setDateFrom] = useState(today());
   const [dateTo,   setDateTo]   = useState(today());
   const [printSettings, setPrintSettings] = useState(null);
+  const [workflowSettings, setWorkflowSettings] = useState(normalizeWorkflowSettings());
   const [cancelModal, setCancelModal] = useState({ open: false, order: null, reason: '', saving: false });
   const [refundModal, setRefundModal] = useState({ open: false, order: null, reference: '', note: '', saving: false });
   const reviewOnly = statusF === REVIEW_ORDER_STATUSES.join(',');
@@ -476,7 +478,10 @@ export default function Orders() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    getRestaurantSettings().then(r => setPrintSettings(r.data)).catch(() => {});
+    getRestaurantSettings().then(r => {
+      setPrintSettings(r.data);
+      setWorkflowSettings(normalizeWorkflowSettings(r.data?.workflow_settings));
+    }).catch(() => {});
   }, []);
 
   const toggleReviewOnly = () => {
@@ -802,6 +807,7 @@ export default function Orders() {
         onCompleteRefund={(order) => setRefundModal({ open: true, order, reference: '', note: '', saving: false })}
         canManageRefunds={canManageRefunds}
         printSettings={printSettings}
+        workflowSettings={workflowSettings}
       />
 
       <Modal open={cancelModal.open} onClose={() => !cancelModal.saving && setCancelModal({ open: false, order: null, reason: '', saving: false })} title="Cancel Online Order" width={460}>

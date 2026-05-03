@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
 
 const DEFAULT_TIMEZONE = 'Asia/Karachi';
 
@@ -22,6 +23,16 @@ const DEFAULT_TAX_RATES = [
 async function getRestaurantTimezone(client, restaurantId) {
   const result = await client.query(`SELECT settings->>'timezone' AS timezone FROM restaurants WHERE id=$1`, [restaurantId]);
   return result.rows[0]?.timezone || DEFAULT_TIMEZONE;
+}
+
+async function getRestaurantWorkflowSettings(client, restaurantId) {
+  const result = await client.query(
+    `SELECT settings->'workflow_settings' AS workflow_settings
+     FROM restaurants
+     WHERE id=$1`,
+    [restaurantId]
+  );
+  return normalizeWorkflowSettings(result.rows[0]?.workflow_settings);
 }
 
 // ─── Auto-journalize a paid order ─────────────────────────────────────────────
@@ -484,9 +495,27 @@ exports.createOrder = async (req, res) => {
     const { restaurantId, id: employeeId } = req.user;
     const { table_id, order_type = 'dine_in', items, guest_count = 1,
       customer_name, customer_phone, customer_address, customer_lat, customer_lng,
-      rider_id, waiter_id, notes, source = 'pos', discount_amount } = req.body;
+      rider_id, waiter_id, notes, source = 'pos', discount_amount, initial_status } = req.body;
 
     if (!items || !items.length) return res.status(400).json({ error: 'Items required' });
+    const workflowSettings = await getRestaurantWorkflowSettings(client, restaurantId);
+    const enabledOrderTypes = workflowSettings.enabled_order_types || {};
+    if (enabledOrderTypes[order_type] === false) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'This order type is disabled in workflow settings.' });
+    }
+    if (order_type === 'dine_in' && workflowSettings.require_table_selection && !table_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Table selection is required for dine-in orders.' });
+    }
+    if (order_type === 'dine_in' && workflowSettings.require_waiter_selection && !waiter_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Waiter selection is required for dine-in orders.' });
+    }
+    const allowedInitialStatuses = workflowSettings.use_kitchen_workflow
+      ? ['pending']
+      : ['pending', 'confirmed', 'served'];
+    const orderStatus = allowedInitialStatuses.includes(initial_status) ? initial_status : 'pending';
 
     // ── Shift + Attendance validation (all POS users, no exceptions) ───────────
     let shiftId = null;
@@ -585,8 +614,8 @@ exports.createOrder = async (req, res) => {
                           status, source, guest_count, subtotal, discount_amount, tax_amount, total_amount,
                           customer_name, customer_phone, customer_lat, customer_lng,
                           delivery_address, rider_id, waiter_id, notes)
-       VALUES($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
-      [restaurantId, table_id || null, employeeId, shiftId, shiftSessionId, orderNumber, order_type, source,
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
+      [restaurantId, table_id || null, employeeId, shiftId, shiftSessionId, orderNumber, order_type, orderStatus, source,
         guest_count, subtotal, discAmt, taxAmount, totalAmount,
         customer_name || null, customer_phone || null,
         customer_lat || null, customer_lng || null,

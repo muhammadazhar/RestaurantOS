@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, Badge, T, useT } from '../shared/UI';
 import { getRestaurantSettings, updateRestaurantSettings, uploadRestaurantLogo, getRoles, createRole, updateRole, testWhatsAppMsg } from '../../services/api';
 import { DEFAULT_PRINT_TEMPLATES, KOT_FIELDS, RECEIPT_FIELDS, mergePrintTemplates, renderKotHtml, renderReceiptHtml } from '../../utils/printTemplates';
+import { DEFAULT_WORKFLOW_SETTINGS, normalizeWorkflowSettings } from '../../utils/workflowSettings';
 import toast from 'react-hot-toast';
 
 const IMG_BASE = process.env.REACT_APP_SOCKET_URL
@@ -974,10 +975,90 @@ function PrintTemplateEditor() {
   );
 }
 
+function WorkflowSettings() {
+  useT();
+  const [workflow, setWorkflow] = useState(DEFAULT_WORKFLOW_SETTINGS);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getRestaurantSettings()
+      .then(r => setWorkflow(normalizeWorkflowSettings(r.data?.workflow_settings)))
+      .catch(() => {});
+  }, []);
+
+  const setWorkflowField = (key, value) => setWorkflow(current => ({ ...current, [key]: value }));
+  const setOrderTypeEnabled = (key, value) => setWorkflow(current => ({
+    ...current,
+    enabled_order_types: {
+      ...current.enabled_order_types,
+      [key]: value,
+    },
+  }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateRestaurantSettings({ workflow_settings: workflow });
+      toast.success('Workflow settings saved!');
+    } catch {
+      toast.error('Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const orderTypeOptions = [
+    ['dine_in', 'Dine In', 'Use tables and dine-in service flow.'],
+    ['takeaway', 'Takeaway', 'Allow walk-in and takeaway orders from POS.'],
+    ['delivery', 'Delivery', 'Allow delivery orders with rider assignment.'],
+    ['online', 'Online', 'Show online order mode in POS and order history.'],
+  ];
+
+  return (
+    <div>
+      <SectionHeader icon="WF" title="POS Workflow" subtitle="Control which POS / Orders steps your restaurant uses." />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 20 }}>
+        <div>
+          <div style={{ fontSize: 11, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Workflow Rules</div>
+          <Card style={{ padding: 16 }}>
+            <Toggle value={workflow.use_kitchen_workflow} onChange={value => setWorkflowField('use_kitchen_workflow', value)} label="Use kitchen workflow (pending → preparing → ready → served)" />
+            <Toggle value={workflow.require_table_selection} onChange={value => setWorkflowField('require_table_selection', value)} label="Require table selection for dine-in" />
+            <Toggle value={workflow.require_waiter_selection} onChange={value => setWorkflowField('require_waiter_selection', value)} label="Require waiter selection for dine-in" />
+          </Card>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, color: T.textMid, letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Enabled Order Modes</div>
+          <Card style={{ padding: 16 }}>
+            {orderTypeOptions.map(([key, label, hint], index) => (
+              <div key={key} style={{ padding: '12px 0', borderBottom: index === orderTypeOptions.length - 1 ? 'none' : `1px solid ${T.border}` }}>
+                <Toggle value={workflow.enabled_order_types?.[key] !== false} onChange={value => setOrderTypeEnabled(key, value)} label={label} />
+                <div style={{ fontSize: 11, color: T.textDim, marginTop: -2 }}>{hint}</div>
+              </div>
+            ))}
+          </Card>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 18, background: T.accentGlow, border: `1px solid ${T.accent}33`, borderRadius: 12, padding: '14px 16px', fontSize: 12, color: T.textMid }}>
+        Setup Wizard and POS / Orders will follow these workflow settings. Turn kitchen workflow off for restaurants that do not use KDS steps, and disable table or waiter selection when they are not required.
+      </div>
+
+      <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={save} disabled={saving} style={{ background: saving ? T.border : T.accent, color: saving ? T.textDim : '#fff', border: 'none', borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
+          {saving ? 'Saving...' : 'Save Workflow'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'general',      icon: '🏪', label: 'General Info'       },
   { id: 'tax',          icon: '🧾', label: 'Tax Rates'          },
   { id: 'payments',     icon: '💳', label: 'Payment Methods'    },
+  { id: 'workflow',     icon: 'WF', label: 'POS Workflow'       },
   { id: 'roles',        icon: '🔐', label: 'Roles & Permissions'},
   { id: 'alerts',       icon: '⚠️', label: 'Alert Thresholds'   },
   { id: 'integrations', icon: '🔌', label: 'Integrations'        },
@@ -992,6 +1073,7 @@ export default function Settings() {
     tax:          <TaxRates />,
     printing:     <PrintTemplateEditor />,
     payments:     <PaymentMethods />,
+    workflow:     <WorkflowSettings />,
     roles:        <RolesPermissions />,
     alerts:       <AlertThresholds />,
     integrations: <Integrations />,

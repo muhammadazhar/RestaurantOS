@@ -525,3 +525,35 @@ These warnings existed before and the build succeeds.
   - `frontend/.env`
 
 Note: a later local status check also showed a lot of unrelated `node_modules`, build, cache, upload, and env noise. Do not clean or stage that unless the user explicitly asks.
+
+## Latest Completed Change
+
+- Added restaurant-level POS workflow settings so setup and settings can control:
+  - kitchen workflow on/off
+  - require table selection for dine-in
+  - require waiter selection for dine-in
+  - enabled order modes: dine-in, takeaway, delivery, online
+- Added backend workflow normalization and persistence in:
+  - `backend/src/utils/workflowSettings.js`
+  - `backend/src/controllers/combinedControllers.js`
+- `GET /menu` and restaurant settings now return normalized `workflow_settings`.
+- Setup Wizard now includes a `POS Workflow` step and saves workflow choices during onboarding.
+- Settings now include a `POS Workflow` screen for later changes.
+- POS now follows workflow settings by:
+  - hiding disabled order modes
+  - hiding table/waiter selectors when not required
+  - validating table/waiter only when enabled
+  - using workflow-based initial order status
+  - skipping KOT printing and changing button/success text when kitchen workflow is disabled
+- Orders screen now advances order status using workflow-based next-step logic.
+- Sidebar hides `Kitchen Display` when kitchen workflow is disabled.
+
+Verification run for this change:
+
+```powershell
+node --check backend/src/controllers/ordersController.js
+node --check backend/src/controllers/combinedControllers.js
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.
