@@ -97,7 +97,7 @@ const EmpAvatar = ({ emp, size = 48 }) => {
   );
 };
 
-const EmpCard = ({ emp, onEdit, incentiveAmount }) => (
+const EmpCard = ({ emp, onEdit, onToggleStatus, togglingStatus, incentiveAmount }) => (
   <Card hover style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
     <EmpAvatar emp={emp} />
     <div style={{ flex: 1, minWidth: 0 }}>
@@ -121,13 +121,33 @@ const EmpCard = ({ emp, onEdit, incentiveAmount }) => (
     <div style={{ textAlign: 'right', flexShrink: 0 }}>
       {emp.salary && <div style={{ fontSize: 12, fontWeight: 800, color: T.accent, fontFamily: 'monospace' }}>PKR {Number(emp.salary).toLocaleString()}</div>}
       <div style={{ fontSize: 11, color: T.textMid, marginTop: 2 }}>{emp.shift_status === 'active' ? '🟢 On Duty' : '⚫ Off Duty'}</div>
-      <button onClick={() => onEdit(emp)} style={{ marginTop: 6, background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Edit</button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => onToggleStatus(emp)}
+          disabled={togglingStatus}
+          style={{
+            background: emp.status === 'active' ? T.redDim : T.greenDim,
+            border: `1px solid ${emp.status === 'active' ? T.red : T.green}44`,
+            color: emp.status === 'active' ? T.red : T.green,
+            borderRadius: 7,
+            padding: '3px 10px',
+            fontSize: 11,
+            cursor: togglingStatus ? 'not-allowed' : 'pointer',
+            fontFamily: "'Inter', sans-serif",
+            opacity: togglingStatus ? 0.7 : 1,
+            fontWeight: 700,
+          }}
+        >
+          {togglingStatus ? 'Saving…' : emp.status === 'active' ? 'In-Active' : 'Active'}
+        </button>
+        <button onClick={() => onEdit(emp)} style={{ background: 'none', border: `1px solid ${T.border}`, color: T.textMid, borderRadius: 7, padding: '3px 10px', fontSize: 11, cursor: 'pointer', fontFamily: "'Inter', sans-serif" }}>Edit</button>
+      </div>
     </div>
   </Card>
 );
 
 // ─── Add/Edit Employee Modal ──────────────────────────────────────────────────
-const BLANK = { full_name: '', email: '', phone: '', pin: '', password: '', newPassword: '', confirmPassword: '', role_id: '', employee_type: 'full_time', salary: '', add_shift: false, shift_name: 'Morning', shift_start: '07:00', shift_end: '15:00', shift_date: todayStr() };
+const BLANK = { full_name: '', email: '', phone: '', pin: '', password: '', newPassword: '', confirmPassword: '', role_id: '', employee_type: 'full_time', salary: '', status: 'active', add_shift: false, shift_name: 'Morning', shift_start: '07:00', shift_end: '15:00', shift_date: todayStr() };
 
 function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
   const [form, setForm]             = useState(BLANK);
@@ -260,6 +280,10 @@ function EmployeeModal({ open, onClose, onSaved, editEmp, roles }) {
           <Select label="Role *" value={form.role_id} onChange={set('role_id')}>
             <option value="">— Select Role —</option>
             {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </Select>
+          <Select label="Status" value={form.status} onChange={set('status')}>
+            <option value="active">Active</option>
+            <option value="inactive">In-Active</option>
           </Select>
         </div>
         <FieldLabel>Employment Type</FieldLabel>
@@ -631,6 +655,7 @@ export default function Employees() {
   const [employees,     setEmployees]     = useState([]);
   const [roles,         setRoles]         = useState([]);
   const [incentiveMap,  setIncentiveMap]  = useState({}); // rider_id -> total pending incentive
+  const [savingStatusId, setSavingStatusId] = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [tab,           setTab]           = useState('staff');
   const [addOpen,       setAddOpen]       = useState(false);
@@ -660,8 +685,24 @@ export default function Employees() {
 
   useEffect(() => { load(); }, [load]);
 
-  const onDuty  = employees.filter(e => e.shift_status === 'active');
-  const offDuty = employees.filter(e => e.shift_status !== 'active');
+  const activeEmployees = employees.filter(e => e.status !== 'inactive');
+  const inactiveEmployees = employees.filter(e => e.status === 'inactive');
+  const onDuty  = activeEmployees.filter(e => e.shift_status === 'active');
+  const offDuty = activeEmployees.filter(e => e.shift_status !== 'active');
+
+  const handleToggleStatus = async (emp) => {
+    const nextStatus = emp.status === 'active' ? 'inactive' : 'active';
+    setSavingStatusId(emp.id);
+    try {
+      await updateEmployee(emp.id, { status: nextStatus });
+      toast.success(`${emp.full_name} is now ${nextStatus}`);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update employee status');
+    } finally {
+      setSavingStatusId(null);
+    }
+  };
 
   const tabStyle = t => ({ padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: tab === t ? 700 : 500, background: tab === t ? T.accent : 'transparent', color: tab === t ? '#000' : T.textMid, border: `1px solid ${tab === t ? T.accent : T.border}`, fontFamily: "'Inter', sans-serif" });
 
@@ -671,7 +712,7 @@ export default function Employees() {
     <div>
       <PageHeader
         title="👥 Staff & Shifts"
-        subtitle={`${employees.length} employees · ${onDuty.length} on duty`}
+        subtitle={`${activeEmployees.length} active employees · ${onDuty.length} on duty`}
         action={<Btn onClick={() => { setEditEmp(null); setAddOpen(true); }}>+ Add Employee</Btn>}
       />
 
@@ -683,7 +724,7 @@ export default function Employees() {
       {tab === 'staff' && (
         <>
           <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-            {[['Total Staff', employees.length, T.accent], ['On Duty', onDuty.length, T.green], ['Off Duty', offDuty.length, T.textMid], ['Full-Time', employees.filter(e => e.employee_type === 'full_time').length, T.blue], ['Part-Time', employees.filter(e => e.employee_type === 'part_time').length, T.purple]].map(([l, v, c]) => (
+            {[['Total Staff', employees.length, T.accent], ['Active', activeEmployees.length, T.green], ['In-Active', inactiveEmployees.length, T.red], ['On Duty', onDuty.length, T.blue], ['Off Duty', offDuty.length, T.textMid], ['Full-Time', employees.filter(e => e.employee_type === 'full_time').length, T.blue], ['Part-Time', employees.filter(e => e.employee_type === 'part_time').length, T.purple]].map(([l, v, c]) => (
               <div key={l} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: c }} />
                 <span style={{ fontSize: 12, color: T.textMid }}>{l}</span>
@@ -696,7 +737,7 @@ export default function Employees() {
             <>
               <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: T.green, fontWeight: 700, marginBottom: 10 }}>🟢 On Duty ({onDuty.length})</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 12, marginBottom: 24 }}>
-                {onDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} incentiveAmount={incentiveMap[e.id] || 0} />)}
+                {onDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} onToggleStatus={handleToggleStatus} togglingStatus={savingStatusId === e.id} incentiveAmount={incentiveMap[e.id] || 0} />)}
               </div>
             </>
           )}
@@ -705,7 +746,16 @@ export default function Employees() {
             <>
               <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: T.textMid, fontWeight: 700, marginBottom: 10 }}>⚫ Off Duty ({offDuty.length})</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 12 }}>
-                {offDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} incentiveAmount={incentiveMap[e.id] || 0} />)}
+                {offDuty.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} onToggleStatus={handleToggleStatus} togglingStatus={savingStatusId === e.id} incentiveAmount={incentiveMap[e.id] || 0} />)}
+              </div>
+            </>
+          )}
+
+          {inactiveEmployees.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: T.red, fontWeight: 700, marginTop: 24, marginBottom: 10 }}>⛔ In-Active ({inactiveEmployees.length})</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px,1fr))', gap: 12 }}>
+                {inactiveEmployees.map(e => <EmpCard key={e.id} emp={e} onEdit={emp => { setEditEmp(emp); setAddOpen(true); }} onToggleStatus={handleToggleStatus} togglingStatus={savingStatusId === e.id} incentiveAmount={incentiveMap[e.id] || 0} />)}
               </div>
             </>
           )}

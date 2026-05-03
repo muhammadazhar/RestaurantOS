@@ -602,3 +602,29 @@ node --check backend/src/controllers/combinedControllers.js
 ```
 
 Build passed with the same existing warnings.
+
+## Latest Completed Change
+
+- Added admin control for employee Active / In-Active status in `Staff -> Staff Directory`.
+- Employee cards now include a quick action button to switch:
+  - `Active` -> `In-Active`
+  - `In-Active` -> `Active`
+- Employee edit modal now includes a visible `Status` selector so admin can manage employee activation while editing profile details.
+- Staff directory now separates employees into:
+  - `On Duty` (active employees with active shift)
+  - `Off Duty` (active employees without an active shift)
+  - `In-Active` (deactivated employees)
+- Staff summary cards now show counts for:
+  - total staff
+  - active
+  - in-active
+  - on duty
+  - off duty
+
+Verification run for this change:
+
+```powershell
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.
