@@ -477,6 +477,13 @@ Completed in this session:
 - Adjusted the variant action row to a `minmax(0,1fr) auto` layout so the label and price share space more predictably inside each tile.
 - Increased item card height, image height, and main text sizing slightly again to match the wider tile footprint.
 
+### POS Menu Tiles Widened Further To Reduce Variant Truncation
+
+Completed in this session:
+
+- Increased the auto-fit tile minimum width again so the menu grid can drop another column when needed instead of truncating variant text.
+- Increased variant button padding and font sizing slightly again to match the wider tiles while keeping the cart width unchanged.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
