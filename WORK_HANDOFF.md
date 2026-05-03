@@ -462,6 +462,13 @@ Completed in this session:
 - Replaced the fixed menu-column count with an auto-fit `minmax(...)` grid so the POS menu automatically fills available width instead of leaving a fixed empty lane.
 - Allowed item cards to stretch to the width of each generated grid slot rather than staying locked to a hardcoded tile width.
 
+### POS Menu Tiles Slightly Widened With Larger Text
+
+Completed in this session:
+
+- Increased the auto-fit menu tile minimum width slightly so cards feel less cramped while still filling the row automatically.
+- Increased item title, price, prep-time, and variant text sizing to match the slightly wider tile layout.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
