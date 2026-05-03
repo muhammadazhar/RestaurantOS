@@ -433,6 +433,13 @@ Completed in this session:
 - Increased the cart column width substantially again so that previously unused menu-side whitespace is now handed to the order/cart area.
 - Kept the cart top aligned with the category/menu block while widening the right panel.
 
+### POS Cart Realigned To Panel Top Instead Of Search Row
+
+Completed in this session:
+
+- Increased the cart column top offset so the cart now aligns with the top of the categories/menu panel instead of visually starting near the search row.
+- This keeps the cart and menu panels on the same horizontal start line and better reflects the user's marked alignment reference.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.

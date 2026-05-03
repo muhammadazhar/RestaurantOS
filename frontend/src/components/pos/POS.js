@@ -949,7 +949,7 @@ export default function POS() {
       </div>
 
       {/* POS section */}
-      <div style={{ width: 700, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', paddingTop: 42 }}>
+      <div style={{ width: 700, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden', paddingTop: 78 }}>
         <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
             Order - {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
