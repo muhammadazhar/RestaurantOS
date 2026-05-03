@@ -851,7 +851,7 @@ export default function POS() {
           </Badge>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '136px minmax(0,1fr)', gap: 6, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '128px minmax(0,1fr)', gap: 6, overflow: 'hidden' }}>
           <aside style={{ borderRadius: 12, padding: 8, ...S.panel, minHeight: 0, overflowY: 'auto' }}>
             <div style={{ fontSize: 11, fontWeight: 900, color: T.text, marginBottom: 8 }}>Categories</div>
             <div style={{ display: 'grid', gap: 5 }}>
@@ -880,7 +880,7 @@ export default function POS() {
           </aside>
 
           {/* Menu grid */}
-          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gridAutoRows: 'max-content', alignItems: 'stretch', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
+          <div style={{ minHeight: 0, width: '100%', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, 170px)', gridAutoRows: 'max-content', alignItems: 'start', justifyContent: 'start', justifyItems: 'stretch', gap: 4, alignContent: 'start', paddingBottom: 10 }}>
             {filtered.map(item => {
               const variants = getItemVariants(item);
               const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
@@ -888,10 +888,10 @@ export default function POS() {
               return (
                 <div key={item.id} style={{
                   ...(itemCartQty ? S.cardSelected : S.card),
-                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 210, width: '100%', justifySelf: 'stretch',
+                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 170, width: 170, justifySelf: 'stretch', aspectRatio: '1 / 1',
                 }}>
                   {/* Image */}
-                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 92, minHeight: 92, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
+                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 88, minHeight: 88, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer', flexShrink: 0 }}>
                     {item.image_url ? (
                       <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
                         alt={item.name} onError={e => e.target.style.display='none'}
@@ -904,10 +904,10 @@ export default function POS() {
                   </div>
                   <div style={{ padding: 8, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
                     <div>
-                      <div title={item.name} style={{ fontSize: 12, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.2, marginBottom: 5, minHeight: 28, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.name}</div>
+                      <div title={item.name} style={{ fontSize: 13, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.25, marginBottom: 5, minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.name}</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 11 }}>From PKR {Number(item.price).toLocaleString()}</span>
-                        <span style={{ fontSize: 9, color: T.textDim }}>{item.prep_time_min ? `~${item.prep_time_min}m` : ''}</span>
+                        <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 12 }}>From PKR {Number(item.price).toLocaleString()}</span>
+                        <span style={{ fontSize: 10, color: T.textDim }}>{item.prep_time_min ? `~${item.prep_time_min}m` : ''}</span>
                       </div>
                     </div>
                     <div style={{ display: 'grid', gap: 5, marginTop: 6 }}>
@@ -926,7 +926,7 @@ export default function POS() {
                             gap: 10,
                             fontWeight: 800,
                             width: '100%',
-                            fontSize: 10,
+                            fontSize: 11,
                           }}>
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{variant.name}</span>
                             <span>PKR {Number(variant.price).toLocaleString()}</span>
@@ -949,7 +949,7 @@ export default function POS() {
       </div>
 
       {/* POS section */}
-      <div style={{ width: 470, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+      <div style={{ width: 560, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
         <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
             Order - {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
