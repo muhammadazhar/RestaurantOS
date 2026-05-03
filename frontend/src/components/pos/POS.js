@@ -851,18 +851,18 @@ export default function POS() {
           </Badge>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '190px minmax(0,1fr)', gap: 10, overflow: 'hidden' }}>
-          <aside style={{ borderRadius: 14, padding: 10, ...S.panel, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '168px minmax(0,1fr)', gap: 8, overflow: 'hidden' }}>
+          <aside style={{ borderRadius: 12, padding: 8, ...S.panel, minHeight: 0, overflowY: 'auto' }}>
             <div style={{ fontSize: 11, fontWeight: 900, color: T.text, marginBottom: 8 }}>Categories</div>
-            <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ display: 'grid', gap: 5 }}>
               {cats.map(c => {
                 const active = cat === c.id;
                 const count = c.id === 'all' ? menu.items.filter(i => i.is_available !== false).length : (categoryCounts[c.id] || 0);
                 return (
                   <button key={c.id} onClick={() => setCat(c.id)} style={{
-                    borderRadius: 10,
+                    borderRadius: 9,
                     ...(active ? S.active : S.inactive),
-                    padding: '8px 10px',
+                    padding: '7px 9px',
                     fontWeight: active ? 800 : 600,
                     cursor: 'pointer',
                     display: 'flex',
@@ -880,7 +880,7 @@ export default function POS() {
           </aside>
 
           {/* Menu grid */}
-          <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gridAutoRows: 'max-content', alignItems: 'start', gap: 10, alignContent: 'start', paddingBottom: 10 }}>
+          <div style={{ minHeight: 0, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gridAutoRows: 'max-content', alignItems: 'start', gap: 8, alignContent: 'start', paddingBottom: 10 }}>
             {filtered.map(item => {
               const variants = getItemVariants(item);
               const itemCartQty = cart.filter(c => c.id === item.id).reduce((sum, c) => sum + c.qty, 0);
@@ -888,10 +888,10 @@ export default function POS() {
               return (
                 <div key={item.id} style={{
                   ...(itemCartQty ? S.cardSelected : S.card),
-                  borderRadius: 14, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 0,
+                  borderRadius: 12, overflow: 'hidden', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', minHeight: 0,
                 }}>
                   {/* Image */}
-                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 78, minHeight: 78, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
+                  <div onClick={() => handleMenuItemClick(item, variants[0])} style={{ height: 64, minHeight: 64, ...S.image, overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
                     {item.image_url ? (
                       <img src={item.image_url.startsWith('http') ? item.image_url : `${IMG_BASE}${item.image_url}`}
                         alt={item.name} onError={e => e.target.style.display='none'}
@@ -899,32 +899,32 @@ export default function POS() {
                     ) : (
                       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, opacity: 0.45, fontWeight: 800 }}>IMG</div>
                     )}
-                    {item.is_popular && <div style={{ position: 'absolute', top: 6, right: 6 }}><Badge color={T.accent} small>Popular</Badge></div>}
-                    {inCart && <div style={{ position: 'absolute', top: 6, left: 6, background: T.accent, color: '#fff', borderRadius: 20, padding: '1px 7px', fontSize: 10, fontWeight: 800 }}>x{inCart.qty}</div>}
+                    {item.is_popular && <div style={{ position: 'absolute', top: 4, right: 4 }}><Badge color={T.accent} small>Popular</Badge></div>}
+                    {inCart && <div style={{ position: 'absolute', top: 4, left: 4, background: T.accent, color: '#fff', borderRadius: 20, padding: '1px 6px', fontSize: 9, fontWeight: 800 }}>x{inCart.qty}</div>}
                   </div>
-                  <div style={{ padding: 10, display: 'block', background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
-                    <div title={item.name} style={{ fontSize: 13, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.25, marginBottom: 6, minHeight: 32, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.name}</div>
+                  <div style={{ padding: 8, display: 'block', background: itemCartQty ? (light ? '#f8fafc' : 'rgba(251,191,36,0.05)') : (light ? '#fff' : 'rgba(15,23,42,0.92)') }}>
+                    <div title={item.name} style={{ fontSize: 12, fontWeight: 900, color: light ? '#0f172a' : T.text, lineHeight: 1.2, marginBottom: 5, minHeight: 28, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.name}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 12 }}>From PKR {Number(item.price).toLocaleString()}</span>
-                      <span style={{ fontSize: 10, color: T.textDim }}>{item.prep_time_min ? `~${item.prep_time_min}m` : ''}</span>
+                      <span style={{ fontWeight: 800, color: light ? '#0f172a' : T.accent, fontFamily: 'monospace', fontSize: 11 }}>From PKR {Number(item.price).toLocaleString()}</span>
+                      <span style={{ fontSize: 9, color: T.textDim }}>{item.prep_time_min ? `~${item.prep_time_min}m` : ''}</span>
                     </div>
-                    <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
+                    <div style={{ display: 'grid', gap: 5, marginTop: 6 }}>
                       {variants.map(variant => {
                         const cartKey = `${item.id}:${variant.id || variant.name}`;
                         const selected = cart.find(c => c.cart_key === cartKey);
                         return (
                           <button key={cartKey} onClick={() => handleMenuItemClick(item, variant)} style={{
-                            borderRadius: 10,
+                            borderRadius: 8,
                             ...(selected ? S.active : S.inactive),
-                            padding: '6px 8px',
-                            minHeight: 30,
+                            padding: '5px 7px',
+                            minHeight: 26,
                             cursor: 'pointer',
                             display: 'flex',
                             justifyContent: 'space-between',
                             gap: 10,
                             fontWeight: 800,
                             width: '100%',
-                            fontSize: 11,
+                            fontSize: 10,
                           }}>
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{variant.name}</span>
                             <span>PKR {Number(variant.price).toLocaleString()}</span>
@@ -947,7 +947,7 @@ export default function POS() {
       </div>
 
       {/* POS section */}
-      <div style={{ width: 310, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
+      <div style={{ width: 340, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden' }}>
         <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: T.text, marginBottom: 2 }}>
             Order - {orderType === 'dine_in' ? (tables.find(t => t.id === tableId)?.label || 'No table') : orderType.replace('_',' ')}
