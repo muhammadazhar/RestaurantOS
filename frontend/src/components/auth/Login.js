@@ -9,6 +9,7 @@ export default function Login() {
   const { mode, theme: T, toggle } = useTheme();
   const navigate          = useNavigate();
   const [form, setForm]   = useState({ email: '', password: '', restaurantSlug: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handle = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -42,12 +43,12 @@ export default function Login() {
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', sans-serif", transition: 'background 0.3s' }}>
-      <button onClick={toggle} style={{ position: 'fixed', top: 20, right: 20, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 16, color: T.text }}>
-        {mode === 'dark' ? '☀️' : '🌙'}
+      <button onClick={toggle} style={{ position: 'fixed', top: 20, right: 20, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: T.text }}>
+        {mode === 'dark' ? 'Light' : 'Dark'}
       </button>
 
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: '40px 36px', width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ fontSize: 48, textAlign: 'center', marginBottom: 8 }}>🍽</div>
+        <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 8, fontWeight: 900, color: T.accent }}>RO</div>
         <h1 style={{ color: T.text, textAlign: 'center', fontSize: 24, fontWeight: 800, margin: 0 }}>RestaurantOS</h1>
         <p style={{ color: T.textMid, textAlign: 'center', fontSize: 14, marginTop: 6, marginBottom: 28 }}>Sign in to your restaurant</p>
 
@@ -57,9 +58,39 @@ export default function Login() {
           <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 10, letterSpacing: 0.5 }}>Email</label>
           <input name="email" type="email" value={form.email} onChange={handle} placeholder="you@restaurant.com" style={inp} required />
           <label style={{ color: T.textMid, fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 10, letterSpacing: 0.5 }}>Password</label>
-          <input name="password" type="password" value={form.password} onChange={handle} placeholder="••••••••" style={inp} required />
+          <div style={{ position: 'relative' }}>
+            <input
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              value={form.password}
+              onChange={handle}
+              placeholder="Enter password"
+              style={{ ...inp, paddingRight: 72 }}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                border: 'none',
+                background: 'none',
+                color: T.accent,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: '4px 6px',
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
           <button type="submit" disabled={loading} style={{ marginTop: 20, background: T.accent, color: '#fff', border: 'none', borderRadius: 12, padding: '14px', fontSize: 15, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: "'Inter', sans-serif" }}>
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
 
@@ -76,7 +107,7 @@ export default function Login() {
             display: 'inline-block', background: T.surface, border: `1px solid ${T.border}`,
             color: T.text, borderRadius: 10, padding: '10px 24px', fontSize: 13, fontWeight: 700,
             textDecoration: 'none',
-          }}>🏪 Register Your Restaurant →</Link>
+          }}>Register Your Restaurant -></Link>
         </div>
       </div>
     </div>
