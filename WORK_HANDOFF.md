@@ -416,6 +416,15 @@ Completed in this session:
 - Increased item title, price, and variant button text sizing again for readability after the compact tile change.
 - Increased the cart column width further so the menu no longer reclaims the extra space when the right panel is widened.
 
+### POS Cart Aligned With Item Grid And Taller Item Cards
+
+Completed in this session:
+
+- Dropped the POS cart column down so it starts alongside the item grid instead of starting beside the top control bar.
+- Increased the cart column width again so the right-side order area makes better use of the previously empty upper-right space.
+- Increased menu-card height while keeping compact card width so prices and variant rows stay visible.
+- Increased item title and price text slightly again to improve readability inside the compact card layout.
+
 ## Important Next Task
 
 No active next task is pending right now. Wait for the user's next instruction.
