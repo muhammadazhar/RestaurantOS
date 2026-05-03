@@ -345,9 +345,21 @@ Completed in this session:
 - Tightened the POS screen layout so the menu occupies less space and the cart remains easier to see:
   - reduced category rail width and spacing
   - reduced menu card height, image height, padding, and variant button size
-  - reduced the menu grid minimum card width so more items fit on the screen
-  - slightly widened the order/cart panel to keep cart content readable with the denser menu layout
+- reduced the menu grid minimum card width so more items fit on the screen
+- slightly widened the order/cart panel to keep cart content readable with the denser menu layout
 - Keep this denser POS treatment as the default direction for future POS UI changes unless the user asks for a larger layout again.
+
+### Railway Build Root Guard And Shared Deploy Scripts
+
+Completed in this session:
+
+- Simplified Railway deployment so the root `package.json` owns the install/build/start flow.
+- Root `postinstall` now installs backend and frontend dependencies with `--legacy-peer-deps`.
+- Root `build` / `railway:build` now builds the frontend from repository root.
+- Root `start` / `railway:start` now starts `backend/src/index.js` directly without reinstalling at boot.
+- Updated root `railway.json` and `nixpacks.toml` to use the shared root scripts instead of repeating nested install/build commands.
+- Added a clear Railway build guard message for the failure case where Railway is pointed at the wrong root directory and cannot see both `/backend` and `/frontend`.
+- If Railway still reports missing `/backend` after this push, check the Railway service `Root Directory` setting and keep it at repository root / blank.
 
 ## Important Next Task
 

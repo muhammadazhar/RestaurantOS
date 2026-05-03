@@ -1,8 +1,8 @@
 [phases.install]
-cmds = ['npm install --prefix backend --legacy-peer-deps', 'npm install --prefix frontend --legacy-peer-deps']
+cmds = ['if [ ! -f package.json ] || [ ! -f backend/package.json ] || [ ! -f frontend/package.json ]; then echo "Railway must build from the repository root so backend and frontend are both available." && exit 1; fi', 'npm install --legacy-peer-deps']
 
 [phases.build]
-cmds = ['CI=false npm run build --prefix frontend']
+cmds = ['npm run railway:build']
 
 [start]
-cmd = 'node backend/src/index.js'
+cmd = 'npm run railway:start'
