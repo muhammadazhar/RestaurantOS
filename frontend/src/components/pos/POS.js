@@ -1041,16 +1041,16 @@ export default function POS() {
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Guests</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.textMid, flex: 1 }}>Guests</span>
                 <button onClick={() => setGuestCount(g => Math.max(1, g-1))} style={{ width: 24, height: 24, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>-</button>
                 <span style={{ fontWeight: 800, fontFamily: 'monospace', minWidth: 20, textAlign: 'center', color: T.text }}>{guestCount}</span>
                 <button onClick={() => setGuestCount(g => g+1)} style={{ width: 24, height: 24, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontWeight: 800, fontSize: 14 }}>+</button>
               </div>
               {showWaiterSelection && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, color: T.textMid, flex: 1 }}>Waiter</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.textMid, flex: 1 }}>Waiter</span>
                   <select value={waiterId} onChange={e => setWaiterId(e.target.value)}
-                    style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: waiterId ? T.text : T.textDim, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
+                    style={{ flex: 1, background: T.surface, border: `1px solid ${T.border}`, color: waiterId ? T.text : T.textDim, borderRadius: 6, padding: '5px 8px', fontSize: 12, fontFamily: "'Inter', sans-serif", outline: 'none', minWidth: 0 }}>
                     <option value="">Assign waiter</option>
                     {employees.filter(e => ['server','waiter'].includes((e.role_name||'').toLowerCase())).map(e => (
                       <option key={e.id} value={e.id}>{e.full_name}</option>
@@ -1065,17 +1065,17 @@ export default function POS() {
           <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             {cart.length === 0 && (
               <div style={{ textAlign: 'center', padding: '30px 0', color: T.textDim }}>
-                <div style={{ fontSize: 12, fontWeight: 800 }}>Empty</div>
-                <div style={{ fontSize: 12, marginTop: 6 }}>Cart is empty</div>
+                <div style={{ fontSize: 13, fontWeight: 800 }}>Empty</div>
+                <div style={{ fontSize: 13, marginTop: 6 }}>Cart is empty</div>
               </div>
             )}
             {cart.map(item => (
-              <div key={item.cart_key} style={{ marginBottom: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 14, padding: '8px 10px' }}>
+              <div key={item.cart_key} style={{ marginBottom: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 14, padding: '9px 11px' }}>
                 {/* Main row: name + price + qty controls + remove */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                    <div style={{ fontSize: 10, color: T.textMid }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                    <div style={{ fontSize: 11, color: T.textMid }}>
                       {item.open_price_allowed ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           PKR
@@ -1084,7 +1084,7 @@ export default function POS() {
                             min="0"
                             value={item.price}
                             onChange={e => setCartItemPrice(item.cart_key, e.target.value)}
-                            style={{ width: 72, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, color: T.accent, fontSize: 10, fontFamily: 'monospace', padding: '2px 5px', outline: 'none' }}
+                            style={{ width: 78, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, color: T.accent, fontSize: 11, fontFamily: 'monospace', padding: '3px 6px', outline: 'none' }}
                           />
                         </span>
                       ) : (
@@ -1098,7 +1098,7 @@ export default function POS() {
                   {!item.existing_order_item && (
                     <button onClick={() => changeQty(item.cart_key,-1)} style={{ width: 20, height: 20, borderRadius: '50%', background: T.border, border: 'none', color: T.text, cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>-</button>
                   )}
-                  <div style={{ textAlign: 'center', fontSize: 13, color: T.textMid, fontFamily: 'monospace' }}>x{item.qty}</div>
+                  <div style={{ textAlign: 'center', fontSize: 14, color: T.textMid, fontFamily: 'monospace', fontWeight: 700 }}>x{item.qty}</div>
                   {!item.existing_order_item && (
                     <button onClick={() => addToCart(item, { id: item.variant_id, name: item.variant_name, price: item.price })} style={{ width: 20, height: 20, borderRadius: '50%', background: T.accent, border: 'none', color: '#fff', cursor: 'pointer', fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</button>
                   )}
@@ -1127,8 +1127,8 @@ export default function POS() {
           {cart.length > 0 && (
             <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: T.textMid }}>Subtotal</span>
-                <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.text }}>PKR {subtotal.toLocaleString()}</span>
+                <span style={{ fontSize: 13, color: T.textMid }}>Subtotal</span>
+                <span style={{ fontSize: 13, fontFamily: 'monospace', color: T.text }}>PKR {subtotal.toLocaleString()}</span>
               </div>
               {/* Discount presets */}
               {discountPresets.length > 0 && (
@@ -1149,24 +1149,24 @@ export default function POS() {
               )}
               {/* Discount */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: T.textMid, flex: 1 }}>Discount (PKR)</span>
+                <span style={{ fontSize: 13, color: T.textMid, flex: 1 }}>Discount (PKR)</span>
                 <input type="number" value={discount} onChange={e => setDiscount(e.target.value)}
                   placeholder="0" min="0" max={subtotal}
-                  style={{ width: 80, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: '3px 8px', color: T.accent, fontSize: 12, fontFamily: 'monospace', outline: 'none', textAlign: 'right' }} />
+                  style={{ width: 84, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 6, padding: '4px 8px', color: T.accent, fontSize: 13, fontFamily: 'monospace', outline: 'none', textAlign: 'right' }} />
               </div>
               {discountAmt > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: T.green }}>Discount applied</span>
-                  <span style={{ fontSize: 12, color: T.green, fontFamily: 'monospace' }}>- PKR {discountAmt.toLocaleString()}</span>
+                  <span style={{ fontSize: 13, color: T.green }}>Discount applied</span>
+                  <span style={{ fontSize: 13, color: T.green, fontFamily: 'monospace' }}>- PKR {discountAmt.toLocaleString()}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: T.textMid }}>{taxLabel}</span>
-                <span style={{ fontSize: 12, fontFamily: 'monospace', color: T.text }}>PKR {tax.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
+                <span style={{ fontSize: 13, color: T.textMid }}>{taxLabel}</span>
+                <span style={{ fontSize: 13, fontFamily: 'monospace', color: T.text }}>PKR {tax.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingTop: 8, borderTop: `1px solid ${T.border}` }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>Total</span>
-                <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: T.accent }}>PKR {total.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: T.text }}>Total</span>
+                <span style={{ fontSize: 16, fontWeight: 800, fontFamily: 'monospace', color: T.accent }}>PKR {total.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
               </div>
               {activeTableOrder ? (
                 <>

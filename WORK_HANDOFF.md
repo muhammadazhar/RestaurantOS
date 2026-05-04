@@ -667,3 +667,23 @@ npm run build --prefix frontend
 ```
 
 Build passed with the same existing warnings.
+
+## Latest Completed Change
+
+- Increased POS cart typography in `frontend/src/components/pos/POS.js` for better readability.
+- Adjusted cart panel text sizing for:
+  - guest and waiter labels
+  - empty-cart state
+  - cart item names and secondary text
+  - open-price input text
+  - quantity display
+  - subtotal, discount, tax, and total lines
+- Kept the compact POS layout intact while making the cart easier to read during ordering.
+
+Verification run for this change:
+
+```powershell
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.
