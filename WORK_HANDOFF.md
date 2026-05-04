@@ -687,3 +687,33 @@ npm run build --prefix frontend
 ```
 
 Build passed with the same existing warnings.
+
+## Latest Completed Change
+
+- Restricted super admin (`SaaS`) navigation in `frontend/src/components/shared/Layout.js`.
+- Super admin no longer sees restaurant-operational menu groups such as:
+  - dashboard
+  - POS
+  - shifts
+  - tables
+  - kitchen
+  - staff
+  - delivery
+  - reports
+  - finance
+  - restaurant support
+- Added a dedicated `SaaS` group for super admin with platform-level items only, focused on:
+  - registered sites
+  - company groups
+  - subscription and module management
+  - admin panel
+  - admin support
+- Kept the normal restaurant `Settings` group available only for non-super-admin restaurant users.
+
+Verification run for this change:
+
+```powershell
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.

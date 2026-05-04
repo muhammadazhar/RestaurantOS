@@ -21,6 +21,7 @@ const NAV_GROUPS = [
   {
     label: 'Dashboard',
     module: null,
+    hiddenForSuperAdmin: true,
     description: 'Overview and live metrics',
     items: [
       { to: '/dashboard', icon: 'dashboard', label: 'Dashboard', perm: 'dashboard' },
@@ -29,6 +30,7 @@ const NAV_GROUPS = [
   {
     label: 'POS',
     module: 'base',
+    hiddenForSuperAdmin: true,
     description: 'Transactions and order flow',
     items: [
       { to: '/pos', icon: 'pos', label: 'POS / Orders', perm: 'pos', badgeKey: 'orders' },
@@ -39,6 +41,7 @@ const NAV_GROUPS = [
   {
     label: 'Shifts',
     module: null,
+    hiddenForSuperAdmin: true,
     description: 'Open, close, and review shifts',
     items: [
       { to: '/my-shift', icon: 'shift', label: 'My Shift', perm: 'pos' },
@@ -49,6 +52,7 @@ const NAV_GROUPS = [
   {
     label: 'Tables',
     module: 'tables',
+    hiddenForSuperAdmin: true,
     description: 'Dining floor and reservations',
     items: [
       { to: '/tables', icon: 'tables', label: 'Tables', perm: 'tables' },
@@ -58,6 +62,7 @@ const NAV_GROUPS = [
   {
     label: 'Kitchen',
     module: 'inventory',
+    hiddenForSuperAdmin: true,
     description: 'Inventory and menu controls',
     items: [
       { to: '/inventory', icon: 'inventory', label: 'Inventory', perm: 'inventory' },
@@ -68,6 +73,7 @@ const NAV_GROUPS = [
   {
     label: 'Staff',
     module: 'staff',
+    hiddenForSuperAdmin: true,
     description: 'Team access and attendance',
     items: [
       { to: '/employees', icon: 'staff', label: 'Employees', perm: 'employees' },
@@ -77,6 +83,7 @@ const NAV_GROUPS = [
   {
     label: 'Delivery',
     module: 'rider',
+    hiddenForSuperAdmin: true,
     description: 'Riders, queues, and collections',
     items: [
       { to: '/delivery', icon: 'delivery', label: 'Online Delivery', perm: 'pos' },
@@ -92,6 +99,7 @@ const NAV_GROUPS = [
   {
     label: 'Reports',
     module: 'reports',
+    hiddenForSuperAdmin: true,
     description: 'Operational, sales, and audit reports',
     items: [
       { to: '/reports', icon: 'report', label: 'Reports', perm: 'pos' },
@@ -101,6 +109,7 @@ const NAV_GROUPS = [
   {
     label: 'Finance',
     module: 'gl',
+    hiddenForSuperAdmin: true,
     description: 'Ledger, setup, and finance views',
     items: [
       { to: '/ledger', icon: 'finance', label: 'General Ledger', perm: 'gl' },
@@ -111,25 +120,39 @@ const NAV_GROUPS = [
   {
     label: 'Support',
     module: 'support',
+    hiddenForSuperAdmin: true,
     description: 'Tickets and support follow-up',
     items: [
       { to: '/support', icon: 'support', label: 'Support Tickets', perm: null, badgeKey: 'support' },
     ],
   },
   {
+    label: 'SaaS',
+    module: null,
+    superAdminOnly: true,
+    description: 'Registered sites, subscriptions, and platform control',
+    items: [
+      { to: '/branches', icon: 'branch', label: 'Registered Sites', superAdmin: true },
+      { to: '/company-groups', icon: 'branch', label: 'Company Groups', superAdmin: true },
+      { to: '/group-dashboard', icon: 'dashboard', label: 'Group Dashboard', superAdmin: true },
+      { to: '/subscriptions', icon: 'finance', label: 'Subscriptions Overview', superAdmin: true },
+      { to: '/alerts', icon: 'alert', label: 'Alerts', perm: null },
+      { to: '/admin', icon: 'settings', label: 'Admin Panel', superAdmin: true },
+      { to: '/module-pricing', icon: 'finance', label: 'Module Pricing', superAdmin: true },
+      { to: '/subscription-mgmt', icon: 'finance', label: 'Subscriptions', superAdmin: true },
+      { to: '/admin-support', icon: 'support', label: 'Support Tickets', superAdmin: true, badgeKey: 'adminSupport' },
+    ],
+  },
+  {
     label: 'Settings',
     module: null,
+    hiddenForSuperAdmin: true,
     description: 'System, roles, pricing, and config',
     items: [
       { to: '/branches', icon: 'branch', label: 'My Branch / Group', perm: null },
       { to: '/group-dashboard', icon: 'dashboard', label: 'Group Dashboard', perm: 'settings' },
       { to: '/subscriptions', icon: 'finance', label: 'My Subscriptions', perm: null },
       { to: '/alerts', icon: 'alert', label: 'Alerts', perm: null },
-      { to: '/admin', icon: 'settings', label: 'Admin Panel', superAdmin: true },
-      { to: '/company-groups', icon: 'branch', label: 'Company Groups', superAdmin: true },
-      { to: '/module-pricing', icon: 'finance', label: 'Module Pricing', superAdmin: true },
-      { to: '/subscription-mgmt', icon: 'finance', label: 'Subscriptions', superAdmin: true },
-      { to: '/admin-support', icon: 'support', label: 'Support Tickets', superAdmin: true, badgeKey: 'adminSupport' },
       { to: '/discount-presets', icon: 'finance', label: 'Discount Presets', perm: 'settings' },
       { to: '/system', icon: 'settings', label: 'System', perm: 'settings' },
       { to: '/settings', icon: 'settings', label: 'Settings', perm: 'settings' },
@@ -411,6 +434,8 @@ export default function Layout({ children }) {
   };
 
   const canSeeGroup = (group) => {
+    if (group.superAdminOnly) return user?.isSuperAdmin;
+    if (group.hiddenForSuperAdmin && user?.isSuperAdmin) return false;
     if (!group.module) return true;
     if (user?.isSuperAdmin) return true;
     return hasModule(group.module);
