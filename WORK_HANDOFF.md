@@ -606,10 +606,8 @@ Build passed with the same existing warnings.
 ## Latest Completed Change
 
 - Added admin control for employee Active / In-Active status in `Staff -> Staff Directory`.
-- Employee cards now include a quick action button to switch:
-  - `Active` -> `In-Active`
-  - `In-Active` -> `Active`
-- Employee edit modal now includes a visible `Status` selector so admin can manage employee activation while editing profile details.
+- Employee cards now only show the current `active` / `inactive` status badge.
+- Employee status changes are now handled only inside the employee edit modal through a toggle-style `Active` / `In-Active` control.
 - Staff directory now separates employees into:
   - `On Duty` (active employees with active shift)
   - `Off Duty` (active employees without an active shift)
