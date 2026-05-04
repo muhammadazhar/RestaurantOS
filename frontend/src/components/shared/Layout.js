@@ -547,6 +547,7 @@ export default function Layout({ children }) {
                   {activeGroup.items.map(item => {
                     const itemBadgeCount = getBadgeCount(item);
                     const target = reviewLink(item, itemBadgeCount);
+                    const isShiftManagementItem = activeGroup.label === 'Shifts' && item.to === '/shift-management';
                     return (
                       <NavLink
                         key={item.to}
@@ -558,19 +559,27 @@ export default function Layout({ children }) {
                           padding: '7px 10px',
                           borderRadius: 12,
                           textDecoration: 'none',
-                          background: isActive ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)` : (isLight ? '#ffffff' : 'rgba(255,255,255,0.03)'),
-                          border: `1px solid ${isActive ? accentDeep : panelBorder}`,
+                          background: isActive
+                            ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`
+                            : isShiftManagementItem
+                              ? (isLight ? 'rgba(255,182,97,0.14)' : 'rgba(255,182,97,0.12)')
+                              : (isLight ? '#ffffff' : 'rgba(255,255,255,0.03)'),
+                          border: `1px solid ${isActive ? accentDeep : isShiftManagementItem ? 'rgba(246,168,74,0.35)' : panelBorder}`,
                           color: isActive ? '#111827' : moduleText,
-                          boxShadow: isActive ? '0 12px 24px rgba(255,182,97,0.2)' : 'none',
+                          boxShadow: isActive
+                            ? '0 12px 24px rgba(255,182,97,0.2)'
+                            : isShiftManagementItem
+                              ? 'inset 0 0 0 1px rgba(255,182,97,0.08)'
+                              : 'none',
                           transition: 'all 0.18s ease',
                           fontSize: 11,
-                          fontWeight: 800,
+                          fontWeight: isShiftManagementItem ? 900 : 800,
                           whiteSpace: 'nowrap',
                         })}
                       >
                         {({ isActive }) => (
                           <>
-                            <Icon name={item.icon} color={isActive ? '#111827' : '#cbd5e1'} size={13} stroke={1.85} />
+                            <Icon name={item.icon} color={isActive ? '#111827' : isShiftManagementItem ? accent : '#cbd5e1'} size={13} stroke={1.85} />
                             <span>{item.label}</span>
                             {itemBadgeCount > 0 && (
                               <span style={{ minWidth: 17, height: 17, padding: '0 5px', borderRadius: 999, background: isActive ? '#111827' : '#ef4444', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, lineHeight: 1 }}>

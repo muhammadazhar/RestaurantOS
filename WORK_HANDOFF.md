@@ -653,3 +653,17 @@ npm run build --prefix frontend
 ```
 
 Build passed with the same existing warnings.
+
+## Latest Completed Change
+
+- Improved visibility of `Shift Management` inside the compact navigation.
+- Within the `Shifts` submenu, the `Shift Management` chip now has a subtle persistent emphasis so users can find the screen that contains the open/close shift workflow more easily.
+- This does not change routes or screen behavior; it is a visibility polish only.
+
+Verification run for this change:
+
+```powershell
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.
