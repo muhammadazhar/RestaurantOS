@@ -139,7 +139,7 @@ const NAV_GROUPS = [
 
 const INCOMPLETE_ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served', 'picked', 'out_for_delivery'];
 const needsSupportReview = (ticket) => ticket && ticket.status !== 'resolved';
-const formatBadgeCount = (count) => count > 99 ? '99+' : String(count);
+const formatBadgeCount = (count) => (count > 99 ? '99+' : String(count));
 
 const reviewLink = (item, count) => {
   if (!count) return item.to;
@@ -416,7 +416,7 @@ export default function Layout({ children }) {
     return hasModule(group.module);
   };
 
-  const getBadgeCount = (item) => item.badgeKey ? Number(badgeCounts[item.badgeKey] || 0) : 0;
+  const getBadgeCount = (item) => (item.badgeKey ? Number(badgeCounts[item.badgeKey] || 0) : 0);
   const getGroupBadgeCount = (group) => {
     const keys = new Set(group.items.map(item => item.badgeKey).filter(Boolean));
     return [...keys].reduce((sum, key) => sum + Number(badgeCounts[key] || 0), 0);
@@ -439,58 +439,20 @@ export default function Layout({ children }) {
 
   return (
     <div style={{ minHeight: '100vh', background: isLight ? shellBg : `radial-gradient(circle at top left, rgba(255,182,97,0.08), transparent 24%), radial-gradient(circle at top right, rgba(68,183,255,0.08), transparent 22%), ${shellBg}`, fontFamily: "'Inter', sans-serif" }}>
-      <div style={{ maxWidth: '100%', padding: isLight ? '10px 16px 18px' : '10px 16px 22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 12, background: isLight ? '#fff' : 'rgba(255,255,255,0.04)', border: `1px solid ${panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: isLight ? '0 10px 30px rgba(15,23,42,0.06)' : '0 14px 34px rgba(0,0,0,0.25)' }}>
-              {logoUrl
-                ? <img src={logoUrl.startsWith('http') ? logoUrl : `${IMG_BASE}${logoUrl}`} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ fontWeight: 900, color: moduleText }}>RO</span>
-              }
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: moduleText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user?.restaurantName || 'RestaurantOS'}
-              </div>
-              <div style={{ fontSize: 10, color: mutedText }}>
-                {connected ? 'Live' : 'Offline'} / {user?.role || 'User'}
-              </div>
-            </div>
+      <div style={{ display: 'flex', minHeight: '100vh', padding: 12, gap: 12 }}>
+        <aside style={{ width: 88, flexShrink: 0, background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 24, boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 16, background: isLight ? '#fff' : 'rgba(255,255,255,0.04)', border: `1px solid ${panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: isLight ? '0 10px 30px rgba(15,23,42,0.06)' : '0 14px 34px rgba(0,0,0,0.25)' }}>
+            {logoUrl
+              ? <img src={logoUrl.startsWith('http') ? logoUrl : `${IMG_BASE}${logoUrl}`} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontWeight: 900, color: moduleText }}>RO</span>
+            }
           </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              onClick={toggle}
-              title={`Switch to ${isLight ? 'dark' : 'light'} mode`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 999,
-                padding: '7px 12px', cursor: 'pointer', color: moduleText,
-                boxShadow: isLight ? '0 10px 26px rgba(15,23,42,0.05)' : '0 12px 30px rgba(0,0,0,0.18)',
-              }}
-            >
-              <div style={{ width: 34, height: 18, borderRadius: 999, background: isLight ? accent : 'rgba(255,255,255,0.12)', position: 'relative' }}>
-                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isLight ? 19 : 3, transition: 'left 0.2s' }} />
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700 }}>{isLight ? 'Light Mode' : 'Dark Mode'}</span>
-            </button>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 999, padding: '6px 9px 6px 6px', boxShadow: isLight ? '0 10px 26px rgba(15,23,42,0.05)' : '0 12px 30px rgba(0,0,0,0.18)' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: accent, color: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900 }}>
-                {user?.name?.[0] || 'U'}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: moduleText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
-                <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: mutedText, padding: 0, cursor: 'pointer', fontSize: 10, fontFamily: "'Inter', sans-serif" }}>
-                  Sign out →
-                </button>
-              </div>
-            </div>
+          <div style={{ fontSize: 10, fontWeight: 800, color: moduleText, textAlign: 'center', lineHeight: 1.25, maxWidth: 64 }}>
+            {user?.restaurantName || 'RestaurantOS'}
           </div>
-        </div>
 
-        <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 22, padding: 8, boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', overflowX: 'auto', marginBottom: 12 }}>
-          <div style={{ display: 'flex', gap: 6, minWidth: 'max-content' }}>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflowY: 'auto', paddingTop: 4 }}>
             {visibleGroups.map(group => {
               const groupActive = activeGroup?.label === group.label;
               const badgeCount = getGroupBadgeCount(group);
@@ -499,39 +461,31 @@ export default function Layout({ children }) {
                 <button
                   key={group.label}
                   onClick={() => navigate(target)}
+                  title={group.label}
                   style={{
                     position: 'relative',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    minWidth: 132,
-                    padding: '10px 13px',
-                    borderRadius: 16,
+                    width: '100%',
                     border: `1px solid ${groupActive ? accentDeep : 'transparent'}`,
-                    background: groupActive
-                      ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`
-                      : 'transparent',
+                    background: groupActive ? `linear-gradient(180deg, ${accent} 0%, #ffc880 100%)` : 'transparent',
                     color: groupActive ? '#111827' : moduleText,
+                    borderRadius: 18,
+                    padding: '10px 6px 8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
                     cursor: 'pointer',
-                    textAlign: 'left',
-                    boxShadow: groupActive
-                      ? '0 14px 30px rgba(255,182,97,0.28)'
-                      : 'none',
+                    boxShadow: groupActive ? '0 14px 28px rgba(255,182,97,0.22)' : 'none',
                     transition: 'all 0.18s ease',
-                    flexShrink: 0,
                   }}
                 >
-                  <div style={{ width: 30, height: 30, borderRadius: 10, background: groupActive ? 'rgba(255,255,255,0.24)' : (isLight ? '#f8fafc' : 'rgba(255,255,255,0.04)'), border: `1px solid ${groupActive ? 'rgba(255,255,255,0.2)' : panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 12, background: groupActive ? 'rgba(255,255,255,0.28)' : (isLight ? '#ffffff' : 'rgba(255,255,255,0.04)'), border: `1px solid ${groupActive ? 'rgba(255,255,255,0.24)' : panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icon name={group.items[0]?.icon} color={groupActive ? '#111827' : '#dbe4f0'} size={16} stroke={1.85} />
                   </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: groupActive ? '#111827' : moduleText, whiteSpace: 'nowrap' }}>{group.label}</div>
-                    <div style={{ fontSize: 10, color: groupActive ? 'rgba(17,24,39,0.78)' : mutedText }}>
-                      {group.items.length} screen{group.items.length === 1 ? '' : 's'}
-                    </div>
-                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 800, lineHeight: 1.1, textAlign: 'center' }}>{group.label}</span>
                   {badgeCount > 0 && (
-                    <span style={{ position: 'absolute', top: 8, right: 8, minWidth: 20, height: 20, padding: '0 6px', borderRadius: 999, background: groupActive ? '#111827' : '#ef4444', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, lineHeight: 1 }}>
+                    <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: groupActive ? '#111827' : '#ef4444', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, lineHeight: 1 }}>
                       {formatBadgeCount(badgeCount)}
                     </span>
                   )}
@@ -539,73 +493,110 @@ export default function Layout({ children }) {
               );
             })}
           </div>
-        </div>
 
-        {activeGroup && (
-          <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 22, padding: '12px 14px 12px', boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 14, background: `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 16px 32px rgba(255,182,97,0.25)', flexShrink: 0 }}>
-                  <Icon name={activeGroup.items[0]?.icon} color="#111827" size={18} stroke={1.9} />
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: moduleText }}>{activeGroup.label}</div>
-                  <div style={{ fontSize: 12, color: mutedText }}>{activeGroup.description}</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)', border: `1px solid ${panelBorder}`, borderRadius: 14, padding: '7px 11px' }}>
-                <Icon name="shift" color={mutedText} size={13} stroke={1.85} />
-                <span style={{ fontSize: 11, color: mutedText }}>Active:</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: accent }}>{activeItem?.label || activeGroup.label}</span>
-              </div>
+          <button
+            onClick={toggle}
+            title={`Switch to ${isLight ? 'dark' : 'light'} mode`}
+            style={{
+              width: '100%',
+              background: isLight ? '#ffffff' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${panelBorder}`,
+              borderRadius: 16,
+              padding: '10px 6px 8px',
+              cursor: 'pointer',
+              color: moduleText,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <div style={{ width: 34, height: 18, borderRadius: 999, background: isLight ? accent : 'rgba(255,255,255,0.14)', position: 'relative' }}>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isLight ? 19 : 3, transition: 'left 0.2s' }} />
             </div>
+            <span style={{ fontSize: 10, fontWeight: 800 }}>{isLight ? 'Light' : 'Dark'}</span>
+          </button>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {activeGroup.items.map(item => {
-                const itemBadgeCount = getBadgeCount(item);
-                const target = reviewLink(item, itemBadgeCount);
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={target}
-                    style={({ isActive }) => ({
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 12px',
-                      borderRadius: 14,
-                      textDecoration: 'none',
-                      background: isActive ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)` : (isLight ? '#ffffff' : 'rgba(255,255,255,0.03)'),
-                      border: `1px solid ${isActive ? accentDeep : panelBorder}`,
-                      color: isActive ? '#111827' : moduleText,
-                      boxShadow: isActive ? '0 14px 28px rgba(255,182,97,0.24)' : 'none',
-                      transition: 'all 0.18s ease',
-                      fontSize: 12,
-                      fontWeight: 800,
-                    })}
-                  >
-                    {({ isActive }) => (
-                      <>
-                        <Icon name={item.icon} color={isActive ? '#111827' : '#cbd5e1'} size={14} stroke={1.85} />
-                        <span>{item.label}</span>
-                        {itemBadgeCount > 0 && (
-                          <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999, background: isActive ? '#111827' : '#ef4444', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 900, lineHeight: 1 }}>
-                            {formatBadgeCount(itemBadgeCount)}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                );
-              })}
+          <div style={{ width: '100%', background: isLight ? '#ffffff' : 'rgba(255,255,255,0.04)', border: `1px solid ${panelBorder}`, borderRadius: 18, padding: '8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: accent, color: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900 }}>
+              {user?.name?.[0] || 'U'}
             </div>
+            <div style={{ fontSize: 10, fontWeight: 800, color: moduleText, textAlign: 'center', lineHeight: 1.15 }}>{user?.name}</div>
+            <div style={{ fontSize: 9, color: mutedText, textAlign: 'center' }}>{connected ? 'Live' : 'Offline'} / {user?.role || 'User'}</div>
+            <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: mutedText, padding: 0, cursor: 'pointer', fontSize: 10, fontFamily: "'Inter', sans-serif", fontWeight: 700 }}>
+              Sign out
+            </button>
           </div>
-        )}
+        </aside>
 
-        <main style={{ minHeight: 'calc(100vh - 208px)' }}>
-          {children}
-        </main>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {activeGroup && (
+            <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 20, padding: '10px 12px', boxShadow: isLight ? '0 16px 42px rgba(15,23,42,0.05)' : '0 18px 42px rgba(0,0,0,0.18)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, marginRight: 6 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 12, background: `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 26px rgba(255,182,97,0.22)', flexShrink: 0 }}>
+                    <Icon name={activeGroup.items[0]?.icon} color="#111827" size={16} stroke={1.9} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: moduleText }}>{activeGroup.label}</div>
+                    <div style={{ fontSize: 11, color: mutedText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeGroup.description}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+                  {activeGroup.items.map(item => {
+                    const itemBadgeCount = getBadgeCount(item);
+                    const target = reviewLink(item, itemBadgeCount);
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={target}
+                        style={({ isActive }) => ({
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 7,
+                          padding: '7px 10px',
+                          borderRadius: 12,
+                          textDecoration: 'none',
+                          background: isActive ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)` : (isLight ? '#ffffff' : 'rgba(255,255,255,0.03)'),
+                          border: `1px solid ${isActive ? accentDeep : panelBorder}`,
+                          color: isActive ? '#111827' : moduleText,
+                          boxShadow: isActive ? '0 12px 24px rgba(255,182,97,0.2)' : 'none',
+                          transition: 'all 0.18s ease',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          whiteSpace: 'nowrap',
+                        })}
+                      >
+                        {({ isActive }) => (
+                          <>
+                            <Icon name={item.icon} color={isActive ? '#111827' : '#cbd5e1'} size={13} stroke={1.85} />
+                            <span>{item.label}</span>
+                            {itemBadgeCount > 0 && (
+                              <span style={{ minWidth: 17, height: 17, padding: '0 5px', borderRadius: 999, background: isActive ? '#111827' : '#ef4444', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, lineHeight: 1 }}>
+                                {formatBadgeCount(itemBadgeCount)}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </NavLink>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)', border: `1px solid ${panelBorder}`, borderRadius: 12, padding: '7px 10px', marginLeft: 'auto' }}>
+                  <Icon name="shift" color={mutedText} size={12} stroke={1.85} />
+                  <span style={{ fontSize: 10, color: mutedText }}>Active:</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: accent }}>{activeItem?.label || activeGroup.label}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <main style={{ flex: 1, minHeight: 'calc(100vh - 24px)' }}>
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );

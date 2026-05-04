@@ -626,3 +626,30 @@ npm run build --prefix frontend
 ```
 
 Build passed with the same existing warnings.
+
+## Latest Completed Change
+
+- Replaced the oversized top navigation with a more compact modern shell in `frontend/src/components/shared/Layout.js`.
+- New layout uses:
+  - a slim left-side module rail with icon-first navigation
+  - compact badge counters on module icons
+  - a much smaller contextual submenu strip above page content
+  - compact theme and user controls inside the rail
+- Preserved existing behavior for:
+  - permissions
+  - module visibility
+  - badge counts
+  - review links
+  - kitchen workflow-based `Kitchen Display` hiding
+- Goal of this redesign:
+  - reduce menu footprint
+  - free up more working space for app screens
+  - keep a cleaner, more modern UI than the previous large top menu
+
+Verification run for this change:
+
+```powershell
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.
