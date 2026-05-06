@@ -12,6 +12,7 @@ const rateLimit  = require('express-rate-limit');
 const routes = require('./routes');
 const db     = require('./config/db');
 const fs     = require('fs');
+const { ensureOfflineSyncSchema } = require('./utils/offlineSync');
 
 // Ensure uploads directory exists
 const uploadsDir = require('path').join(__dirname, '../uploads');
@@ -108,6 +109,8 @@ const PORT = process.env.PORT || 5000;
 
 db.query('SELECT NOW()').then(async () => {
   console.log('✓ Database connected');
+  await ensureOfflineSyncSchema().catch(e => console.warn('Offline sync migration note:', e.message));
+
   // Add order-timing columns (idempotent — safe to run every startup)
   await db.query(`
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS preparing_at  TIMESTAMPTZ;

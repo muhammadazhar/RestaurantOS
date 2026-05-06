@@ -717,3 +717,48 @@ npm run build --prefix frontend
 ```
 
 Build passed with the same existing warnings.
+
+## Latest Completed Change
+
+- Started the local-server offline mode foundation.
+- Confirmed local Docker PostgreSQL schema on port `5432` now matches Neon for tables, columns, and indexes.
+- Added backend offline runtime config in `backend/src/utils/offlineConfig.js`:
+  - `DEPLOYMENT_MODE=local_offline`
+  - `DEVICE_ID`
+  - `BRANCH_CODE`
+  - `CLOUD_API_URL`
+- Added idempotent offline sync schema bootstrap in `backend/src/utils/offlineSync.js`:
+  - `offline_devices`
+  - `offline_sync_queue`
+  - sync metadata columns/indexes on core offline write tables.
+- Backend startup now runs the offline sync schema bootstrap after DB connection.
+- Added sync API endpoints:
+  - `GET /api/sync/status`
+  - `POST /api/sync/retry`
+- Added frontend API wrappers for sync status/retry.
+- Added compact sync/offline status indicator in the shared layout:
+  - `Online`
+  - `Offline - local mode`
+  - `Local mode online`
+  - `Pending sync N`
+  - `Sync issues N`
+
+Verification run for this change:
+
+```powershell
+node --check backend/src/utils/offlineConfig.js
+node --check backend/src/utils/offlineSync.js
+node --check backend/src/controllers/syncController.js
+node --check backend/src/index.js
+node --check backend/src/routes/index.js
+npm run build --prefix frontend
+```
+
+Build passed with the same existing warnings.
+
+Important next offline-mode work:
+
+- Add queue writes around POS order creation/status/payment/returns.
+- Add real cloud push worker for pending queue items.
+- Add cloud pull for menu/settings/tables/employees.
+- Add local-server deployment env example and startup instructions.

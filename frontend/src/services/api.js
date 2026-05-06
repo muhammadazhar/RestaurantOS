@@ -263,6 +263,10 @@ export const createBackup     = ()         => API.post('/system/backup');
 export const downloadBackup   = (filename) => API.get(`/system/backups/${encodeURIComponent(filename)}`, { responseType: 'blob' });
 export const deleteBackup     = (filename) => API.delete(`/system/backups/${encodeURIComponent(filename)}`);
 
+// Offline Sync
+export const getSyncStatus = () => API.get('/sync/status');
+export const retrySync = () => API.post('/sync/retry');
+
 // ── Subscriptions / Licensing ─────────────────────────────────────────────────
 export const getModules              = ()     => API.get('/modules');
 export const getMySubscriptions      = ()     => API.get('/subscriptions/my');

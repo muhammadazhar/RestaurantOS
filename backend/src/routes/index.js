@@ -16,6 +16,7 @@ const subscription = require('../controllers/subscriptionController');
 const branch       = require('../controllers/branchController');
 const support      = require('../controllers/supportController');
 const pricing      = require('../controllers/deliveryPricingController');
+const sync         = require('../controllers/syncController');
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.get('/auth/groups',                           auth.getPublicGroups);       // public
@@ -34,6 +35,10 @@ router.use(authenticate);
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 router.get('/dashboard/stats', orders.getDashboardStats);
+
+// Offline sync status and queue controls
+router.get('/sync/status', sync.getStatus);
+router.post('/sync/retry', requirePermission('settings'), sync.retryFailed);
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 router.get('/orders',              requirePermission('pos'), orders.getOrders);

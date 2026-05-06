@@ -10,6 +10,7 @@ import {
   getPhoneOrders,
   getMySupportTickets,
   adminGetAllTickets,
+  getSyncStatus,
 } from '../../services/api';
 import LicenseGate from './LicenseGate';
 import { normalizeWorkflowSettings } from '../../utils/workflowSettings';
@@ -163,6 +164,57 @@ const NAV_GROUPS = [
 const INCOMPLETE_ORDER_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served', 'picked', 'out_for_delivery'];
 const needsSupportReview = (ticket) => ticket && ticket.status !== 'resolved';
 const formatBadgeCount = (count) => (count > 99 ? '99+' : String(count));
+
+const getSyncDisplay = (status, socketConnected) => {
+  if (!status) {
+    return {
+      label: socketConnected ? 'Online' : 'Checking',
+      tone: socketConnected ? 'online' : 'checking',
+      detail: socketConnected ? 'Cloud connection active' : 'Checking sync status',
+    };
+  }
+
+  const queue = status.queue || {};
+  const runtime = status.runtime || {};
+  const cloud = status.cloud || {};
+  const failed = Number(queue.failed || 0);
+  const conflicts = Number(queue.conflict || 0);
+  const pending = Number(queue.pending || 0) + Number(queue.syncing || 0);
+
+  if (failed || conflicts) {
+    return {
+      label: `Sync issues ${failed + conflicts}`,
+      tone: 'danger',
+      detail: `${failed} failed, ${conflicts} conflict`,
+    };
+  }
+  if (pending) {
+    return {
+      label: `Pending sync ${pending}`,
+      tone: 'warning',
+      detail: cloud.online ? 'Waiting to push local changes' : 'Cloud is offline',
+    };
+  }
+  if (runtime.isLocalOfflineMode && !cloud.online) {
+    return {
+      label: 'Offline - local mode',
+      tone: 'offline',
+      detail: cloud.error || 'Using local server',
+    };
+  }
+  if (runtime.isLocalOfflineMode) {
+    return {
+      label: 'Local mode online',
+      tone: 'local',
+      detail: 'Local server with cloud reachable',
+    };
+  }
+  return {
+    label: socketConnected ? 'Online' : 'API online',
+    tone: 'online',
+    detail: socketConnected ? 'Live updates connected' : 'API reachable',
+  };
+};
 
 const reviewLink = (item, count) => {
   if (!count) return item.to;
@@ -332,6 +384,7 @@ export default function Layout({ children }) {
   const [basePricing, setBasePricing] = useState([]);
   const [badgeCounts, setBadgeCounts] = useState({ orders: 0, support: 0, adminSupport: 0 });
   const [workflowSettings, setWorkflowSettings] = useState(normalizeWorkflowSettings());
+  const [syncStatus, setSyncStatus] = useState(null);
 
   const isLight = mode === 'light';
   const shellBg = isLight ? '#f3f6fb' : '#07111d';
@@ -341,6 +394,15 @@ export default function Layout({ children }) {
   const mutedText = isLight ? '#64748b' : '#94a3b8';
   const accent = '#ffb661';
   const accentDeep = '#f6a84a';
+  const syncDisplay = getSyncDisplay(syncStatus, connected);
+  const syncTone = {
+    online: { bg: isLight ? '#ecfdf5' : 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.35)', text: isLight ? '#047857' : '#86efac', dot: '#22c55e' },
+    local: { bg: isLight ? '#eff6ff' : 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.35)', text: isLight ? '#1d4ed8' : '#93c5fd', dot: '#3b82f6' },
+    warning: { bg: isLight ? '#fffbeb' : 'rgba(245,158,11,0.13)', border: 'rgba(245,158,11,0.38)', text: isLight ? '#92400e' : '#fcd34d', dot: '#f59e0b' },
+    danger: { bg: isLight ? '#fef2f2' : 'rgba(239,68,68,0.13)', border: 'rgba(239,68,68,0.38)', text: isLight ? '#b91c1c' : '#fca5a5', dot: '#ef4444' },
+    offline: { bg: isLight ? '#f8fafc' : 'rgba(148,163,184,0.12)', border: panelBorder, text: mutedText, dot: '#94a3b8' },
+    checking: { bg: isLight ? '#f8fafc' : 'rgba(148,163,184,0.10)', border: panelBorder, text: mutedText, dot: '#94a3b8' },
+  }[syncDisplay.tone] || {};
 
   useEffect(() => {
     if (!user?.isSuperAdmin && hasPermission('settings')) {
@@ -357,6 +419,24 @@ export default function Layout({ children }) {
         .catch(() => {});
     }
   }, [user, hasModule]);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const loadSyncStatus = () => {
+      getSyncStatus()
+        .then(r => { if (!cancelled) setSyncStatus(r.data); })
+        .catch(() => { if (!cancelled) setSyncStatus(null); });
+    };
+    loadSyncStatus();
+    const timer = setInterval(loadSyncStatus, 30000);
+    window.addEventListener('focus', loadSyncStatus);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('focus', loadSyncStatus);
+    };
+  }, [user]);
 
   const baseExpired = !user?.isSuperAdmin && user && !hasModule('base');
   useEffect(() => {
@@ -547,7 +627,7 @@ export default function Layout({ children }) {
               {user?.name?.[0] || 'U'}
             </div>
             <div style={{ fontSize: 10, fontWeight: 800, color: moduleText, textAlign: 'center', lineHeight: 1.15 }}>{user?.name}</div>
-            <div style={{ fontSize: 9, color: mutedText, textAlign: 'center' }}>{connected ? 'Live' : 'Offline'} / {user?.role || 'User'}</div>
+            <div style={{ fontSize: 9, color: mutedText, textAlign: 'center' }}>{syncDisplay.label} / {user?.role || 'User'}</div>
             <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: mutedText, padding: 0, cursor: 'pointer', fontSize: 10, fontFamily: "'Inter', sans-serif", fontWeight: 700 }}>
               Sign out
             </button>
@@ -618,7 +698,12 @@ export default function Layout({ children }) {
                   })}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)', border: `1px solid ${panelBorder}`, borderRadius: 12, padding: '7px 10px', marginLeft: 'auto' }}>
+                <div title={syncDisplay.detail} style={{ display: 'flex', alignItems: 'center', gap: 7, background: syncTone.bg, border: `1px solid ${syncTone.border}`, borderRadius: 12, padding: '7px 10px', marginLeft: 'auto' }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: syncTone.dot, boxShadow: `0 0 0 3px ${syncTone.dot}22`, flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 900, color: syncTone.text, whiteSpace: 'nowrap' }}>{syncDisplay.label}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)', border: `1px solid ${panelBorder}`, borderRadius: 12, padding: '7px 10px' }}>
                   <Icon name="shift" color={mutedText} size={12} stroke={1.85} />
                   <span style={{ fontSize: 10, color: mutedText }}>Active:</span>
                   <span style={{ fontSize: 10, fontWeight: 800, color: accent }}>{activeItem?.label || activeGroup.label}</span>
