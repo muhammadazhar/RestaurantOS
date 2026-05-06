@@ -762,3 +762,49 @@ Important next offline-mode work:
 - Add real cloud push worker for pending queue items.
 - Add cloud pull for menu/settings/tables/employees.
 - Add local-server deployment env example and startup instructions.
+
+## Latest Completed Change
+
+- Added a local Docker runtime for testing RestaurantOS against the local Docker PostgreSQL DB:
+  - `.dockerignore`
+  - `Dockerfile.local`
+  - `docker-compose.local.yml`
+- The local app container:
+  - builds the React frontend inside Docker
+  - serves the frontend from the backend in production mode
+  - runs backend on internal port `5001`
+  - maps host port `5051` to avoid conflict with the existing local backend port
+  - connects to local PostgreSQL through `host.docker.internal:5432`
+  - runs with `DEPLOYMENT_MODE=local_offline` and `DB_MODE=local`
+  - reads Cloudinary credentials from local `backend/.env` through Compose `env_file`
+  - mounts `./backend/uploads` into the container
+- Moved public `GET /api/health` before authenticated API routes so Docker/local health checks can use it without a token.
+- Local Docker app was started successfully:
+  - URL: `http://localhost:5051`
+  - container: `restaurantos-local`
+  - DB mode endpoint confirmed local mode
+
+Verification run for this change:
+
+```powershell
+docker compose -f docker-compose.local.yml build restaurantos-local
+docker compose -f docker-compose.local.yml up -d --force-recreate
+Invoke-RestMethod -Uri 'http://localhost:5051/api/health'
+Invoke-RestMethod -Uri 'http://localhost:5051/api/db-info'
+Invoke-WebRequest -Uri 'http://localhost:5051/' -UseBasicParsing
+node --check backend/src/index.js
+```
+
+Build passed with the same existing frontend warnings.
+
+How to run local Docker app:
+
+```powershell
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+How to stop it:
+
+```powershell
+docker compose -f docker-compose.local.yml down
+```

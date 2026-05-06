@@ -1,0 +1,26 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY backend/package*.json ./backend/
+COPY frontend/package*.json ./frontend/
+
+RUN npm ci --prefix backend
+RUN npm ci --prefix frontend --legacy-peer-deps
+
+COPY backend ./backend
+COPY frontend ./frontend
+
+ARG REACT_APP_API_URL=/api
+ARG REACT_APP_SOCKET_URL=http://localhost:5001
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV REACT_APP_SOCKET_URL=${REACT_APP_SOCKET_URL}
+
+RUN npm run build --prefix frontend
+
+ENV NODE_ENV=production
+ENV PORT=5001
+
+EXPOSE 5001
+
+CMD ["node", "backend/src/index.js"]

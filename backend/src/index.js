@@ -63,10 +63,10 @@ app.use('/api',      rateLimit({ windowMs: 60 * 1000, max: 300 }));
 // Make io available in controllers
 app.set('io', io);
 
+app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api', routes);
-
-app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 
 const frontendBuildDir = path.join(__dirname, '../../frontend/build');
 if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendBuildDir)) {

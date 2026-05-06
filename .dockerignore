@@ -1,0 +1,12 @@
+**/node_modules
+**/.cache
+frontend/build
+backend/uploads
+backend/backups
+.git
+.env
+backend/.env
+frontend/.env
+npm-debug.log*
+Dockerfile*
+docker-compose*.yml
