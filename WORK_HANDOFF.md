@@ -808,3 +808,30 @@ How to stop it:
 ```powershell
 docker compose -f docker-compose.local.yml down
 ```
+
+## Latest Completed Change
+
+- Mirrored all Neon table data into the local Docker PostgreSQL database.
+- Stopped `restaurantos-local` before copying data so the app would not write during the mirror.
+- Created local backup schema before replacing local data:
+  - `backup_before_neon_sync_20260506144608`
+- Copied all common public tables from Neon to local:
+  - tables copied: `58`
+  - rows copied: `1461`
+- Reset matching local sequences from Neon:
+  - `order_adjustment_number_seq`
+  - `plant_care_log_id_seq`
+- Restarted the local Docker app after the mirror.
+- Verified local and Neon row counts match exactly:
+  - Neon total rows: `1461`
+  - local total rows: `1461`
+  - differing table counts: `0`
+- Verified local app endpoints after restart:
+  - `http://localhost:5051/api/health`
+  - `http://localhost:5051/api/db-info`
+- Local Docker app remains available at:
+  - `http://localhost:5051`
+
+Important note:
+
+- Data is now matched from Neon to local, but offline-created POS writes still need queue/push logic before they can sync back to Neon.
