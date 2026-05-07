@@ -3,7 +3,7 @@ const db = require('../config/db');
 const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
 const { queueMasterDataSnapshot } = require('../utils/masterDataSync');
 const { isLocalOfflineMode } = require('../utils/offlineConfig');
-const { queueShiftSessionSnapshot } = require('../utils/offlineSync');
+const { queueDiningTableStatusSnapshot, queueShiftSessionSnapshot } = require('../utils/offlineSync');
 
 const queueMasterSync = (restaurantId, entityType, entityId, operation = 'sync') => {
   queueMasterDataSnapshot(restaurantId, entityType, entityId, operation)
@@ -21,6 +21,11 @@ const blockLocalMasterDataWrite = (res) => {
 const queueShiftSessionSync = (restaurantId, sessionId, operation = 'sync') => {
   queueShiftSessionSnapshot(restaurantId, sessionId, operation)
     .catch(err => console.warn('Shift session sync queue skipped:', err.message));
+};
+
+const queueDiningTableStatusSync = (restaurantId, tableId) => {
+  queueDiningTableStatusSnapshot(restaurantId, tableId, 'status')
+    .catch(err => console.warn('Dining table status sync queue skipped:', err.message));
 };
 
 const DEFAULT_TAX_RATES = [
@@ -102,6 +107,7 @@ exports.updateTableStatus = async (req, res) => {
       [status, id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Table not found' });
+    queueDiningTableStatusSync(req.user.restaurantId, id);
     req.app.get('io')?.to(req.user.restaurantId).emit('table_updated', result.rows[0]);
     res.json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }

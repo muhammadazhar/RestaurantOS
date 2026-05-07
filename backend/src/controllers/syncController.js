@@ -1,5 +1,5 @@
 const { cloudSyncToken } = require('../utils/offlineConfig');
-const { applyAttendanceLogSnapshot, applyMasterDataEntitySnapshot, applyOrderSnapshot, applyShiftSessionSnapshot, getSyncStatus, markFailedForRetry, processPendingQueue } = require('../utils/offlineSync');
+const { applyAttendanceLogSnapshot, applyDiningTableStatusSnapshot, applyMasterDataEntitySnapshot, applyOrderSnapshot, applyShiftSessionSnapshot, getSyncStatus, markFailedForRetry, processPendingQueue } = require('../utils/offlineSync');
 const { buildMasterDataPullSnapshot } = require('../utils/masterDataSync');
 
 exports.getStatus = async (_req, res) => {
@@ -45,6 +45,11 @@ exports.ingest = async (req, res) => {
     if (payload.kind === 'attendance_log_snapshot') {
       await applyAttendanceLogSnapshot(payload);
       return res.json({ success: true, applied: 'attendance_log_snapshot', logId: payload.logId });
+    }
+
+    if (payload.kind === 'dining_table_status_snapshot') {
+      await applyDiningTableStatusSnapshot(payload);
+      return res.json({ success: true, applied: 'dining_table_status_snapshot', tableId: payload.tableId });
     }
 
     if (payload.kind === 'master_data_snapshot') {

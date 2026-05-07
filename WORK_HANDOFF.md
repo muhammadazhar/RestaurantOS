@@ -1163,3 +1163,29 @@ Cloud verification after repair:
 
 - Neon now has May 7 attendance logs for employee `d1000000-0000-0000-0000-000000000001`.
 - Latest May 7 log is `clock_in`, so cloud status should show checked in after refresh.
+
+## Latest Completed Change
+
+- Added dining table status sync for local offline mode.
+- Problem found after user marked a table clean/cleaning locally:
+  - Local `T-01` (`e205ec48-9c1c-4c82-9e6c-b5689678cda1`) had `status='cleaning'`.
+  - Neon still had `status='occupied'`.
+  - No dining table status item existed in `offline_sync_queue`.
+- New sync payload:
+  - `dining_table_status_snapshot`
+- Local `PATCH /tables/:id/status` now queues a `dining_table` status item.
+- Cloud ingest now accepts `dining_table_status_snapshot` and updates only `dining_tables.status` plus sync metadata.
+- This keeps table layout/master-data cloud-owned while still allowing operational status to sync from local POS.
+- Current cloud row was repaired directly:
+  - table: `T-01`
+  - before: `occupied`
+  - after: `cleaning`
+
+Verification:
+
+```powershell
+node --check backend/src/utils/offlineSync.js
+node --check backend/src/controllers/syncController.js
+node --check backend/src/controllers/combinedControllers.js
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+```

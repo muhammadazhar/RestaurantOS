@@ -23,6 +23,7 @@ const MASTER_ENTITY_TABLES = {
 const OPERATIONAL_ENTITY_TABLES = {
   shift_session: 'shift_sessions',
   attendance_log: 'attendance_logs',
+  dining_table: 'dining_tables',
 };
 
 const OFFLINE_WRITE_TABLES = [
@@ -406,6 +407,82 @@ async function queueAttendanceLogSnapshot(restaurantId, logId, operation = 'sync
   }
 }
 
+async function fetchDiningTableStatusSnapshot(client, restaurantId, tableId) {
+  const tableRes = await client.query(
+    `SELECT id, restaurant_id, status
+     FROM dining_tables
+     WHERE id=$1 AND restaurant_id=$2`,
+    [tableId, restaurantId]
+  );
+  if (!tableRes.rows.length) return null;
+
+  return {
+    kind: 'dining_table_status_snapshot',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    deviceId,
+    branchCode,
+    restaurantId,
+    tableId,
+    table: tableRes.rows[0],
+  };
+}
+
+async function queueDiningTableStatusSnapshot(restaurantId, tableId, operation = 'status') {
+  if (!isLocalOfflineMode || !restaurantId || !tableId) return null;
+
+  const client = await db.getClient();
+  try {
+    const snapshot = await fetchDiningTableStatusSnapshot(client, restaurantId, tableId);
+    if (!snapshot) return null;
+    const idempotencyKey = `dining_table:${tableId}:status`;
+
+    const result = await client.query(
+      `INSERT INTO offline_sync_queue(
+         restaurant_id, device_id, branch_code, entity_type, entity_id,
+         operation, endpoint, method, payload, idempotency_key, status, attempts,
+         last_error, queued_at, next_attempt_at, synced_at
+       )
+       VALUES($1,$2,$3,'dining_table',$4,$5,'/api/sync/ingest','POST',$6::jsonb,$7,'pending',0,NULL,NOW(),NOW(),NULL)
+       ON CONFLICT (idempotency_key) DO UPDATE SET
+         restaurant_id = EXCLUDED.restaurant_id,
+         device_id = EXCLUDED.device_id,
+         branch_code = EXCLUDED.branch_code,
+         entity_type = EXCLUDED.entity_type,
+         entity_id = EXCLUDED.entity_id,
+         operation = EXCLUDED.operation,
+         endpoint = EXCLUDED.endpoint,
+         method = EXCLUDED.method,
+         payload = EXCLUDED.payload,
+         status = 'pending',
+         attempts = 0,
+         last_error = NULL,
+         queued_at = NOW(),
+         next_attempt_at = NOW(),
+         synced_at = NULL
+       RETURNING id`,
+      [restaurantId, deviceId, branchCode, tableId, operation, toJsonb(snapshot), idempotencyKey]
+    );
+
+    await client.query(
+      `UPDATE dining_tables
+       SET sync_status='pending',
+           sync_error=NULL,
+           local_device_id=COALESCE(local_device_id, $2)
+       WHERE id=$1`,
+      [tableId, deviceId]
+    ).catch(() => {});
+
+    triggerImmediateSync('dining table status snapshot');
+    return result.rows[0];
+  } catch (err) {
+    console.warn('Queue dining table status snapshot failed:', err.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
 async function getTableColumns(client, tableName) {
   const result = await client.query(
     `SELECT column_name
@@ -531,6 +608,40 @@ async function applyAttendanceLogSnapshot(snapshot) {
       sync_error: null,
       last_synced_at: new Date(),
     });
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function applyDiningTableStatusSnapshot(snapshot) {
+  if (!snapshot || snapshot.kind !== 'dining_table_status_snapshot' || !snapshot.table?.id) {
+    const err = new Error('Invalid dining table status snapshot payload');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE dining_tables
+       SET status=$3,
+           sync_status='synced',
+           sync_error=NULL,
+           last_synced_at=NOW()
+       WHERE id=$1 AND restaurant_id=$2
+       RETURNING *`,
+      [snapshot.table.id, snapshot.table.restaurant_id || snapshot.restaurantId, snapshot.table.status]
+    );
+    if (!result.rows.length) {
+      const err = new Error('Dining table not found for status sync');
+      err.statusCode = 404;
+      throw err;
+    }
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -852,9 +963,11 @@ module.exports = {
   queueOrderSnapshot,
   queueShiftSessionSnapshot,
   queueAttendanceLogSnapshot,
+  queueDiningTableStatusSnapshot,
   applyOrderSnapshot,
   applyShiftSessionSnapshot,
   applyAttendanceLogSnapshot,
+  applyDiningTableStatusSnapshot,
   applyMasterDataEntitySnapshot,
   pullCloudMasterData,
   processPendingQueue,
