@@ -1,5 +1,24 @@
 const db = require('../config/db');
 const { cloudApiUrl, cloudSyncToken, deviceId, branchCode, isLocalOfflineMode, getRuntimeInfo } = require('./offlineConfig');
+const {
+  MASTER_DATA_TABLES,
+  addMasterDataSyncMetadata,
+  applyMasterDataEntitySnapshot,
+  applyMasterDataPullSnapshot,
+  getLocalRestaurantIds,
+} = require('./masterDataSync');
+
+const MASTER_ENTITY_TABLES = {
+  restaurant: 'restaurants',
+  dining_table: 'dining_tables',
+  category: 'categories',
+  menu_item: 'menu_items',
+  employee: 'employees',
+  role: 'roles',
+  discount_preset: 'discount_presets',
+  inventory_item: 'inventory_items',
+  recipe: 'recipes',
+};
 
 const OFFLINE_WRITE_TABLES = [
   'orders',
@@ -12,6 +31,7 @@ const OFFLINE_WRITE_TABLES = [
   'inventory_transactions',
   'attendance_logs',
   'rider_collections',
+  ...MASTER_DATA_TABLES,
 ];
 
 async function tableExists(tableName) {
@@ -106,6 +126,12 @@ async function ensureOfflineSyncSchema() {
       CREATE INDEX IF NOT EXISTS idx_${tableName}_local_device_id
         ON ${tableName}(local_device_id);
     `);
+  }
+  const client = await db.getClient();
+  try {
+    await addMasterDataSyncMetadata(client);
+  } finally {
+    client.release();
   }
 }
 
@@ -299,6 +325,37 @@ async function applyOrderSnapshot(snapshot) {
   }
 }
 
+async function pullCloudMasterData() {
+  if (!isLocalOfflineMode || !cloudApiUrl || !cloudSyncToken) return { pulled: false };
+  if (typeof fetch !== 'function') throw new Error('Runtime fetch API is unavailable');
+
+  const restaurantIds = await getLocalRestaurantIds();
+  if (!restaurantIds.length) return { pulled: false, reason: 'no_local_restaurants' };
+
+  const response = await fetch(`${cloudApiUrl}/api/sync/master-data`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-RestaurantOS-Sync-Token': cloudSyncToken,
+      'X-RestaurantOS-Device-Id': deviceId,
+    },
+    body: JSON.stringify({ restaurantIds, branchCode, deviceId }),
+  });
+
+  if (!response.ok) {
+    let message = `Cloud master-data pull returned ${response.status}`;
+    try {
+      const body = await response.json();
+      message = body.error || message;
+    } catch {}
+    throw new Error(message);
+  }
+
+  const payload = await response.json();
+  const stats = await applyMasterDataPullSnapshot(payload);
+  return { pulled: true, ...stats };
+}
+
 async function getQueueSummary() {
   const result = await db.query(`
     SELECT status, COUNT(*)::int AS count
@@ -410,6 +467,15 @@ async function markQueueItemSynced(item) {
        WHERE id=$1`,
       [item.entity_id]
     ).catch(() => {});
+  } else if (item.entity_id && MASTER_ENTITY_TABLES[item.entity_type]) {
+    await db.query(
+      `UPDATE ${MASTER_ENTITY_TABLES[item.entity_type]}
+       SET sync_status='synced',
+           last_synced_at=NOW(),
+           sync_error=NULL
+       WHERE id=$1`,
+      [item.entity_id]
+    ).catch(() => {});
   }
 }
 
@@ -425,6 +491,14 @@ async function markQueueItemFailed(item, status, error) {
   if (item.entity_type === 'order' && item.entity_id) {
     await db.query(
       `UPDATE orders
+       SET sync_status=$2,
+           sync_error=$3
+       WHERE id=$1`,
+      [item.entity_id, status === 'conflict' ? 'conflict' : 'failed', String(error || 'Sync failed').slice(0, 1000)]
+    ).catch(() => {});
+  } else if (item.entity_id && MASTER_ENTITY_TABLES[item.entity_type]) {
+    await db.query(
+      `UPDATE ${MASTER_ENTITY_TABLES[item.entity_type]}
        SET sync_status=$2,
            sync_error=$3
        WHERE id=$1`,
@@ -516,11 +590,17 @@ function startOfflineSyncWorker() {
   }
 
   let running = false;
+  let lastMasterPullAt = 0;
   const tick = async () => {
     if (running) return;
     running = true;
     try {
       await processPendingQueue();
+      const pullIntervalMs = Number(process.env.MASTER_SYNC_PULL_INTERVAL_MS || 60000);
+      if (Date.now() - lastMasterPullAt >= pullIntervalMs) {
+        lastMasterPullAt = Date.now();
+        await pullCloudMasterData();
+      }
     } catch (err) {
       console.warn('Offline sync worker error:', err.message);
     } finally {
@@ -539,6 +619,8 @@ module.exports = {
   getSyncStatus,
   queueOrderSnapshot,
   applyOrderSnapshot,
+  applyMasterDataEntitySnapshot,
+  pullCloudMasterData,
   processPendingQueue,
   startOfflineSyncWorker,
   markFailedForRetry,

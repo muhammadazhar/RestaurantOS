@@ -1,6 +1,12 @@
 // ── tables.js ─────────────────────────────────────────────────────────────────
 const db = require('../config/db');
 const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
+const { queueMasterDataSnapshot } = require('../utils/masterDataSync');
+
+const queueMasterSync = (restaurantId, entityType, entityId, operation = 'sync') => {
+  queueMasterDataSnapshot(restaurantId, entityType, entityId, operation)
+    .catch(err => console.warn('Master-data sync queue skipped:', err.message));
+};
 
 const DEFAULT_TAX_RATES = [
   { id: 'gst', name: 'Sales Tax (GST)', rate: 8, applies_to: 'all', enabled: true },
@@ -94,6 +100,7 @@ exports.createTable = async (req, res) => {
       `INSERT INTO dining_tables(restaurant_id,label,section,capacity) VALUES($1,$2,$3,$4) RETURNING *`,
       [req.user.restaurantId, String(label).trim(), section||'Main', capacity||4]
     );
+    queueMasterSync(req.user.restaurantId, 'dining_table', result.rows[0].id, 'create');
     req.app.get('io')?.to(req.user.restaurantId).emit('table_updated', result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }
@@ -120,6 +127,7 @@ exports.updateTable = async (req, res) => {
       ]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Table not found' });
+    queueMasterSync(req.user.restaurantId, 'dining_table', result.rows[0].id, 'update');
     req.app.get('io')?.to(req.user.restaurantId).emit('table_updated', result.rows[0]);
     res.json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }
@@ -150,6 +158,7 @@ exports.deleteTable = async (req, res) => {
       [id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Table not found' });
+    queueMasterSync(req.user.restaurantId, 'dining_table', id, 'delete');
     req.app.get('io')?.to(req.user.restaurantId).emit('table_updated', result.rows[0]);
     res.json({ deleted: true, table: result.rows[0] });
   } catch (err) {
@@ -209,6 +218,7 @@ exports.createEmployee = async (req, res) => {
     }
 
     await client.query('COMMIT');
+    queueMasterSync(req.user.restaurantId, 'employee', emp.id, 'create');
     res.status(201).json({ ...emp, employee_type: employee_type || null });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -234,6 +244,7 @@ exports.updateEmployee = async (req, res) => {
        id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Employee not found' });
+    queueMasterSync(req.user.restaurantId, 'employee', result.rows[0].id, 'update');
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
@@ -489,6 +500,7 @@ exports.createMenuItem = async (req, res) => {
     await insertMenuVariants(client, result.rows[0].id, normalizedVariants);
     await insertMenuAddOnGroups(client, result.rows[0].id, normalizedAddOnGroups);
     await client.query('COMMIT');
+    queueMasterSync(req.user.restaurantId, 'menu_item', result.rows[0].id, 'create');
     res.status(201).json({ ...result.rows[0], variants: normalizedVariants, addon_groups: normalizedAddOnGroups });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -510,6 +522,7 @@ exports.uploadMenuImage = async (req, res) => {
       [imageUrl, id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item not found' });
+    queueMasterSync(req.user.restaurantId, 'menu_item', result.rows[0].id, 'update');
     res.json({ image_url: imageUrl, item: result.rows[0] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
@@ -597,6 +610,7 @@ exports.updateMenuItem = async (req, res) => {
       await insertMenuAddOnGroups(client, id, normalizedAddOnGroups);
     }
     await client.query('COMMIT');
+    queueMasterSync(req.user.restaurantId, 'menu_item', id, 'update');
     res.json({
       ...result.rows[0],
       variants: normalizedVariants || undefined,
@@ -638,6 +652,7 @@ exports.deleteMenuItem = async (req, res) => {
          RETURNING id`,
         [id, req.user.restaurantId]
       );
+      queueMasterSync(req.user.restaurantId, 'menu_item', id, 'update');
       return res.json({
         success: true,
         deactivated: true,
@@ -654,6 +669,7 @@ exports.deleteMenuItem = async (req, res) => {
       [id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item not found' });
+    queueMasterSync(req.user.restaurantId, 'menu_item', id, 'update');
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -675,6 +691,7 @@ exports.uploadMenuItemImage = async (req, res) => {
       [imageUrl, id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item not found' });
+    queueMasterSync(req.user.restaurantId, 'menu_item', result.rows[0].id, 'update');
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
@@ -686,6 +703,7 @@ exports.deleteMenuItemImage = async (req, res) => {
       `UPDATE menu_items SET image_url=NULL WHERE id=$1 AND restaurant_id=$2`,
       [id, req.user.restaurantId]
     );
+    queueMasterSync(req.user.restaurantId, 'menu_item', id, 'update');
     res.json({ success: true });
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
@@ -722,6 +740,7 @@ exports.createCategory = async (req, res) => {
        VALUES($1,$2,$3,$4,$5) RETURNING *`,
       [req.user.restaurantId, name.trim(), description || null, parent_id || null, sort_order ?? 0]
     );
+    queueMasterSync(req.user.restaurantId, 'category', result.rows[0].id, 'create');
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Category name already exists' });
@@ -748,6 +767,7 @@ exports.updateCategory = async (req, res) => {
        id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Category not found' });
+    queueMasterSync(req.user.restaurantId, 'category', result.rows[0].id, 'update');
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
@@ -776,6 +796,7 @@ exports.deleteCategory = async (req, res) => {
         `UPDATE categories SET is_active=FALSE WHERE id=$1 AND restaurant_id=$2 RETURNING *`,
         [id, req.user.restaurantId]
       );
+      queueMasterSync(req.user.restaurantId, 'category', id, 'update');
       return res.json({
         success: true,
         deactivated: true,
@@ -792,6 +813,7 @@ exports.deleteCategory = async (req, res) => {
     if (subs.rows.length) return res.status(400).json({ error: 'Category has sub-categories — delete them first' });
     const del = await db.query(`DELETE FROM categories WHERE id=$1 AND restaurant_id=$2 RETURNING id`, [id, req.user.restaurantId]);
     if (!del.rows.length) return res.status(404).json({ error: 'Category not found' });
+    queueMasterSync(req.user.restaurantId, 'category', id, 'delete');
     res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
@@ -840,6 +862,7 @@ exports.createRecipe = async (req, res) => {
       }
     }
     await client.query('COMMIT');
+    queueMasterSync(req.user.restaurantId, 'recipe', recipe.rows[0].id, 'create');
     res.status(201).json(recipe.rows[0]);
   } catch { await client.query('ROLLBACK'); res.status(500).json({ error: 'Server error' }); }
   finally { client.release(); }
@@ -1318,6 +1341,7 @@ exports.createRole = async (req, res) => {
        VALUES($1, $2, $3, false) RETURNING id, name, permissions, is_system`,
       [req.user.restaurantId, name.trim(), JSON.stringify(permissions)]
     );
+    queueMasterSync(req.user.restaurantId, 'role', result.rows[0].id, 'create');
     res.status(201).json(result.rows[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Role name already exists' });
@@ -1336,6 +1360,7 @@ exports.updateRole = async (req, res) => {
       [JSON.stringify(permissions), id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Role not found' });
+    queueMasterSync(req.user.restaurantId, 'role', result.rows[0].id, 'update');
     res.json(result.rows[0]);
   } catch { res.status(500).json({ error: 'Server error' }); }
 };
@@ -1948,6 +1973,7 @@ exports.updateRestaurantSettings = async (req, res) => {
       [JSON.stringify(nextSettings), req.user.restaurantId]
     );
     const settings = result.rows[0]?.settings || {};
+    queueMasterSync(req.user.restaurantId, 'restaurant', req.user.restaurantId, 'update');
     res.json({
       ...settings,
       workflow_settings: normalizeWorkflowSettings(settings.workflow_settings),
@@ -1961,6 +1987,7 @@ exports.uploadRestaurantLogo = async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const url = req.file.path && req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     await db.query(`UPDATE restaurants SET logo_url=$1 WHERE id=$2`, [url, req.user.restaurantId]);
+    queueMasterSync(req.user.restaurantId, 'restaurant', req.user.restaurantId, 'update');
     res.json({ url });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Upload failed' }); }
 };
@@ -2601,6 +2628,7 @@ exports.createDiscountPreset = async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
       [req.user.restaurantId, name, type, value, is_active, sort_order]
     );
+    queueMasterSync(req.user.restaurantId, 'discount_preset', result.rows[0].id, 'create');
     res.status(201).json(result.rows[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'A preset with this name already exists' });
@@ -2619,6 +2647,7 @@ exports.updateDiscountPreset = async (req, res) => {
       [name, type, value, is_active, sort_order, id, req.user.restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Preset not found' });
+    queueMasterSync(req.user.restaurantId, 'discount_preset', result.rows[0].id, 'update');
     res.json(result.rows[0]);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'A preset with this name already exists' });
@@ -2634,6 +2663,7 @@ exports.deleteDiscountPreset = async (req, res) => {
       `DELETE FROM discount_presets WHERE id=$1 AND restaurant_id=$2`,
       [id, req.user.restaurantId]
     );
+    queueMasterSync(req.user.restaurantId, 'discount_preset', id, 'delete');
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };

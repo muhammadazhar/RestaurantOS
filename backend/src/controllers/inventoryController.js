@@ -1,4 +1,10 @@
 const db = require('../config/db');
+const { queueMasterDataSnapshot } = require('../utils/masterDataSync');
+
+const queueInventorySync = (restaurantId, inventoryItemId, operation = 'sync') => {
+  queueMasterDataSnapshot(restaurantId, 'inventory_item', inventoryItemId, operation)
+    .catch(err => console.warn('Inventory master-data sync queue skipped:', err.message));
+};
 
 // ─── Auto-journalize an inventory transaction ──────────────────────────────────
 async function autoJournalizeInventory(restaurantId, txn, item) {
@@ -108,6 +114,7 @@ exports.createItem = async (req, res) => {
        stock_quantity||0, min_quantity||0, max_quantity||100,
        cost_per_unit||0, supplier||null, category||'General', barcode||null]
     );
+    queueInventorySync(restaurantId, result.rows[0].id, 'create');
     res.status(201).json(result.rows[0]);
   } catch (err) {
     if (err.code === '23505') return res.status(400).json({ error: 'Item with this name already exists' });
@@ -133,6 +140,7 @@ exports.updateItem = async (req, res) => {
        id, restaurantId]
     );
     if (!result.rows.length) return res.status(404).json({ error: 'Item not found' });
+    queueInventorySync(restaurantId, result.rows[0].id, 'update');
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
@@ -143,6 +151,7 @@ exports.deleteItem = async (req, res) => {
     const { restaurantId } = req.user;
     const { id } = req.params;
     await db.query(`DELETE FROM inventory_items WHERE id=$1 AND restaurant_id=$2`, [id, restaurantId]);
+    queueInventorySync(restaurantId, id, 'delete');
     res.json({ success: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
 };
@@ -193,6 +202,7 @@ exports.updateStock = async (req, res) => {
     );
 
     await client.query('COMMIT');
+    queueInventorySync(restaurantId, updated.rows[0].id, 'update');
 
     // Auto-journalize after commit (non-blocking)
     try {

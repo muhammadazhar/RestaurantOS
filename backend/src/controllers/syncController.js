@@ -1,5 +1,6 @@
 const { cloudSyncToken } = require('../utils/offlineConfig');
-const { applyOrderSnapshot, getSyncStatus, markFailedForRetry, processPendingQueue } = require('../utils/offlineSync');
+const { applyMasterDataEntitySnapshot, applyOrderSnapshot, getSyncStatus, markFailedForRetry, processPendingQueue } = require('../utils/offlineSync');
+const { buildMasterDataPullSnapshot } = require('../utils/masterDataSync');
 
 exports.getStatus = async (_req, res) => {
   try {
@@ -36,9 +37,34 @@ exports.ingest = async (req, res) => {
       return res.json({ success: true, applied: 'order_snapshot', orderId: payload.orderId });
     }
 
+    if (payload.kind === 'master_data_snapshot') {
+      await applyMasterDataEntitySnapshot(payload);
+      return res.json({
+        success: true,
+        applied: 'master_data_snapshot',
+        entityType: payload.entityType,
+        entityId: payload.entityId,
+      });
+    }
+
     return res.status(400).json({ error: 'Unsupported sync payload kind' });
   } catch (err) {
     console.error('Sync ingest error:', err.message, err.detail || '');
     res.status(err.statusCode || 500).json({ error: err.message || 'Unable to ingest sync payload' });
+  }
+};
+
+exports.getMasterData = async (req, res) => {
+  try {
+    const token = req.headers['x-restaurantos-sync-token'];
+    if (!cloudSyncToken || token !== cloudSyncToken) {
+      return res.status(401).json({ error: 'Invalid sync token' });
+    }
+
+    const restaurantIds = Array.isArray(req.body?.restaurantIds) ? req.body.restaurantIds : [];
+    res.json(await buildMasterDataPullSnapshot(restaurantIds));
+  } catch (err) {
+    console.error('Sync master-data pull error:', err.message, err.detail || '');
+    res.status(err.statusCode || 500).json({ error: err.message || 'Unable to build master-data snapshot' });
   }
 };

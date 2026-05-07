@@ -901,3 +901,59 @@ Important follow-up:
 - Set `CLOUD_SYNC_TOKEN` on Railway and local Docker before testing live push.
 - Set `CLOUD_API_URL` locally to the Railway backend URL.
 - After setting those, local status should move from `Offline - local mode` to `Local mode online`; creating/updating a POS order should briefly show `Pending sync 1`, then clear when pushed.
+
+## Latest Completed Change
+
+- Added master-data offline sync for local-server mode.
+- Local admin/master-data edits now queue `master_data_snapshot` items into `offline_sync_queue` for:
+  - restaurant settings/logo
+  - dining tables
+  - categories
+  - menu items, variants, add-on groups, and add-ons
+  - employees
+  - roles
+  - discount presets
+  - inventory items and stock quantity changes
+  - recipes and recipe ingredients
+- Cloud ingest endpoint now accepts both:
+  - `order_snapshot`
+  - `master_data_snapshot`
+- Added protected cloud-to-local master-data pull endpoint:
+  - `POST /api/sync/master-data`
+  - protected by `X-RestaurantOS-Sync-Token`
+  - returns full master-data snapshots for the requested restaurant IDs.
+- Local sync worker now:
+  - pushes pending queue items to Railway/Neon
+  - pulls cloud master data back down every `MASTER_SYNC_PULL_INTERVAL_MS` milliseconds, default `60000`
+  - skips applying a cloud master-data row when the same local row has a pending/failed/conflict local edit.
+- Added sync metadata columns to master-data tables through the existing offline schema bootstrap.
+- Added `MASTER_SYNC_PULL_INTERVAL_MS` to `backend/.env.example`.
+
+Verification run for this change:
+
+```powershell
+node --check backend/src/utils/masterDataSync.js
+node --check backend/src/utils/offlineSync.js
+node --check backend/src/controllers/syncController.js
+node --check backend/src/controllers/combinedControllers.js
+node --check backend/src/controllers/inventoryController.js
+node --check backend/src/routes/index.js
+docker compose -f docker-compose.local.yml build restaurantos-local
+docker compose -f docker-compose.local.yml up -d --force-recreate
+Invoke-RestMethod -Uri 'http://localhost:5051/api/health'
+Invoke-RestMethod -Uri 'http://localhost:5051/api/db-info'
+```
+
+Smoke tests:
+
+- Built a full master-data pull snapshot from local Docker PostgreSQL for one restaurant:
+  - restaurants: `1`
+  - snapshots: `186`
+- Queued and cleaned up a temporary category `master_data_snapshot` queue item:
+  - entity_type: `category`
+  - operation: `update`
+  - status: `pending`
+
+Important note:
+
+- Live cloud-to-local master-data pull will start only after local Docker has `CLOUD_API_URL` and matching `CLOUD_SYNC_TOKEN`; the current local container correctly logs idle while `CLOUD_API_URL` is empty.
