@@ -139,6 +139,13 @@ function toJsonb(value) {
   return JSON.stringify(value || {});
 }
 
+function triggerImmediateSync(reason = 'queue update') {
+  if (!isLocalOfflineMode || !cloudApiUrl || !cloudSyncToken) return;
+  setImmediate(() => {
+    processPendingQueue().catch(err => console.warn(`Immediate offline sync after ${reason} failed:`, err.message));
+  });
+}
+
 async function fetchOrderSnapshot(client, restaurantId, orderId) {
   const orderRes = await client.query(
     `SELECT * FROM orders WHERE id=$1 AND restaurant_id=$2`,
@@ -232,6 +239,7 @@ async function queueOrderSnapshot(restaurantId, orderId, operation = 'sync') {
       [orderId, deviceId]
     ).catch(() => {});
 
+    triggerImmediateSync('order snapshot');
     return result.rows[0];
   } catch (err) {
     console.warn('Queue order snapshot failed:', err.message);

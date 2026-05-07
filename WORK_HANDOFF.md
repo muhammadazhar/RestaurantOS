@@ -1046,3 +1046,21 @@ Local image localization result:
 Important note:
 
 - Downloaded image files in `backend/uploads/offline-cache` are local runtime data and were not staged for Git.
+
+## Latest Completed Change
+
+- Improved POS order sync timing.
+- `queueOrderSnapshot` now triggers an immediate background `processPendingQueue()` when local offline mode has both:
+  - `CLOUD_API_URL`
+  - `CLOUD_SYNC_TOKEN`
+- The periodic worker remains as a backup and still defaults to:
+  - `SYNC_WORKER_INTERVAL_MS=15000`
+- Added env example notes clarifying immediate order push and worker interval.
+
+Current local runtime observation:
+
+- Local Docker has:
+  - `CLOUD_API_URL=https://restaurantos-production-bdb7.up.railway.app`
+  - `DEPLOYMENT_MODE=local_offline`
+  - empty `CLOUD_SYNC_TOKEN`
+- Because `CLOUD_SYNC_TOKEN` is empty, the sync worker does not start yet and queue items remain pending until the same token is configured in Railway and local Docker.
