@@ -987,3 +987,15 @@ Invoke-RestMethod -Uri 'http://localhost:5051/api/health'
 Smoke test:
 
 - With `DEPLOYMENT_MODE=local_offline`, mocked local `createCategory` and `createItem` calls both returned HTTP `409` before any DB write.
+
+## Latest Completed Change
+
+- Configured the local Docker offline runtime with the Railway backend API URL:
+  - `https://restaurantos-production-bdb7.up.railway.app`
+- Confirmed Railway backend health endpoint is reachable:
+  - `GET /api/health` returned `status: ok`
+- Local Docker now defaults `CLOUD_API_URL` to that Railway backend URL unless overridden by the host environment.
+
+Important note:
+
+- `CLOUD_SYNC_TOKEN` still must be set to the same value in both Railway backend variables and local Docker before protected sync push/pull can run.

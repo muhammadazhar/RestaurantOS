@@ -25,7 +25,7 @@ services:
       DEVICE_ID: ${DEVICE_ID:-LOCAL-POS-01}
       BRANCH_CODE: ${BRANCH_CODE:-LOCAL}
       DEVICE_LABEL: ${DEVICE_LABEL:-RestaurantOS Local POS}
-      CLOUD_API_URL: ${CLOUD_API_URL:-}
+      CLOUD_API_URL: ${CLOUD_API_URL:-https://restaurantos-production-bdb7.up.railway.app}
       CLOUD_SYNC_TOKEN: ${CLOUD_SYNC_TOKEN:-}
       JWT_SECRET: ${JWT_SECRET:-restaurantos_jwt_secret_change_in_production_min32chars}
       JWT_EXPIRES_IN: 8h
