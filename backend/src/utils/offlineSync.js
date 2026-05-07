@@ -255,7 +255,9 @@ async function queueOrderSnapshot(restaurantId, orderId, operation = 'sync') {
 
 async function fetchShiftSessionSnapshot(client, restaurantId, sessionId) {
   const sessionRes = await client.query(
-    `SELECT * FROM shift_sessions WHERE id=$1 AND restaurant_id=$2`,
+    `SELECT *, shift_date::text AS shift_date
+     FROM shift_sessions
+     WHERE id=$1 AND restaurant_id=$2`,
     [sessionId, restaurantId]
   );
   if (!sessionRes.rows.length) return null;

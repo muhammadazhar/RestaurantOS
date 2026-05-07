@@ -1110,3 +1110,21 @@ Runtime check after the user reported pending shift sync:
   - pending `shift_session` create: 1
   - both have `attempts=0`
 - Meaning: worker has not attempted cloud push because the token is missing locally.
+
+## Latest Completed Change
+
+- Fixed shift-session snapshot date serialization.
+- Problem found after sync started working:
+  - Local queue showed the shift session as `synced`.
+  - Neon had the same `shift_sessions.id` and `status='active'`.
+  - But Neon stored `shift_date='2026-05-06'` while local intended `2026-05-07`, so the cloud shift screen for May 7 still looked closed.
+- Root cause:
+  - `shift_date` is a PostgreSQL `DATE`.
+  - Local snapshot serialized the pg DATE as a JavaScript Date/UTC timestamp.
+  - Railway/Neon inserted that timestamp back into a `DATE`, shifting it one day earlier.
+- Code fix:
+  - `fetchShiftSessionSnapshot` now selects `shift_date::text AS shift_date`, sending `YYYY-MM-DD` in the sync payload.
+- Data repair already applied in Neon:
+  - session id: `7d98e947-b628-421a-aa88-8f6e6ce538b3`
+  - before: `shift_date=2026-05-06`, `status=active`
+  - after: `shift_date=2026-05-07`, `status=active`
