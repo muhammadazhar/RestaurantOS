@@ -22,6 +22,7 @@ const MASTER_ENTITY_TABLES = {
 
 const OPERATIONAL_ENTITY_TABLES = {
   shift_session: 'shift_sessions',
+  attendance_log: 'attendance_logs',
 };
 
 const OFFLINE_WRITE_TABLES = [
@@ -329,6 +330,82 @@ async function queueShiftSessionSnapshot(restaurantId, sessionId, operation = 's
   }
 }
 
+async function fetchAttendanceLogSnapshot(client, restaurantId, logId) {
+  const logRes = await client.query(
+    `SELECT *, attendance_date::text AS attendance_date
+     FROM attendance_logs
+     WHERE id=$1 AND restaurant_id=$2`,
+    [logId, restaurantId]
+  );
+  if (!logRes.rows.length) return null;
+
+  return {
+    kind: 'attendance_log_snapshot',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    deviceId,
+    branchCode,
+    restaurantId,
+    logId,
+    attendanceLog: logRes.rows[0],
+  };
+}
+
+async function queueAttendanceLogSnapshot(restaurantId, logId, operation = 'sync') {
+  if (!isLocalOfflineMode || !restaurantId || !logId) return null;
+
+  const client = await db.getClient();
+  try {
+    const snapshot = await fetchAttendanceLogSnapshot(client, restaurantId, logId);
+    if (!snapshot) return null;
+    const idempotencyKey = `attendance_log:${logId}`;
+
+    const result = await client.query(
+      `INSERT INTO offline_sync_queue(
+         restaurant_id, device_id, branch_code, entity_type, entity_id,
+         operation, endpoint, method, payload, idempotency_key, status, attempts,
+         last_error, queued_at, next_attempt_at, synced_at
+       )
+       VALUES($1,$2,$3,'attendance_log',$4,$5,'/api/sync/ingest','POST',$6::jsonb,$7,'pending',0,NULL,NOW(),NOW(),NULL)
+       ON CONFLICT (idempotency_key) DO UPDATE SET
+         restaurant_id = EXCLUDED.restaurant_id,
+         device_id = EXCLUDED.device_id,
+         branch_code = EXCLUDED.branch_code,
+         entity_type = EXCLUDED.entity_type,
+         entity_id = EXCLUDED.entity_id,
+         operation = EXCLUDED.operation,
+         endpoint = EXCLUDED.endpoint,
+         method = EXCLUDED.method,
+         payload = EXCLUDED.payload,
+         status = 'pending',
+         attempts = 0,
+         last_error = NULL,
+         queued_at = NOW(),
+         next_attempt_at = NOW(),
+         synced_at = NULL
+       RETURNING id`,
+      [restaurantId, deviceId, branchCode, logId, operation, toJsonb(snapshot), idempotencyKey]
+    );
+
+    await client.query(
+      `UPDATE attendance_logs
+       SET sync_status='pending',
+           sync_error=NULL,
+           local_device_id=COALESCE(local_device_id, $2)
+       WHERE id=$1`,
+      [logId, deviceId]
+    ).catch(() => {});
+
+    triggerImmediateSync('attendance log snapshot');
+    return result.rows[0];
+  } catch (err) {
+    console.warn('Queue attendance log snapshot failed:', err.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
 async function getTableColumns(client, tableName) {
   const result = await client.query(
     `SELECT column_name
@@ -425,6 +502,31 @@ async function applyShiftSessionSnapshot(snapshot) {
     await client.query('BEGIN');
     await upsertRow(client, 'shift_sessions', {
       ...snapshot.shiftSession,
+      sync_status: 'synced',
+      sync_error: null,
+      last_synced_at: new Date(),
+    });
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function applyAttendanceLogSnapshot(snapshot) {
+  if (!snapshot || snapshot.kind !== 'attendance_log_snapshot' || !snapshot.attendanceLog?.id) {
+    const err = new Error('Invalid attendance log snapshot payload');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await upsertRow(client, 'attendance_logs', {
+      ...snapshot.attendanceLog,
       sync_status: 'synced',
       sync_error: null,
       last_synced_at: new Date(),
@@ -749,8 +851,10 @@ module.exports = {
   getSyncStatus,
   queueOrderSnapshot,
   queueShiftSessionSnapshot,
+  queueAttendanceLogSnapshot,
   applyOrderSnapshot,
   applyShiftSessionSnapshot,
+  applyAttendanceLogSnapshot,
   applyMasterDataEntitySnapshot,
   pullCloudMasterData,
   processPendingQueue,

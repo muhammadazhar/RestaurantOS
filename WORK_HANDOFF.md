@@ -1128,3 +1128,38 @@ Runtime check after the user reported pending shift sync:
   - session id: `7d98e947-b628-421a-aa88-8f6e6ce538b3`
   - before: `shift_date=2026-05-06`, `status=active`
   - after: `shift_date=2026-05-07`, `status=active`
+
+## Latest Completed Change
+
+- Added attendance-log sync for local offline mode.
+- Problem found after shift sync was fixed:
+  - Local May 7 check-in rows existed in `attendance_logs`.
+  - Neon was missing those May 7 rows.
+  - No `attendance_log` items were present in `offline_sync_queue`; `sync_status='synced'` was only the default metadata value.
+- New sync payload:
+  - `attendance_log_snapshot`
+- Local attendance writes now queue to `offline_sync_queue` for:
+  - clock-in
+  - clock-out
+  - manual punch
+  - void log
+- Cloud ingest now accepts `attendance_log_snapshot` and upserts `attendance_logs`.
+- `attendance_date` is serialized as `attendance_date::text` to avoid DATE/timezone shifts.
+- Current missing May 7 local attendance rows were repaired directly in Neon:
+  - `d8fcaa3e-29b3-4f62-bb91-c08441c6ac2a` clock-in
+  - `34c89b1d-d710-4d05-882a-aeacdbd2a986` clock-out
+  - `a322df20-2b18-4880-bc4a-3e6ef817d1f2` clock-in
+
+Verification:
+
+```powershell
+node --check backend/src/utils/offlineSync.js
+node --check backend/src/controllers/syncController.js
+node --check backend/src/controllers/attendanceController.js
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+```
+
+Cloud verification after repair:
+
+- Neon now has May 7 attendance logs for employee `d1000000-0000-0000-0000-000000000001`.
+- Latest May 7 log is `clock_in`, so cloud status should show checked in after refresh.

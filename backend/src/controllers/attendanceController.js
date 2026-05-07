@@ -2,6 +2,12 @@
 // attendanceController.js  — Time & Attendance Module (Premium Add-on)
 // ═══════════════════════════════════════════════════════════════════════════════
 const db = require('../config/db');
+const { queueAttendanceLogSnapshot } = require('../utils/offlineSync');
+
+const queueAttendanceLogSync = (restaurantId, logId, operation = 'sync') => {
+  queueAttendanceLogSnapshot(restaurantId, logId, operation)
+    .catch(err => console.warn('Attendance log sync queue skipped:', err.message));
+};
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -254,6 +260,7 @@ exports.clockIn = async (req, res) => {
 
     await computeDaily(client, rid, empId, attendanceDate);
     await client.query('COMMIT');
+    queueAttendanceLogSync(rid, log.rows[0].id, 'create');
     res.json({ log: log.rows[0], attendance_date: attendanceDate });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -302,6 +309,7 @@ exports.clockOut = async (req, res) => {
 
     await computeDaily(client, rid, empId, attendanceDate);
     await client.query('COMMIT');
+    queueAttendanceLogSync(rid, log.rows[0].id, 'create');
     res.json({ log: log.rows[0] });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -389,6 +397,7 @@ exports.createLog = async (req, res) => {
     );
     await computeDaily(client, rid, employee_id, attendanceDate);
     await client.query('COMMIT');
+    queueAttendanceLogSync(rid, log.rows[0].id, 'create');
     res.status(201).json(log.rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -412,6 +421,7 @@ exports.voidLog = async (req, res) => {
     const log = result.rows[0];
     await computeDaily(client, rid, log.employee_id, log.attendance_date);
     await client.query('COMMIT');
+    queueAttendanceLogSync(rid, log.id, 'update');
     res.json(log);
   } catch (err) {
     await client.query('ROLLBACK');
