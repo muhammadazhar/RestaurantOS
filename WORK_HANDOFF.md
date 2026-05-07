@@ -1092,3 +1092,21 @@ node --check backend/src/controllers/combinedControllers.js
 Important note:
 
 - Local Docker still has empty `CLOUD_SYNC_TOKEN`; shift/order sync queue items cannot push to Railway until the same token is configured locally and in the Railway backend environment.
+
+## Latest Completed Change
+
+- Fixed local Docker sync-token wiring.
+- `docker-compose.local.yml` still loads `backend/.env`, but no longer overrides `CLOUD_SYNC_TOKEN` to an empty value when the host shell does not define it.
+- Added `backend/.env.example` guidance that Docker local offline mode expects `CLOUD_SYNC_TOKEN` in `backend/.env`.
+
+Runtime check after the user reported pending shift sync:
+
+- Local container environment:
+  - `DEPLOYMENT_MODE=local_offline`
+  - `CLOUD_API_URL=https://restaurantos-production-bdb7.up.railway.app`
+  - empty `CLOUD_SYNC_TOKEN`
+- Local queue:
+  - pending `order` status: 1
+  - pending `shift_session` create: 1
+  - both have `attempts=0`
+- Meaning: worker has not attempted cloud push because the token is missing locally.
