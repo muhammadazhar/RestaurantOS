@@ -957,3 +957,33 @@ Smoke tests:
 Important note:
 
 - Live cloud-to-local master-data pull will start only after local Docker has `CLOUD_API_URL` and matching `CLOUD_SYNC_TOKEN`; the current local container correctly logs idle while `CLOUD_API_URL` is empty.
+
+## Latest Completed Change
+
+- Tightened master-data conflict policy so local-server offline mode treats master setup data as cloud-managed and read-only.
+- When `DEPLOYMENT_MODE=local_offline`, the backend now rejects local add/edit/delete actions with HTTP `409` for:
+  - dining table setup
+  - employee setup
+  - menu item setup, image changes, variants, and add-ons
+  - category setup
+  - recipe setup
+  - role/permission setup
+  - restaurant settings/logo
+  - discount presets
+  - inventory item setup
+- Cloud-to-local master-data pull remains enabled, so changes made in Railway/Neon still sync down to the local server.
+- Inventory stock movements remain local operational activity; only inventory item definition/setup is blocked locally.
+
+Verification run for this change:
+
+```powershell
+node --check backend/src/controllers/combinedControllers.js
+node --check backend/src/controllers/inventoryController.js
+docker compose -f docker-compose.local.yml build restaurantos-local
+docker compose -f docker-compose.local.yml up -d --force-recreate
+Invoke-RestMethod -Uri 'http://localhost:5051/api/health'
+```
+
+Smoke test:
+
+- With `DEPLOYMENT_MODE=local_offline`, mocked local `createCategory` and `createItem` calls both returned HTTP `409` before any DB write.

@@ -1,9 +1,18 @@
 const db = require('../config/db');
 const { queueMasterDataSnapshot } = require('../utils/masterDataSync');
+const { isLocalOfflineMode } = require('../utils/offlineConfig');
 
 const queueInventorySync = (restaurantId, inventoryItemId, operation = 'sync') => {
   queueMasterDataSnapshot(restaurantId, 'inventory_item', inventoryItemId, operation)
     .catch(err => console.warn('Inventory master-data sync queue skipped:', err.message));
+};
+
+const blockLocalInventoryMasterWrite = (res) => {
+  if (!isLocalOfflineMode) return false;
+  res.status(409).json({
+    error: 'Inventory item setup is managed from the cloud. Please add or edit items online, then let the local server sync them down.',
+  });
+  return true;
 };
 
 // ─── Auto-journalize an inventory transaction ──────────────────────────────────
@@ -104,6 +113,7 @@ exports.getInventory = async (req, res) => {
 // ─── CREATE item ───────────────────────────────────────────────────────────────
 exports.createItem = async (req, res) => {
   try {
+    if (blockLocalInventoryMasterWrite(res)) return;
     const { restaurantId } = req.user;
     const { name, unit, stock_quantity, min_quantity, max_quantity, cost_per_unit, supplier, category, barcode } = req.body;
     if (!name || !unit) return res.status(400).json({ error: 'name and unit required' });
@@ -125,6 +135,7 @@ exports.createItem = async (req, res) => {
 // ─── UPDATE item details ───────────────────────────────────────────────────────
 exports.updateItem = async (req, res) => {
   try {
+    if (blockLocalInventoryMasterWrite(res)) return;
     const { restaurantId } = req.user;
     const { id } = req.params;
     const { name, unit, min_quantity, max_quantity, cost_per_unit, supplier, category, barcode } = req.body;
@@ -148,6 +159,7 @@ exports.updateItem = async (req, res) => {
 // ─── DELETE item ───────────────────────────────────────────────────────────────
 exports.deleteItem = async (req, res) => {
   try {
+    if (blockLocalInventoryMasterWrite(res)) return;
     const { restaurantId } = req.user;
     const { id } = req.params;
     await db.query(`DELETE FROM inventory_items WHERE id=$1 AND restaurant_id=$2`, [id, restaurantId]);

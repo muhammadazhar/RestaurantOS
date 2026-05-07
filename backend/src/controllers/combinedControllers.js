@@ -2,10 +2,19 @@
 const db = require('../config/db');
 const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
 const { queueMasterDataSnapshot } = require('../utils/masterDataSync');
+const { isLocalOfflineMode } = require('../utils/offlineConfig');
 
 const queueMasterSync = (restaurantId, entityType, entityId, operation = 'sync') => {
   queueMasterDataSnapshot(restaurantId, entityType, entityId, operation)
     .catch(err => console.warn('Master-data sync queue skipped:', err.message));
+};
+
+const blockLocalMasterDataWrite = (res) => {
+  if (!isLocalOfflineMode) return false;
+  res.status(409).json({
+    error: 'Master data is managed from the cloud. Please add or edit this setup data online, then let the local server sync it down.',
+  });
+  return true;
 };
 
 const DEFAULT_TAX_RATES = [
@@ -94,6 +103,7 @@ exports.updateTableStatus = async (req, res) => {
 
 exports.createTable = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { label, section, capacity } = req.body;
     if (!label || !String(label).trim()) return res.status(400).json({ error: 'Table label is required' });
     const result = await db.query(
@@ -108,6 +118,7 @@ exports.createTable = async (req, res) => {
 
 exports.updateTable = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const { label, section, capacity } = req.body;
     if (label != null && !String(label).trim()) return res.status(400).json({ error: 'Table label is required' });
@@ -135,6 +146,7 @@ exports.updateTable = async (req, res) => {
 
 exports.deleteTable = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const active = await db.query(
       `SELECT
@@ -188,6 +200,7 @@ exports.getEmployees = async (req, res) => {
 };
 
 exports.createEmployee = async (req, res) => {
+  if (blockLocalMasterDataWrite(res)) return;
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -229,6 +242,7 @@ exports.createEmployee = async (req, res) => {
 
 exports.updateEmployee = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const { full_name, phone, email, role_id, salary, status, password } = req.body;
     const hash = password ? await bcrypt.hash(password, 10) : null;
@@ -446,6 +460,7 @@ exports.getMenu = async (req, res) => {
 };
 
 exports.createMenuItem = async (req, res) => {
+  if (blockLocalMasterDataWrite(res)) return;
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -511,6 +526,7 @@ exports.createMenuItem = async (req, res) => {
 
 exports.uploadMenuImage = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const imageUrl = req.file.path?.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
@@ -528,6 +544,7 @@ exports.uploadMenuImage = async (req, res) => {
 };
 
 exports.updateMenuItem = async (req, res) => {
+  if (blockLocalMasterDataWrite(res)) return;
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -625,6 +642,7 @@ exports.updateMenuItem = async (req, res) => {
 
 exports.deleteMenuItem = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const existing = await db.query(
       `SELECT id, name FROM menu_items
@@ -680,6 +698,7 @@ exports.deleteMenuItem = async (req, res) => {
 // ── menu image upload ─────────────────────────────────────────────────────────
 exports.uploadMenuItemImage = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const imageUrl = req.file.path && req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
@@ -698,6 +717,7 @@ exports.uploadMenuItemImage = async (req, res) => {
 
 exports.deleteMenuItemImage = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     await db.query(
       `UPDATE menu_items SET image_url=NULL WHERE id=$1 AND restaurant_id=$2`,
@@ -733,6 +753,7 @@ exports.getCategories = async (req, res) => {
 
 exports.createCategory = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { name, description, parent_id, sort_order } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Category name required' });
     const result = await db.query(
@@ -750,6 +771,7 @@ exports.createCategory = async (req, res) => {
 
 exports.updateCategory = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const { name, description, parent_id, sort_order, is_active } = req.body;
     // Prevent a category from being its own parent
@@ -774,6 +796,7 @@ exports.updateCategory = async (req, res) => {
 
 exports.deleteCategory = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const existing = await db.query(
       `SELECT id FROM categories WHERE id=$1 AND restaurant_id=$2`,
@@ -844,6 +867,7 @@ exports.getRecipes = async (req, res) => {
 };
 
 exports.createRecipe = async (req, res) => {
+  if (blockLocalMasterDataWrite(res)) return;
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
@@ -1334,6 +1358,7 @@ exports.getRoles = async (req, res) => {
 
 exports.createRole = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { name, permissions = [] } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Role name required' });
     const result = await db.query(
@@ -1351,6 +1376,7 @@ exports.createRole = async (req, res) => {
 
 exports.updateRole = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const { permissions } = req.body;
     const result = await db.query(
@@ -1964,6 +1990,7 @@ exports.getRestaurantSettings = async (req, res) => {
 
 exports.updateRestaurantSettings = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const nextSettings = { ...req.body };
     if (Object.prototype.hasOwnProperty.call(nextSettings, 'workflow_settings')) {
       nextSettings.workflow_settings = normalizeWorkflowSettings(nextSettings.workflow_settings);
@@ -1984,6 +2011,7 @@ exports.updateRestaurantSettings = async (req, res) => {
 // ── restaurant logo upload ─────────────────────────────────────────────────────
 exports.uploadRestaurantLogo = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const url = req.file.path && req.file.path.startsWith('http') ? req.file.path : `/uploads/${req.file.filename}`;
     await db.query(`UPDATE restaurants SET logo_url=$1 WHERE id=$2`, [url, req.user.restaurantId]);
@@ -2620,6 +2648,7 @@ exports.getDiscountPresets = async (req, res) => {
 // POST /discount-presets
 exports.createDiscountPreset = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { name, type, value, is_active = true, sort_order = 0 } = req.body;
     if (!name || !type || value === undefined)
       return res.status(400).json({ error: 'name, type and value are required' });
@@ -2639,6 +2668,7 @@ exports.createDiscountPreset = async (req, res) => {
 // PUT /discount-presets/:id
 exports.updateDiscountPreset = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     const { name, type, value, is_active, sort_order } = req.body;
     const result = await db.query(
@@ -2658,6 +2688,7 @@ exports.updateDiscountPreset = async (req, res) => {
 // DELETE /discount-presets/:id
 exports.deleteDiscountPreset = async (req, res) => {
   try {
+    if (blockLocalMasterDataWrite(res)) return;
     const { id } = req.params;
     await db.query(
       `DELETE FROM discount_presets WHERE id=$1 AND restaurant_id=$2`,
