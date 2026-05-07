@@ -999,3 +999,50 @@ Smoke test:
 Important note:
 
 - `CLOUD_SYNC_TOKEN` still must be set to the same value in both Railway backend variables and local Docker before protected sync push/pull can run.
+
+## Latest Completed Change
+
+- Added local offline menu image localization.
+- New utility:
+  - `backend/src/utils/offlineImageCache.js`
+- In `DEPLOYMENT_MODE=local_offline`, the backend now:
+  - downloads remote `menu_items.image_url` values into `backend/uploads/offline-cache`
+  - rewrites only the local DB `menu_items.image_url` to `/uploads/offline-cache/...`
+  - leaves cloud/Neon image URLs unchanged
+  - reruns localization after cloud-to-local master-data pull
+  - runs localization once on local server startup
+- Added env documentation for:
+  - `OFFLINE_IMAGE_CACHE_LIMIT`
+  - `OFFLINE_IMAGE_FETCH_TIMEOUT_MS`
+
+Verification run for this change:
+
+```powershell
+node --check backend/src/utils/offlineImageCache.js
+node --check backend/src/utils/masterDataSync.js
+node --check backend/src/index.js
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+```
+
+Local image localization result:
+
+- Before:
+  - total menu items: `99`
+  - remote image URLs: `80`
+  - local upload images: `1`
+  - no images: `18`
+- Localization run:
+  - checked: `80`
+  - localized: `80`
+  - failed: `0`
+- After:
+  - remote image URLs: `0`
+  - offline cached images: `80`
+  - other local upload images: `1`
+  - no images: `18`
+- Confirmed local Docker serves cached menu image URLs with HTTP `200` from:
+  - `http://localhost:5051/uploads/offline-cache/...`
+
+Important note:
+
+- Downloaded image files in `backend/uploads/offline-cache` are local runtime data and were not staged for Git.

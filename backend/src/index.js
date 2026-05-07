@@ -13,6 +13,7 @@ const routes = require('./routes');
 const db     = require('./config/db');
 const fs     = require('fs');
 const { ensureOfflineSyncSchema, startOfflineSyncWorker } = require('./utils/offlineSync');
+const { startOfflineImageLocalization } = require('./utils/offlineImageCache');
 
 // Ensure uploads directory exists
 const uploadsDir = require('path').join(__dirname, '../uploads');
@@ -679,6 +680,7 @@ db.query('SELECT NOW()').then(async () => {
   server.listen(PORT, () => {
     console.log(`✓ RestaurantOS API running on http://localhost:${PORT}`);
     console.log(`✓ WebSocket ready`);
+    startOfflineImageLocalization();
     startOfflineSyncWorker();
   });
 }).catch(err => {

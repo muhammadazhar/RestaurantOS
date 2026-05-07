@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { branchCode, deviceId, isLocalOfflineMode } = require('./offlineConfig');
+const { localizeMenuImages } = require('./offlineImageCache');
 
 const MASTER_DATA_ENTITIES = {
   restaurant: {
@@ -463,6 +464,7 @@ async function applyMasterDataPullSnapshot(payload) {
       [deviceId]
     ).catch(() => {});
     await client.query('COMMIT');
+    localizeMenuImages().catch(err => console.warn('Offline image localization after master pull failed:', err.message));
     return stats;
   } catch (err) {
     await client.query('ROLLBACK');
