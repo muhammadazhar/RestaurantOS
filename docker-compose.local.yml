@@ -26,6 +26,7 @@ services:
       BRANCH_CODE: ${BRANCH_CODE:-LOCAL}
       DEVICE_LABEL: ${DEVICE_LABEL:-RestaurantOS Local POS}
       CLOUD_API_URL: ${CLOUD_API_URL:-}
+      CLOUD_SYNC_TOKEN: ${CLOUD_SYNC_TOKEN:-}
       JWT_SECRET: ${JWT_SECRET:-restaurantos_jwt_secret_change_in_production_min32chars}
       JWT_EXPIRES_IN: 8h
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-restaurantos_refresh_secret_change_in_production_32c}

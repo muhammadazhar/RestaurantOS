@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
+const { queueOrderSnapshot } = require('../utils/offlineSync');
 
 const DEFAULT_TIMEZONE = 'Asia/Karachi';
 
@@ -645,6 +646,8 @@ exports.createOrder = async (req, res) => {
       io.to(restaurantId).emit('new_order', { orderId: order.id, orderNumber });
     }
 
+    queueOrderSnapshot(restaurantId, order.id, 'create').catch(err => console.warn('Order sync queue skipped:', err.message));
+
     res.status(201).json(order);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -718,6 +721,8 @@ exports.addOrderItems = async (req, res) => {
 
     const io = req.app.get('io');
     if (io) io.to(restaurantId).emit('order_updated', { orderId: id, status: fullOrder.status, tableId: fullOrder.table_id });
+
+    queueOrderSnapshot(restaurantId, id, 'update').catch(err => console.warn('Order sync queue skipped:', err.message));
 
     res.status(201).json({ order: fullOrder, added_items: addedItems });
   } catch (err) {
@@ -793,6 +798,8 @@ exports.updateOrderStatus = async (req, res) => {
         });
       }
     }
+
+    queueOrderSnapshot(restaurantId, id, status === 'paid' ? 'payment' : 'status').catch(err => console.warn('Order sync queue skipped:', err.message));
 
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Server error' }); }
@@ -951,6 +958,8 @@ exports.replaceOrderItem = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.to(restaurantId).emit('order_updated', { orderId: id, status: fullOrder.status, tableId: fullOrder.table_id });
 
+    queueOrderSnapshot(restaurantId, id, 'replace').catch(err => console.warn('Order sync queue skipped:', err.message));
+
     res.json({ order: fullOrder, adjustment, net_amount: net, tax_adjustment: taxAdjustment, total_adjustment: totalAdjustment });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1073,6 +1082,8 @@ exports.returnOrderItem = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.to(restaurantId).emit('order_updated', { orderId: id, status: fullOrder.status, tableId: fullOrder.table_id });
 
+    queueOrderSnapshot(restaurantId, id, 'return').catch(err => console.warn('Order sync queue skipped:', err.message));
+
     res.json({ order: fullOrder, adjustment, net_amount: -itemTotal, tax_adjustment: taxAdjustment, total_adjustment: totalAdjustment });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1128,6 +1139,8 @@ exports.cancelOrderReturn = async (req, res) => {
 
     const io = req.app.get('io');
     if (io) io.to(restaurantId).emit('order_updated', { orderId: id, status: 'cancelled', tableId: updatedRes.rows[0].table_id });
+
+    queueOrderSnapshot(restaurantId, id, 'update').catch(err => console.warn('Order sync queue skipped:', err.message));
 
     res.json({ order: updatedRes.rows[0], adjustment });
   } catch (err) {

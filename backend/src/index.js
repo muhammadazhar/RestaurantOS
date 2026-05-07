@@ -12,7 +12,7 @@ const rateLimit  = require('express-rate-limit');
 const routes = require('./routes');
 const db     = require('./config/db');
 const fs     = require('fs');
-const { ensureOfflineSyncSchema } = require('./utils/offlineSync');
+const { ensureOfflineSyncSchema, startOfflineSyncWorker } = require('./utils/offlineSync');
 
 // Ensure uploads directory exists
 const uploadsDir = require('path').join(__dirname, '../uploads');
@@ -679,6 +679,7 @@ db.query('SELECT NOW()').then(async () => {
   server.listen(PORT, () => {
     console.log(`✓ RestaurantOS API running on http://localhost:${PORT}`);
     console.log(`✓ WebSocket ready`);
+    startOfflineSyncWorker();
   });
 }).catch(err => {
   console.error('✗ Database connection failed:', err.message);

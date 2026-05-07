@@ -7,6 +7,7 @@ const isLocalOfflineMode = ['local_offline', 'offline', 'hybrid_local'].includes
 const deviceId = process.env.DEVICE_ID || process.env.OFFLINE_DEVICE_ID || 'LOCAL-POS-01';
 const branchCode = process.env.BRANCH_CODE || process.env.OFFLINE_BRANCH_CODE || null;
 const cloudApiUrl = (process.env.CLOUD_API_URL || process.env.REMOTE_API_URL || '').replace(/\/+$/, '');
+const cloudSyncToken = process.env.CLOUD_SYNC_TOKEN || process.env.SYNC_API_KEY || '';
 
 function getRuntimeInfo() {
   return {
@@ -15,6 +16,7 @@ function getRuntimeInfo() {
     deviceId,
     branchCode,
     cloudApiUrl,
+    syncTokenConfigured: Boolean(cloudSyncToken),
     database: db.dbInfo,
   };
 }
@@ -25,5 +27,6 @@ module.exports = {
   deviceId,
   branchCode,
   cloudApiUrl,
+  cloudSyncToken,
   getRuntimeInfo,
 };

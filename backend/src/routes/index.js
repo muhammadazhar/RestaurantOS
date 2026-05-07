@@ -29,6 +29,7 @@ router.post('/auth/logout',       auth.logout);
 router.post('/auth/forgot-password', auth.forgotPassword);
 router.post('/auth/reset-password',  auth.resetPassword);
 router.get('/db-info', (_req, res) => res.json({ database: db.dbInfo }));
+router.post('/sync/ingest', sync.ingest);
 
 // All routes below require authentication
 router.use(authenticate);

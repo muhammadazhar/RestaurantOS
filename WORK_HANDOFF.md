@@ -835,3 +835,69 @@ docker compose -f docker-compose.local.yml down
 Important note:
 
 - Data is now matched from Neon to local, but offline-created POS writes still need queue/push logic before they can sync back to Neon.
+
+## Latest Completed Change
+
+- Added first real offline POS sync loop.
+- POS/order mutations now queue a full order snapshot into `offline_sync_queue` when running in `DEPLOYMENT_MODE=local_offline`:
+  - `POST /orders`
+  - `POST /orders/:id/items`
+  - `PATCH /orders/:id/status`
+  - `POST /orders/:id/replace-item`
+  - `POST /orders/:id/return-item`
+  - `POST /orders/:id/cancel-return`
+- Queue behavior:
+  - One pending queue item per order using stable idempotency key `order:<orderId>`.
+  - Later mutations on the same order update the queued snapshot instead of creating duplicate pending rows.
+  - `orders.sync_status` is marked `pending`, then `synced`, `failed`, or `conflict`.
+- Added background sync worker:
+  - starts only in local offline mode
+  - requires `CLOUD_API_URL`
+  - requires `CLOUD_SYNC_TOKEN`
+  - pushes pending/failed queue items to cloud endpoint `/api/sync/ingest`
+  - marks queue rows `synced` when cloud accepts the snapshot
+- Added cloud ingest endpoint:
+  - `POST /api/sync/ingest`
+  - protected by `X-RestaurantOS-Sync-Token`
+  - applies `order_snapshot` payloads idempotently by upserting:
+    - `orders`
+    - `order_items`
+    - `order_adjustments`
+    - `order_adjustment_items`
+    - dining table status
+- Updated `POST /api/sync/retry` to mark failed items pending and kick the worker.
+- Added offline sync env notes to `backend/.env.example`.
+- Added `CLOUD_SYNC_TOKEN` to `docker-compose.local.yml`.
+
+Required env for live local-to-cloud sync:
+
+```powershell
+CLOUD_API_URL=https://your-railway-backend-url
+CLOUD_SYNC_TOKEN=<same-long-random-token-on-local-and-railway>
+```
+
+Verification run for this change:
+
+```powershell
+node --check backend/src/utils/offlineConfig.js
+node --check backend/src/utils/offlineSync.js
+node --check backend/src/controllers/syncController.js
+node --check backend/src/controllers/ordersController.js
+node --check backend/src/routes/index.js
+node --check backend/src/index.js
+docker compose -f docker-compose.local.yml build restaurantos-local
+docker compose -f docker-compose.local.yml up -d --force-recreate
+Invoke-RestMethod -Uri 'http://localhost:5051/api/health'
+```
+
+Local queue smoke test:
+
+- Created a temporary pending `order_snapshot` queue row for an existing local order.
+- Confirmed `GET /api/sync/status` style queue summary saw `pending: 1`.
+- Removed the temporary queue row and reset the test order sync status.
+
+Important follow-up:
+
+- Set `CLOUD_SYNC_TOKEN` on Railway and local Docker before testing live push.
+- Set `CLOUD_API_URL` locally to the Railway backend URL.
+- After setting those, local status should move from `Offline - local mode` to `Local mode online`; creating/updating a POS order should briefly show `Pending sync 1`, then clear when pushed.
