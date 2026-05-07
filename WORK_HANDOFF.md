@@ -1064,3 +1064,31 @@ Current local runtime observation:
   - `DEPLOYMENT_MODE=local_offline`
   - empty `CLOUD_SYNC_TOKEN`
 - Because `CLOUD_SYNC_TOKEN` is empty, the sync worker does not start yet and queue items remain pending until the same token is configured in Railway and local Docker.
+
+## Latest Completed Change
+
+- Added operational shift-session sync for local offline mode.
+- New shift sync payload:
+  - `shift_session_snapshot`
+- Local shift session writes now queue to `offline_sync_queue` for:
+  - `PATCH /shifts/:id/start`
+  - `PATCH /shifts/:id/continue`
+  - `PATCH /shifts/:id/close-my`
+  - `PATCH /shifts/:id/force-close`
+  - `POST /shifts/auto-close`
+- Cloud ingest now accepts `shift_session_snapshot` and upserts `shift_sessions`.
+- Existing local active shift session was queued manually after this change:
+  - session id: `7d98e947-b628-421a-aa88-8f6e6ce538b3`
+  - status: `pending`
+
+Verification run for this change:
+
+```powershell
+node --check backend/src/utils/offlineSync.js
+node --check backend/src/controllers/syncController.js
+node --check backend/src/controllers/combinedControllers.js
+```
+
+Important note:
+
+- Local Docker still has empty `CLOUD_SYNC_TOKEN`; shift/order sync queue items cannot push to Railway until the same token is configured locally and in the Railway backend environment.

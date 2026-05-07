@@ -20,6 +20,10 @@ const MASTER_ENTITY_TABLES = {
   recipe: 'recipes',
 };
 
+const OPERATIONAL_ENTITY_TABLES = {
+  shift_session: 'shift_sessions',
+};
+
 const OFFLINE_WRITE_TABLES = [
   'orders',
   'order_items',
@@ -249,6 +253,80 @@ async function queueOrderSnapshot(restaurantId, orderId, operation = 'sync') {
   }
 }
 
+async function fetchShiftSessionSnapshot(client, restaurantId, sessionId) {
+  const sessionRes = await client.query(
+    `SELECT * FROM shift_sessions WHERE id=$1 AND restaurant_id=$2`,
+    [sessionId, restaurantId]
+  );
+  if (!sessionRes.rows.length) return null;
+
+  return {
+    kind: 'shift_session_snapshot',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    deviceId,
+    branchCode,
+    restaurantId,
+    sessionId,
+    shiftSession: sessionRes.rows[0],
+  };
+}
+
+async function queueShiftSessionSnapshot(restaurantId, sessionId, operation = 'sync') {
+  if (!isLocalOfflineMode || !restaurantId || !sessionId) return null;
+
+  const client = await db.getClient();
+  try {
+    const snapshot = await fetchShiftSessionSnapshot(client, restaurantId, sessionId);
+    if (!snapshot) return null;
+    const idempotencyKey = `shift_session:${sessionId}`;
+
+    const result = await client.query(
+      `INSERT INTO offline_sync_queue(
+         restaurant_id, device_id, branch_code, entity_type, entity_id,
+         operation, endpoint, method, payload, idempotency_key, status, attempts,
+         last_error, queued_at, next_attempt_at, synced_at
+       )
+       VALUES($1,$2,$3,'shift_session',$4,$5,'/api/sync/ingest','POST',$6::jsonb,$7,'pending',0,NULL,NOW(),NOW(),NULL)
+       ON CONFLICT (idempotency_key) DO UPDATE SET
+         restaurant_id = EXCLUDED.restaurant_id,
+         device_id = EXCLUDED.device_id,
+         branch_code = EXCLUDED.branch_code,
+         entity_type = EXCLUDED.entity_type,
+         entity_id = EXCLUDED.entity_id,
+         operation = EXCLUDED.operation,
+         endpoint = EXCLUDED.endpoint,
+         method = EXCLUDED.method,
+         payload = EXCLUDED.payload,
+         status = 'pending',
+         attempts = 0,
+         last_error = NULL,
+         queued_at = NOW(),
+         next_attempt_at = NOW(),
+         synced_at = NULL
+       RETURNING id`,
+      [restaurantId, deviceId, branchCode, sessionId, operation, toJsonb(snapshot), idempotencyKey]
+    );
+
+    await client.query(
+      `UPDATE shift_sessions
+       SET sync_status='pending',
+           sync_error=NULL,
+           local_device_id=COALESCE(local_device_id, $2)
+       WHERE id=$1`,
+      [sessionId, deviceId]
+    ).catch(() => {});
+
+    triggerImmediateSync('shift session snapshot');
+    return result.rows[0];
+  } catch (err) {
+    console.warn('Queue shift session snapshot failed:', err.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
 async function getTableColumns(client, tableName) {
   const result = await client.query(
     `SELECT column_name
@@ -324,6 +402,31 @@ async function applyOrderSnapshot(snapshot) {
         [snapshot.table.id, snapshot.table.status || null]
       );
     }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function applyShiftSessionSnapshot(snapshot) {
+  if (!snapshot || snapshot.kind !== 'shift_session_snapshot' || !snapshot.shiftSession?.id) {
+    const err = new Error('Invalid shift session snapshot payload');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await upsertRow(client, 'shift_sessions', {
+      ...snapshot.shiftSession,
+      sync_status: 'synced',
+      sync_error: null,
+      last_synced_at: new Date(),
+    });
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -484,6 +587,15 @@ async function markQueueItemSynced(item) {
        WHERE id=$1`,
       [item.entity_id]
     ).catch(() => {});
+  } else if (item.entity_id && OPERATIONAL_ENTITY_TABLES[item.entity_type]) {
+    await db.query(
+      `UPDATE ${OPERATIONAL_ENTITY_TABLES[item.entity_type]}
+       SET sync_status='synced',
+           last_synced_at=NOW(),
+           sync_error=NULL
+       WHERE id=$1`,
+      [item.entity_id]
+    ).catch(() => {});
   }
 }
 
@@ -507,6 +619,14 @@ async function markQueueItemFailed(item, status, error) {
   } else if (item.entity_id && MASTER_ENTITY_TABLES[item.entity_type]) {
     await db.query(
       `UPDATE ${MASTER_ENTITY_TABLES[item.entity_type]}
+       SET sync_status=$2,
+           sync_error=$3
+       WHERE id=$1`,
+      [item.entity_id, status === 'conflict' ? 'conflict' : 'failed', String(error || 'Sync failed').slice(0, 1000)]
+    ).catch(() => {});
+  } else if (item.entity_id && OPERATIONAL_ENTITY_TABLES[item.entity_type]) {
+    await db.query(
+      `UPDATE ${OPERATIONAL_ENTITY_TABLES[item.entity_type]}
        SET sync_status=$2,
            sync_error=$3
        WHERE id=$1`,
@@ -626,7 +746,9 @@ module.exports = {
   ensureOfflineSyncSchema,
   getSyncStatus,
   queueOrderSnapshot,
+  queueShiftSessionSnapshot,
   applyOrderSnapshot,
+  applyShiftSessionSnapshot,
   applyMasterDataEntitySnapshot,
   pullCloudMasterData,
   processPendingQueue,

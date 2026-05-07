@@ -3,6 +3,7 @@ const db = require('../config/db');
 const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
 const { queueMasterDataSnapshot } = require('../utils/masterDataSync');
 const { isLocalOfflineMode } = require('../utils/offlineConfig');
+const { queueShiftSessionSnapshot } = require('../utils/offlineSync');
 
 const queueMasterSync = (restaurantId, entityType, entityId, operation = 'sync') => {
   queueMasterDataSnapshot(restaurantId, entityType, entityId, operation)
@@ -15,6 +16,11 @@ const blockLocalMasterDataWrite = (res) => {
     error: 'Master data is managed from the cloud. Please add or edit this setup data online, then let the local server sync it down.',
   });
   return true;
+};
+
+const queueShiftSessionSync = (restaurantId, sessionId, operation = 'sync') => {
+  queueShiftSessionSnapshot(restaurantId, sessionId, operation)
+    .catch(err => console.warn('Shift session sync queue skipped:', err.message));
 };
 
 const DEFAULT_TAX_RATES = [
@@ -2269,9 +2275,11 @@ exports.forceCloseShift = async (req, res) => {
     );
     if (!sr.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Shift not found' }); }
     const shift = sr.rows[0];
+    const sessionId = shift.session_id;
 
     await _closeShift(client, rid, shift, req.user.id);
     await client.query('COMMIT');
+    if (sessionId) queueShiftSessionSync(rid, sessionId, 'status');
 
     // Recompute attendance (background, non-blocking)
     try {
@@ -2306,10 +2314,13 @@ exports.autoCloseShifts = async (req, res) => {
       [rid, today, nowTime]
     );
 
+    const sessionIds = [];
     for (const shift of expired.rows) {
+      if (shift.session_id) sessionIds.push(shift.session_id);
       await _closeShift(client, rid, shift, req.user.id);
     }
     await client.query('COMMIT');
+    sessionIds.forEach(sessionId => queueShiftSessionSync(rid, sessionId, 'status'));
 
     // Recompute attendance for all affected employees (background)
     try {
@@ -2432,6 +2443,7 @@ exports.startMyShift = async (req, res) => {
        RETURNING *`,
       [id, req.user.restaurantId, scheduledShift.employee_id, today, openingBalance]
     );
+    queueShiftSessionSync(req.user.restaurantId, result.rows[0].id, 'create');
     res.json({
       ...scheduledShift,
       ...result.rows[0],
@@ -2486,6 +2498,7 @@ exports.continueMyShift = async (req, res) => {
        RETURNING *`,
       params
     );
+    if (result.rows[0]?.id) queueShiftSessionSync(req.user.restaurantId, result.rows[0].id, 'status');
     res.json({ ...result.rows[0], date: today, session_id: result.rows[0].id });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 };
@@ -2569,6 +2582,7 @@ exports.closeMyShift = async (req, res) => {
     );
 
     await client.query('COMMIT');
+    queueShiftSessionSync(rid, shift.session_id, 'status');
 
     try {
       const { recomputeEmployee } = require('./attendanceController');
