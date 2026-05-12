@@ -1,0 +1,28 @@
+services:
+  restaurantos-online:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      args:
+        REACT_APP_API_URL: /api
+        REACT_APP_SOCKET_URL: http://localhost:5052
+    container_name: restaurantos-online
+    restart: unless-stopped
+    ports:
+      - "5052:5001"
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      DEPLOYMENT_MODE: cloud
+      DB_MODE: neon
+      JWT_SECRET: ${JWT_SECRET:-restaurantos_jwt_secret_change_in_production_min32chars}
+      JWT_EXPIRES_IN: 8h
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-restaurantos_refresh_secret_change_in_production_32c}
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CLIENT_URL: http://localhost:5052
+      UPLOAD_DIR: uploads
+      MAX_FILE_SIZE_MB: 5
+    volumes:
+      - ./backend/uploads:/app/backend/uploads

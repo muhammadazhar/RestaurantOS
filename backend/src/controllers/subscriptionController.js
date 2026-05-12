@@ -31,6 +31,13 @@ const expireStaleSubscriptions = async (restaurantId, moduleKey = null) => {
   );
 };
 
+const getRenewalStartDate = (currentSubscription) => {
+  const now = new Date();
+  if (!currentSubscription?.expires_at) return now;
+  const currentExpiry = new Date(currentSubscription.expires_at);
+  return currentExpiry > now ? currentExpiry : now;
+};
+
 // ── Public: list modules + pricing ───────────────────────────────────────────
 exports.getModules = async (req, res) => {
   try {
@@ -136,29 +143,32 @@ exports.requestSubscription = async (req, res) => {
 
     const pricing = priceRow.rows[0];
 
-    // Check for already active subscription
-    const existing = await db.query(
+    // Keep one pending payment request per module, but allow renewals while an
+    // active/trial subscription still has time remaining.
+    const existingPending = await db.query(
       `SELECT * FROM subscriptions
        WHERE restaurant_id=$1 AND module_key=$2
-         AND (
-           status = 'pending_payment'
-           OR (
-             status IN ('trial','active')
-             AND (expires_at IS NULL OR expires_at > NOW())
-           )
-         )
+         AND status = 'pending_payment'
        ORDER BY created_at DESC
        LIMIT 1`,
       [restaurantId, module_key]
     );
-    if (existing.rows.length) {
-      const s = existing.rows[0];
-      if (s.status === 'active' || s.status === 'trial') {
-        return res.status(400).json({ error: `Module already has an ${s.status} subscription` });
-      }
-      if (s.status === 'pending_payment') {
-        return res.status(400).json({ error: 'A payment request is already pending for this module' });
-      }
+    if (existingPending.rows.length) {
+      return res.status(400).json({ error: 'A payment request is already pending for this module' });
+    }
+
+    const currentActive = await db.query(
+      `SELECT * FROM subscriptions
+       WHERE restaurant_id=$1 AND module_key=$2
+         AND status IN ('trial','active')
+         AND (expires_at IS NULL OR expires_at > NOW())
+       ORDER BY expires_at DESC NULLS LAST, created_at DESC
+       LIMIT 1`,
+      [restaurantId, module_key]
+    );
+    const renewalStart = getRenewalStartDate(currentActive.rows[0]);
+    if (plan_type === 'trial' && currentActive.rows.length) {
+      return res.status(400).json({ error: 'Free trial is only available when no active subscription exists for this module' });
     }
 
     // Apply group multi-branch discount if applicable
@@ -189,7 +199,8 @@ exports.requestSubscription = async (req, res) => {
     // Trial is auto-activated, paid requires super admin approval
     const isTrial = plan_type === 'trial';
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + pricing.duration_days * 86400000);
+    const startsAt = isTrial ? now : renewalStart;
+    const expiresAt = new Date(startsAt.getTime() + pricing.duration_days * 86400000);
 
     const sub = await db.query(
       `INSERT INTO subscriptions(restaurant_id, module_key, plan_type, status, starts_at, expires_at, price)
@@ -197,8 +208,8 @@ exports.requestSubscription = async (req, res) => {
       [
         restaurantId, module_key, plan_type,
         isTrial ? 'trial' : 'pending_payment',
-        isTrial ? now : null,
-        isTrial ? expiresAt : null,
+        startsAt,
+        expiresAt,
         Math.round(finalPrice * 100) / 100,
       ]
     );
@@ -224,6 +235,7 @@ exports.requestSubscription = async (req, res) => {
         `<h2>Payment Request Received</h2>
          <p>Your request for <b>${module_key}</b> (${plan_type}) has been received.</p>
          <p>Amount due: <b>PKR ${Math.round(finalPrice).toLocaleString()}</b>${discountNote}</p>
+         <p>Requested start date: <b>${startsAt.toDateString()}</b></p>
          <p>Your subscription will be activated once payment is confirmed by our team.</p>`
       );
       const adminEmail = await getConfig('app.admin_email', 'ADMIN_EMAIL');
@@ -235,6 +247,7 @@ exports.requestSubscription = async (req, res) => {
            <p>Restaurant: <b>${rest.name}</b></p>
            <p>Module: <b>${module_key}</b> | Plan: <b>${plan_type}</b></p>
            <p>Amount: <b>PKR ${Math.round(finalPrice).toLocaleString()}</b>${discountNote}</p>
+           <p>Requested start date: <b>${startsAt.toDateString()}</b></p>
            <p>Login to super admin to approve or reject.</p>`
         );
       }
@@ -292,13 +305,25 @@ exports.approveSubscription = async (req, res) => {
     );
     const duration = priceRow.rows[0]?.duration_days || 30;
 
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + duration * 86400000);
+    const currentActive = await db.query(
+      `SELECT * FROM subscriptions
+       WHERE restaurant_id=$1 AND module_key=$2
+         AND id <> $3
+         AND status IN ('trial','active')
+         AND (expires_at IS NULL OR expires_at > NOW())
+       ORDER BY expires_at DESC NULLS LAST, created_at DESC
+       LIMIT 1`,
+      [sub.restaurant_id, sub.module_key, id]
+    );
+    const requestedStart = sub.starts_at ? new Date(sub.starts_at) : null;
+    const renewalStart = getRenewalStartDate(currentActive.rows[0]);
+    const startsAt = requestedStart && requestedStart > renewalStart ? requestedStart : renewalStart;
+    const expiresAt = new Date(startsAt.getTime() + duration * 86400000);
 
     const updated = await db.query(
       `UPDATE subscriptions SET status='active', starts_at=$1, expires_at=$2,
-       approved_at=$1, payment_notes=$3, approved_by=$4 WHERE id=$5 RETURNING *`,
-      [now, expiresAt, payment_notes || null, req.user.id, id]
+       approved_at=NOW(), payment_notes=$3, approved_by=$4 WHERE id=$5 RETURNING *`,
+      [startsAt, expiresAt, payment_notes || null, req.user.id, id]
     );
 
     // Email restaurant
@@ -311,6 +336,7 @@ exports.approveSubscription = async (req, res) => {
       `Subscription Activated – ${sub.module_key}`,
       `<h2>Your subscription is now active!</h2>
        <p>Module: <b>${sub.module_key}</b> (${sub.plan_type})</p>
+       <p>Starts on: <b>${startsAt.toDateString()}</b></p>
        <p>Valid until: <b>${expiresAt.toDateString()}</b></p>
        <p>Amount paid: <b>PKR ${sub.price}</b></p>
        ${payment_notes ? `<p>Note: ${payment_notes}</p>` : ''}
@@ -365,6 +391,7 @@ exports.getActiveModuleKeys = async (restaurantId) => {
   const rows = await db.query(
     `SELECT DISTINCT module_key FROM subscriptions
      WHERE restaurant_id=$1 AND status IN ('trial','active')
+     AND (starts_at IS NULL OR starts_at <= NOW())
      AND (expires_at IS NULL OR expires_at > NOW())`,
     [restaurantId]
   );

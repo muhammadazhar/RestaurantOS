@@ -268,7 +268,7 @@ function PlanModal({ module_key, module_name, plans, requesting, onRequest, onCl
           {MODULE_ICONS[module_key]} Subscribe to {module_name}
         </div>
         <div style={{ fontSize: 12, color: T.textMid, marginBottom: 20 }}>
-          Select a plan. Your subscription will activate after payment confirmation.
+          Select a plan. Renewals start after the current expiry once payment is confirmed.
         </div>
 
         {plans.length === 0 && (
@@ -304,7 +304,7 @@ function PlanModal({ module_key, module_name, plans, requesting, onRequest, onCl
 
         {selectedPlan && (
           <div style={{ background: T.accentGlow, borderRadius: 8, padding: '10px 14px', fontSize: 12, color: T.textMid, marginBottom: 16 }}>
-            After submitting, our team will contact you for payment. Subscription activates upon confirmation.
+            After submitting, our team will contact you for payment. Renewals keep the current period intact and start after it ends.
           </div>
         )}
 

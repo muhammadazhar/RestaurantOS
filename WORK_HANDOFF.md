@@ -1189,3 +1189,43 @@ node --check backend/src/controllers/syncController.js
 node --check backend/src/controllers/combinedControllers.js
 docker compose -f docker-compose.local.yml up -d --build --force-recreate
 ```
+
+## Latest Completed Change
+
+- Fixed module renewal requests while an active subscription still has remaining time.
+- Problem:
+  - `POST /subscriptions/request` rejected paid renewals when the module already had an active/trial subscription.
+  - UI showed "Renew Now", but backend returned `Module already has an active subscription`.
+- New behavior:
+  - Existing `pending_payment` request still blocks duplicate requests for the same module.
+  - Existing active/trial subscription no longer blocks a paid renewal request.
+  - Paid renewal request stores `starts_at` as the current active expiry date when the module is still active.
+  - `expires_at` is calculated from that scheduled start date.
+  - Super-admin approval keeps the renewal scheduled after the current active expiry instead of starting immediately.
+  - Future-dated active renewals are not treated as currently active by `getActiveModuleKeys` until `starts_at <= NOW()`.
+  - Free trial still cannot be requested while a module already has an active/trial subscription.
+- Frontend copy in My Subscriptions now explains that renewals start after the current expiry once payment is confirmed.
+- Added `docker-compose.online.yml` for local online-mode testing:
+  - service: `restaurantos-online`
+  - URL: `http://localhost:5052`
+  - `DEPLOYMENT_MODE=cloud`
+  - `DB_MODE=neon`
+  - uses `backend/.env` for Neon/Cloudinary/JWT settings
+- Railway note:
+  - User said Railway subscription is expired.
+  - Do not push/deploy to Railway until the user renews Railway.
+  - Work was tested in local Docker online mode instead.
+
+Verification:
+
+```powershell
+node --check backend/src/controllers/subscriptionController.js
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+Invoke-RestMethod http://localhost:5052/api/health
+```
+
+Runtime result:
+
+- `restaurantos-online` is running on port `5052`.
+- Health returned `{ status: "ok" }`.
+- Existing `restaurantos-local` offline container remains running on port `5051`.
