@@ -1,5 +1,11 @@
 const db = require('../config/db');
 const { getConfig } = require('../utils/config');
+const { queueSubscriptionRequestSnapshot } = require('../utils/offlineSync');
+
+const queueSubscriptionRequestSync = (restaurantId, subscriptionId) => {
+  queueSubscriptionRequestSnapshot(restaurantId, subscriptionId, 'create')
+    .catch(err => console.warn('Subscription request sync queue skipped:', err.message));
+};
 
 // ── Email helper (uses shared utils/email — supports SMTP, Resend, Mailgun, SendGrid)
 const sendEmail = async (to, subject, html) => {
@@ -213,6 +219,7 @@ exports.requestSubscription = async (req, res) => {
         Math.round(finalPrice * 100) / 100,
       ]
     );
+    if (!isTrial) queueSubscriptionRequestSync(restaurantId, sub.rows[0].id);
 
     // Send email notification
     const restRow = await db.query(

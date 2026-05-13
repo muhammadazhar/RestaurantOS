@@ -24,6 +24,7 @@ const OPERATIONAL_ENTITY_TABLES = {
   shift_session: 'shift_sessions',
   attendance_log: 'attendance_logs',
   dining_table: 'dining_tables',
+  subscription_request: 'subscriptions',
 };
 
 const OFFLINE_WRITE_TABLES = [
@@ -37,6 +38,7 @@ const OFFLINE_WRITE_TABLES = [
   'inventory_transactions',
   'attendance_logs',
   'rider_collections',
+  'subscriptions',
   ...MASTER_DATA_TABLES,
 ];
 
@@ -483,6 +485,81 @@ async function queueDiningTableStatusSnapshot(restaurantId, tableId, operation =
   }
 }
 
+async function fetchSubscriptionRequestSnapshot(client, restaurantId, subscriptionId) {
+  const subscriptionRes = await client.query(
+    `SELECT * FROM subscriptions
+     WHERE id=$1 AND restaurant_id=$2`,
+    [subscriptionId, restaurantId]
+  );
+  if (!subscriptionRes.rows.length) return null;
+
+  return {
+    kind: 'subscription_request_snapshot',
+    version: 1,
+    createdAt: new Date().toISOString(),
+    deviceId,
+    branchCode,
+    restaurantId,
+    subscriptionId,
+    subscription: subscriptionRes.rows[0],
+  };
+}
+
+async function queueSubscriptionRequestSnapshot(restaurantId, subscriptionId, operation = 'create') {
+  if (!isLocalOfflineMode || !restaurantId || !subscriptionId) return null;
+
+  const client = await db.getClient();
+  try {
+    const snapshot = await fetchSubscriptionRequestSnapshot(client, restaurantId, subscriptionId);
+    if (!snapshot) return null;
+    const idempotencyKey = `subscription_request:${subscriptionId}`;
+
+    const result = await client.query(
+      `INSERT INTO offline_sync_queue(
+         restaurant_id, device_id, branch_code, entity_type, entity_id,
+         operation, endpoint, method, payload, idempotency_key, status, attempts,
+         last_error, queued_at, next_attempt_at, synced_at
+       )
+       VALUES($1,$2,$3,'subscription_request',$4,$5,'/api/sync/ingest','POST',$6::jsonb,$7,'pending',0,NULL,NOW(),NOW(),NULL)
+       ON CONFLICT (idempotency_key) DO UPDATE SET
+         restaurant_id = EXCLUDED.restaurant_id,
+         device_id = EXCLUDED.device_id,
+         branch_code = EXCLUDED.branch_code,
+         entity_type = EXCLUDED.entity_type,
+         entity_id = EXCLUDED.entity_id,
+         operation = EXCLUDED.operation,
+         endpoint = EXCLUDED.endpoint,
+         method = EXCLUDED.method,
+         payload = EXCLUDED.payload,
+         status = 'pending',
+         attempts = 0,
+         last_error = NULL,
+         queued_at = NOW(),
+         next_attempt_at = NOW(),
+         synced_at = NULL
+       RETURNING id`,
+      [restaurantId, deviceId, branchCode, subscriptionId, operation, toJsonb(snapshot), idempotencyKey]
+    );
+
+    await client.query(
+      `UPDATE subscriptions
+       SET sync_status='pending',
+           sync_error=NULL,
+           local_device_id=COALESCE(local_device_id, $2)
+       WHERE id=$1`,
+      [subscriptionId, deviceId]
+    ).catch(() => {});
+
+    triggerImmediateSync('subscription request snapshot');
+    return result.rows[0];
+  } catch (err) {
+    console.warn('Queue subscription request snapshot failed:', err.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
 async function getTableColumns(client, tableName) {
   const result = await client.query(
     `SELECT column_name
@@ -642,6 +719,31 @@ async function applyDiningTableStatusSnapshot(snapshot) {
       err.statusCode = 404;
       throw err;
     }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function applySubscriptionRequestSnapshot(snapshot) {
+  if (!snapshot || snapshot.kind !== 'subscription_request_snapshot' || !snapshot.subscription?.id) {
+    const err = new Error('Invalid subscription request snapshot payload');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await upsertRow(client, 'subscriptions', {
+      ...snapshot.subscription,
+      sync_status: 'synced',
+      sync_error: null,
+      last_synced_at: new Date(),
+    });
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -964,10 +1066,12 @@ module.exports = {
   queueShiftSessionSnapshot,
   queueAttendanceLogSnapshot,
   queueDiningTableStatusSnapshot,
+  queueSubscriptionRequestSnapshot,
   applyOrderSnapshot,
   applyShiftSessionSnapshot,
   applyAttendanceLogSnapshot,
   applyDiningTableStatusSnapshot,
+  applySubscriptionRequestSnapshot,
   applyMasterDataEntitySnapshot,
   pullCloudMasterData,
   processPendingQueue,

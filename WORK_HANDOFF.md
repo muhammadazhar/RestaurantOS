@@ -10,7 +10,13 @@ This file is only a memory note for resuming work. It should not affect the app,
 
 ## Current Collaboration Rule
 
-The user wants every completed code change pushed to Git so Railway deploys it.
+The user normally wants every completed code change pushed to Git so Railway deploys it.
+
+Temporary exception:
+
+- The user said the Railway subscription is expired.
+- Do not push/deploy to Railway until the user says Railway is renewed or explicitly asks for a push.
+- Keep committing completed changes locally so the work is ready to push later.
 
 After each completed change:
 
@@ -18,7 +24,7 @@ After each completed change:
 2. Update this `WORK_HANDOFF.md` file with any completed additions/modifications and any important follow-up notes.
 3. Stage only the touched source files, including `WORK_HANDOFF.md` when it was updated.
 4. Commit with a clear message.
-5. Push to `origin main`.
+5. Push to `origin main` only when Railway deployment is allowed again.
 
 Do not stage local-only files unless explicitly requested:
 
@@ -1229,3 +1235,61 @@ Runtime result:
 - `restaurantos-online` is running on port `5052`.
 - Health returned `{ status: "ok" }`.
 - Existing `restaurantos-local` offline container remains running on port `5051`.
+
+## Latest Completed Change
+
+- Added offline-to-online sync for paid subscription renewal requests.
+- Problem:
+  - Renewal requests created from the offline/local app were inserted only into local PostgreSQL.
+  - Online admin looked at Neon through `restaurantos-online`, so those requests were missing online.
+- New behavior:
+  - Paid `POST /subscriptions/request` calls in `DEPLOYMENT_MODE=local_offline` queue a `subscription_request_snapshot`.
+  - `offline_sync_queue.entity_type='subscription_request'` maps to the `subscriptions` table.
+  - The local worker pushes the queued subscription snapshot to `/api/sync/ingest`.
+  - Cloud/online ingest upserts the `subscriptions` row and marks sync metadata as synced.
+  - `subscriptions` now receives offline sync metadata columns from the existing sync schema bootstrap.
+- Updated `docker-compose.local.yml` so it no longer hardcodes the Railway `CLOUD_API_URL`.
+  - Local Docker now reads `CLOUD_API_URL` from `backend/.env`.
+  - Current local test target is `http://host.docker.internal:5052`, which points offline sync at the local online/Neon container instead of Railway.
+
+Verification:
+
+```powershell
+node --check backend/src/utils/offlineSync.js
+node --check backend/src/controllers/syncController.js
+node --check backend/src/controllers/subscriptionController.js
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker exec restaurantos-local sh -lc 'printf "CLOUD_API_URL=%s\n" "$CLOUD_API_URL"; test -n "$CLOUD_SYNC_TOKEN" && echo token-configured || echo token-missing'
+Invoke-RestMethod http://localhost:5051/api/health
+Invoke-RestMethod http://localhost:5052/api/health
+```
+
+Existing offline renewal requests were manually queued and synced after the code change:
+
+- `f60c9458-6be8-42e8-9441-0eca5e3044b8`
+  - module: `reports`
+  - plan: `half_yearly`
+  - status: `pending_payment`
+- `9361f05f-28a9-4115-9a42-e1ac056bc190`
+  - module: `staff`
+  - plan: `half_yearly`
+  - status: `pending_payment`
+
+Runtime result:
+
+- Local `restaurantos-local` environment confirmed:
+  - `CLOUD_API_URL=http://host.docker.internal:5052`
+  - `CLOUD_SYNC_TOKEN` configured
+- Manual queue worker result:
+  - processed: `2`
+- Local queue rows for both subscription requests:
+  - status: `synced`
+  - attempts: `1`
+  - last_error: `NULL`
+- Neon verification:
+  - both subscription request IDs now exist in Neon as `pending_payment`.
+
+Important note:
+
+- `backend/.env` currently contains the local test `CLOUD_API_URL` and sync token. Do not stage it.
+- When Railway is renewed, switch `CLOUD_API_URL` back to `https://restaurantos-production-bdb7.up.railway.app` for real Railway sync testing.
