@@ -54,6 +54,11 @@ const MASTER_DATA_ENTITIES = {
       { table: 'recipe_ingredients', foreignColumn: 'recipe_id' },
     ],
   },
+  subscription: {
+    primaryTable: 'subscriptions',
+    restaurantColumn: 'restaurant_id',
+    children: [],
+  },
 };
 
 const MASTER_DATA_TABLES = [
@@ -70,6 +75,7 @@ const MASTER_DATA_TABLES = [
   'inventory_items',
   'recipes',
   'recipe_ingredients',
+  'subscriptions',
 ];
 
 const MASTER_ENTITY_PULL_ORDER = [
@@ -81,9 +87,11 @@ const MASTER_ENTITY_PULL_ORDER = [
   'menu_item',
   'discount_preset',
   'recipe',
+  'subscription',
 ];
 
 const columnCache = new Map();
+const columnTypeCache = new Map();
 
 function toJsonb(value) {
   return JSON.stringify(value || {});
@@ -118,6 +126,22 @@ async function getTableColumns(client, tableName) {
   return columns;
 }
 
+async function getTableColumnTypes(client, tableName) {
+  if (columnTypeCache.has(tableName)) return columnTypeCache.get(tableName);
+  const result = await client.query(
+    `SELECT column_name, data_type
+     FROM information_schema.columns
+     WHERE table_schema='public'
+       AND table_name=$1
+       AND is_generated='NEVER'
+       AND is_identity='NO'`,
+    [tableName]
+  );
+  const types = Object.fromEntries(result.rows.map(row => [row.column_name, row.data_type]));
+  columnTypeCache.set(tableName, types);
+  return types;
+}
+
 async function hasColumn(client, tableName, columnName) {
   const columns = await getTableColumns(client, tableName);
   return columns.includes(columnName);
@@ -143,6 +167,7 @@ async function addMasterDataSyncMetadata(client) {
     `);
   }
   columnCache.clear();
+  columnTypeCache.clear();
 }
 
 async function upsertRow(client, tableName, row, conflictColumn = 'id', excludeColumns = []) {
@@ -151,9 +176,13 @@ async function upsertRow(client, tableName, row, conflictColumn = 'id', excludeC
   const excluded = new Set(excludeColumns);
   const columns = tableColumns.filter(column => Object.prototype.hasOwnProperty.call(row, column) && !excluded.has(column));
   if (!columns.length) return;
+  const columnTypes = await getTableColumnTypes(client, tableName);
 
   const values = columns.map(column => {
     const value = row[column];
+    if (Array.isArray(value)) {
+      return ['json', 'jsonb'].includes(columnTypes[column]) ? JSON.stringify(value) : value;
+    }
     if (value && typeof value === 'object' && !(value instanceof Date)) return JSON.stringify(value);
     return value;
   });

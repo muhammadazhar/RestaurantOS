@@ -1293,3 +1293,61 @@ Important note:
 
 - `backend/.env` currently contains the local test `CLOUD_API_URL` and sync token. Do not stage it.
 - When Railway is renewed, switch `CLOUD_API_URL` back to `https://restaurantos-production-bdb7.up.railway.app` for real Railway sync testing.
+
+## Latest Completed Change
+
+- Fixed online-approved subscription renewals not updating the offline/local app.
+- Problem:
+  - Offline renewal requests synced up to Neon correctly.
+  - Super-admin approval in online mode changed the Neon `subscriptions` rows to `active`.
+  - Offline/local still showed `Payment request pending` because `subscriptions` were not included in cloud-to-local pull snapshots.
+- New behavior:
+  - `subscriptions` are now included in the cloud-to-local master pull as entity type `subscription`.
+  - Approval/rejection/status changes made online now pull back down to local PostgreSQL.
+  - Generic upsert helpers now distinguish PostgreSQL array columns from JSON/JSONB columns:
+    - native Postgres arrays stay arrays
+    - JSON/JSONB arrays are serialized as JSON
+  - This fixed cloud pull failures such as:
+    - `malformed array literal: "[]"`
+    - `invalid input syntax for type json`
+
+Verification:
+
+```powershell
+node --check backend/src/utils/masterDataSync.js
+node --check backend/src/utils/offlineSync.js
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+```
+
+Manual cloud-to-local pull test:
+
+```powershell
+docker exec restaurantos-local sh -lc "cd /app && CLOUD_API_URL=http://restaurantos-online:5001 node - <<'NODE'
+const { pullCloudMasterData } = require('./backend/src/utils/offlineSync');
+(async () => {
+  const started = Date.now();
+  const result = await pullCloudMasterData();
+  console.log(JSON.stringify({ ms: Date.now() - started, result }, null, 2));
+  process.exit(0);
+})().catch(err => { console.error(err); process.exit(1); });
+NODE"
+```
+
+Result:
+
+- Pull completed successfully:
+  - applied: `336`
+  - skipped: `0`
+- Local PostgreSQL now matches Neon for the approved subscription requests:
+  - `f60c9458-6be8-42e8-9441-0eca5e3044b8` / `reports` / `active`
+  - `9361f05f-28a9-4115-9a42-e1ac056bc190` / `staff` / `active`
+- Local queue summary:
+  - `order`: `synced`
+  - `shift_session`: `synced`
+  - `subscription_request`: `synced`
+
+Runtime note:
+
+- After container recreate, `restaurantos-online` may take a short time before port `5052` accepts requests.
+- First worker attempts during that startup window can log `Offline sync worker error: fetch failed`; later attempts work after online health is ready.

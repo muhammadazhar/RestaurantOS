@@ -574,15 +574,32 @@ async function getTableColumns(client, tableName) {
   return result.rows.map(row => row.column_name);
 }
 
+async function getTableColumnTypes(client, tableName) {
+  const result = await client.query(
+    `SELECT column_name, data_type
+     FROM information_schema.columns
+     WHERE table_schema='public'
+       AND table_name=$1
+       AND is_generated='NEVER'
+       AND is_identity='NO'`,
+    [tableName]
+  );
+  return Object.fromEntries(result.rows.map(row => [row.column_name, row.data_type]));
+}
+
 async function upsertRow(client, tableName, row, conflictColumn = 'id', excludeColumns = []) {
   if (!row || !row[conflictColumn]) return;
   const tableColumns = await getTableColumns(client, tableName);
   const excluded = new Set(excludeColumns);
   const columns = tableColumns.filter(column => Object.prototype.hasOwnProperty.call(row, column) && !excluded.has(column));
   if (!columns.length) return;
+  const columnTypes = await getTableColumnTypes(client, tableName);
 
   const values = columns.map(column => {
     const value = row[column];
+    if (Array.isArray(value)) {
+      return ['json', 'jsonb'].includes(columnTypes[column]) ? JSON.stringify(value) : value;
+    }
     if (value && typeof value === 'object' && !(value instanceof Date)) return JSON.stringify(value);
     return value;
   });
