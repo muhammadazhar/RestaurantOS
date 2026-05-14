@@ -1427,3 +1427,27 @@ Build result:
 
 - Frontend production build completed successfully.
 - Existing ESLint warnings remain in unrelated files.
+
+## Latest Completed Change
+
+- Fixed sidebar hover bubble clipping.
+- Problem:
+  - The left menu hover pop used `translateX(5px) scale(1.08)` inside the scrollable menu column.
+  - The enlarged button was clipped by the scroll container edge.
+- New behavior:
+  - Scrollable menu column now has a little internal horizontal padding.
+  - Menu buttons are slightly narrower with small side margins.
+  - Hover pop now scales from center with `translateY(-1px) scale(1.04)`, so it remains fully visible inside the sidebar.
+
+Verification:
+
+```powershell
+npm run build --prefix frontend
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+```
+
+Build result:
+
+- Frontend production build completed successfully.
+- Existing ESLint warnings remain in unrelated files.

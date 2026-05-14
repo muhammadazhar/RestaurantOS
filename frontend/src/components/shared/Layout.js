@@ -571,7 +571,7 @@ export default function Layout({ children }) {
             {user?.restaurantName || 'RestaurantOS'}
           </div>
 
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflowY: 'auto', paddingTop: 4 }}>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflowY: 'auto', padding: '4px 3px 0', boxSizing: 'border-box' }}>
             {visibleGroups.map(group => {
               const groupActive = activeGroup?.label === group.label;
               const groupHovered = hoveredGroup === group.label;
@@ -586,7 +586,8 @@ export default function Layout({ children }) {
                   title={group.label}
                   style={{
                     position: 'relative',
-                    width: '100%',
+                    width: 'calc(100% - 4px)',
+                    margin: '0 2px',
                     border: `1px solid ${groupActive ? accentDeep : sidebarItemBorder}`,
                     background: groupActive ? `linear-gradient(180deg, ${accent} 0%, #ffc880 100%)` : sidebarItemBg,
                     color: groupActive ? '#111827' : sidebarText,
@@ -603,7 +604,8 @@ export default function Layout({ children }) {
                       : groupHovered
                         ? (isLight ? '0 16px 30px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.78)' : '0 18px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14)')
                         : sidebarInset,
-                    transform: groupHovered ? 'translateX(5px) scale(1.08)' : 'translateX(0) scale(1)',
+                    transform: groupHovered ? 'translateY(-1px) scale(1.04)' : 'translateY(0) scale(1)',
+                    transformOrigin: 'center center',
                     zIndex: groupHovered ? 3 : 1,
                     transition: 'transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease',
                   }}
