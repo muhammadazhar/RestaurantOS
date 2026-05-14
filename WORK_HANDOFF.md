@@ -1407,6 +1407,34 @@ Verification result:
 
 ## Latest Completed Change
 
+- Converted the documentation pack into Microsoft Word `.docx` format.
+- Added Word outputs under `docs/word/`:
+  - `RestaurantOS_Documentation_Pack.docx` - combined pack.
+  - `readme.docx`
+  - `uat_plan.docx`
+  - `user_manual.docx`
+  - `flow_diagrams.docx`
+  - `sequence_diagrams.docx`
+  - `system_architecture.docx`
+- Added `tools/build_word_docs.py` so the Word files can be regenerated from the Markdown sources.
+- Updated `docs/README.md` with the Word file index.
+
+Verification:
+
+```powershell
+& 'C:\Users\Azhar\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tools\build_word_docs.py
+$py='C:\Users\Azhar\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe'
+$renderer='C:\Users\Azhar\.codex\plugins\cache\openai-primary-runtime\documents\26.423.10653\skills\documents\render_docx.py'
+Get-ChildItem docs\word -Filter *.docx | ForEach-Object { $out = Join-Path 'docs\word\qa' $_.BaseName; & $py $renderer $_.FullName --output_dir $out --renderer artifact-tool }
+```
+
+Verification result:
+
+- All Word documents rendered successfully to PNG pages for visual QA.
+- Visual review passed after fixing inherited footer duplication in the combined pack.
+
+## Latest Completed Change
+
 - Refined the shared sidebar after visual review.
 - Problem:
   - The stronger sidebar treatment was too dark in light mode and did not clearly differentiate light/dark theme behavior.

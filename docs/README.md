@@ -18,6 +18,20 @@ This documentation pack provides business, QA, operations, and technical teams w
 | [Sequence Diagrams](./SEQUENCE_DIAGRAMS.md) | Developers, QA, architects | Shows request and sync sequences for key system interactions. |
 | [System Architecture](./SYSTEM_ARCHITECTURE.md) | Engineering, DevOps, security, support | Describes architecture, components, data stores, deployment modes, and integration points. |
 
+## Microsoft Word Versions
+
+Microsoft Word `.docx` copies are available in `docs/word/`.
+
+| Word File | Purpose |
+|---|---|
+| `docs/word/RestaurantOS_Documentation_Pack.docx` | Combined documentation pack in one Word file. |
+| `docs/word/readme.docx` | Documentation index. |
+| `docs/word/uat_plan.docx` | UAT plan. |
+| `docs/word/user_manual.docx` | User manual. |
+| `docs/word/flow_diagrams.docx` | Flow diagrams document. |
+| `docs/word/sequence_diagrams.docx` | Sequence diagrams document. |
+| `docs/word/system_architecture.docx` | System architecture document. |
+
 ## System Summary
 
 RestaurantOS is a multi-tenant restaurant management platform with:
@@ -38,4 +52,3 @@ RestaurantOS is a multi-tenant restaurant management platform with:
 - Local online/cloud test app: `http://localhost:5052`
 - Railway deployment is intentionally not pushed while the Railway subscription is expired.
 - Runtime secrets and environment-specific values must remain outside Git, especially `backend/.env`.
-
