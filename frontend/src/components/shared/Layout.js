@@ -518,7 +518,11 @@ export default function Layout({ children }) {
     };
   }, [refreshBadgeCounts]);
 
-  const handleLogout = async () => { await logout(); navigate('/login'); };
+  const handleLogout = async () => {
+    const destination = user?.isSuperAdmin ? '/super-admin' : '/login';
+    await logout();
+    navigate(destination);
+  };
 
   const canSee = (item) => {
     if (item.superAdmin) return user?.isSuperAdmin;

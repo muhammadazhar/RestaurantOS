@@ -1468,6 +1468,30 @@ Verification result:
 
 ## Latest Completed Change
 
+- Fixed super-admin logout redirect.
+- Problem:
+  - Signing out as a super admin cleared the session and always navigated to `/login`, which is the normal restaurant login screen.
+- New behavior:
+  - The shared layout captures the logout destination before clearing the user.
+  - Super admins now return to `/super-admin` after signing out.
+  - Restaurant users still return to `/login`.
+
+Verification:
+
+```powershell
+npm run build --prefix frontend
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+```
+
+Verification result:
+
+- Frontend production build completed successfully.
+- Existing ESLint warnings remain in unrelated files.
+- Local offline and local online containers rebuilt and restarted.
+
+## Latest Completed Change
+
 - Refined the shared sidebar after visual review.
 - Problem:
   - The stronger sidebar treatment was too dark in light mode and did not clearly differentiate light/dark theme behavior.
