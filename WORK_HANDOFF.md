@@ -1401,3 +1401,29 @@ Build result:
 
 - Frontend production build completed successfully.
 - Existing ESLint warnings remain in unrelated files.
+
+## Latest Completed Change
+
+- Matched the top secondary menu bar to the left sidebar glass palette.
+- Added a bubble-style hover effect to the left sidebar menu buttons:
+  - menu buttons lift forward with a slight scale
+  - shift a few pixels to the right
+  - gain a stronger shadow while hovered
+- Updated the secondary menu bar in `frontend/src/components/shared/Layout.js`:
+  - uses the same sidebar glass background and border
+  - inactive secondary links use the same sidebar item surface
+  - labels and icons use the sidebar text palette
+- Removed newly unused constants after the color swap so the build does not introduce new lint warnings.
+
+Verification:
+
+```powershell
+npm run build --prefix frontend
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+```
+
+Build result:
+
+- Frontend production build completed successfully.
+- Existing ESLint warnings remain in unrelated files.

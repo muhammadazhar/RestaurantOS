@@ -385,12 +385,11 @@ export default function Layout({ children }) {
   const [badgeCounts, setBadgeCounts] = useState({ orders: 0, support: 0, adminSupport: 0 });
   const [workflowSettings, setWorkflowSettings] = useState(normalizeWorkflowSettings());
   const [syncStatus, setSyncStatus] = useState(null);
+  const [hoveredGroup, setHoveredGroup] = useState(null);
 
   const isLight = mode === 'light';
   const shellBg = isLight ? '#f3f6fb' : '#07111d';
-  const panelBg = isLight ? 'rgba(255,255,255,0.92)' : 'rgba(8,14,24,0.9)';
   const panelBorder = isLight ? 'rgba(148,163,184,0.18)' : 'rgba(148,163,184,0.14)';
-  const moduleText = isLight ? '#0f172a' : '#f8fafc';
   const mutedText = isLight ? '#64748b' : '#94a3b8';
   const sidebarBg = isLight
     ? 'linear-gradient(180deg, rgba(226,232,240,0.94) 0%, rgba(203,213,225,0.88) 52%, rgba(241,245,249,0.94) 100%)'
@@ -575,12 +574,15 @@ export default function Layout({ children }) {
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflowY: 'auto', paddingTop: 4 }}>
             {visibleGroups.map(group => {
               const groupActive = activeGroup?.label === group.label;
+              const groupHovered = hoveredGroup === group.label;
               const badgeCount = getGroupBadgeCount(group);
               const target = reviewLink(group.items[0], getBadgeCount(group.items[0]));
               return (
                 <button
                   key={group.label}
                   onClick={() => navigate(target)}
+                  onMouseEnter={() => setHoveredGroup(group.label)}
+                  onMouseLeave={() => setHoveredGroup(null)}
                   title={group.label}
                   style={{
                     position: 'relative',
@@ -596,8 +598,14 @@ export default function Layout({ children }) {
                     justifyContent: 'center',
                     gap: 6,
                     cursor: 'pointer',
-                    boxShadow: groupActive ? '0 14px 28px rgba(255,182,97,0.26)' : sidebarInset,
-                    transition: 'all 0.18s ease',
+                    boxShadow: groupActive
+                      ? '0 14px 28px rgba(255,182,97,0.26)'
+                      : groupHovered
+                        ? (isLight ? '0 16px 30px rgba(15,23,42,0.18), inset 0 1px 0 rgba(255,255,255,0.78)' : '0 18px 34px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.14)')
+                        : sidebarInset,
+                    transform: groupHovered ? 'translateX(5px) scale(1.08)' : 'translateX(0) scale(1)',
+                    zIndex: groupHovered ? 3 : 1,
+                    transition: 'transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease',
                   }}
                 >
                   <div style={{ width: 34, height: 34, borderRadius: 12, background: groupActive ? 'rgba(255,255,255,0.28)' : (isLight ? 'rgba(255,255,255,0.62)' : 'rgba(255,255,255,0.08)'), border: `1px solid ${groupActive ? 'rgba(255,255,255,0.24)' : sidebarItemBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -651,15 +659,15 @@ export default function Layout({ children }) {
 
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {activeGroup && (
-            <div style={{ background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 20, padding: '10px 12px', boxShadow: isLight ? '0 16px 42px rgba(15,23,42,0.05)' : '0 18px 42px rgba(0,0,0,0.18)' }}>
+            <div style={{ background: sidebarBg, border: `1px solid ${sidebarBorder}`, borderRadius: 20, padding: '10px 12px', boxShadow: isLight ? '0 14px 36px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.62)' : '0 18px 42px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.08)', backdropFilter: 'blur(18px) saturate(135%)', WebkitBackdropFilter: 'blur(18px) saturate(135%)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, marginRight: 6 }}>
                   <div style={{ width: 34, height: 34, borderRadius: 12, background: `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 26px rgba(255,182,97,0.22)', flexShrink: 0 }}>
                     <Icon name={activeGroup.items[0]?.icon} color="#111827" size={16} stroke={1.9} />
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: moduleText }}>{activeGroup.label}</div>
-                    <div style={{ fontSize: 11, color: mutedText, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeGroup.description}</div>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: sidebarText }}>{activeGroup.label}</div>
+                    <div style={{ fontSize: 11, color: sidebarMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeGroup.description}</div>
                   </div>
                 </div>
 
@@ -682,15 +690,15 @@ export default function Layout({ children }) {
                           background: isActive
                             ? `linear-gradient(135deg, ${accent} 0%, #ffc880 100%)`
                             : isShiftManagementItem
-                              ? (isLight ? 'rgba(255,182,97,0.14)' : 'rgba(255,182,97,0.12)')
-                              : (isLight ? '#ffffff' : 'rgba(255,255,255,0.03)'),
-                          border: `1px solid ${isActive ? accentDeep : isShiftManagementItem ? 'rgba(246,168,74,0.35)' : panelBorder}`,
-                          color: isActive ? '#111827' : moduleText,
+                              ? (isLight ? 'rgba(255,182,97,0.22)' : 'rgba(255,182,97,0.12)')
+                              : sidebarItemBg,
+                          border: `1px solid ${isActive ? accentDeep : isShiftManagementItem ? 'rgba(246,168,74,0.38)' : sidebarItemBorder}`,
+                          color: isActive ? '#111827' : sidebarText,
                           boxShadow: isActive
                             ? '0 12px 24px rgba(255,182,97,0.2)'
                             : isShiftManagementItem
                               ? 'inset 0 0 0 1px rgba(255,182,97,0.08)'
-                              : 'none',
+                              : sidebarInset,
                           transition: 'all 0.18s ease',
                           fontSize: 11,
                           fontWeight: isShiftManagementItem ? 900 : 800,
@@ -699,7 +707,7 @@ export default function Layout({ children }) {
                       >
                         {({ isActive }) => (
                           <>
-                            <Icon name={item.icon} color={isActive ? '#111827' : isShiftManagementItem ? accent : '#cbd5e1'} size={13} stroke={1.85} />
+                            <Icon name={item.icon} color={isActive ? '#111827' : isShiftManagementItem ? accent : (isLight ? '#253247' : '#cbd5e1')} size={13} stroke={1.85} />
                             <span>{item.label}</span>
                             {itemBadgeCount > 0 && (
                               <span style={{ minWidth: 17, height: 17, padding: '0 5px', borderRadius: 999, background: isActive ? '#111827' : '#ef4444', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 900, lineHeight: 1 }}>
@@ -718,9 +726,9 @@ export default function Layout({ children }) {
                   <span style={{ fontSize: 10, fontWeight: 900, color: syncTone.text, whiteSpace: 'nowrap' }}>{syncDisplay.label}</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: isLight ? '#f8fafc' : 'rgba(255,255,255,0.03)', border: `1px solid ${panelBorder}`, borderRadius: 12, padding: '7px 10px' }}>
-                  <Icon name="shift" color={mutedText} size={12} stroke={1.85} />
-                  <span style={{ fontSize: 10, color: mutedText }}>Active:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: sidebarItemBg, border: `1px solid ${sidebarItemBorder}`, borderRadius: 12, padding: '7px 10px', boxShadow: sidebarInset }}>
+                  <Icon name="shift" color={sidebarMuted} size={12} stroke={1.85} />
+                  <span style={{ fontSize: 10, color: sidebarMuted }}>Active:</span>
                   <span style={{ fontSize: 10, fontWeight: 800, color: accent }}>{activeItem?.label || activeGroup.label}</span>
                 </div>
               </div>
