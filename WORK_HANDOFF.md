@@ -1379,6 +1379,34 @@ Build result:
 
 ## Latest Completed Change
 
+- Added a professional documentation pack for RestaurantOS covering UAT, user operations, flows, sequences, and architecture.
+- New documents:
+  - `docs/README.md` - Documentation index and environment notes.
+  - `docs/UAT_PLAN.md` - UAT plan, test scope, entry/exit criteria, defect handling, and end-to-end acceptance scenarios.
+  - `docs/USER_MANUAL.md` - Role-based user manual for daily restaurant, admin, offline, subscription, and support workflows.
+  - `docs/FLOW_DIAGRAMS.md` - Mermaid flow diagrams for login/access, POS, kitchen, offline sync, master data, subscriptions, delivery, and support.
+  - `docs/SEQUENCE_DIAGRAMS.md` - Mermaid sequence diagrams for core operational and sync journeys.
+  - `docs/SYSTEM_ARCHITECTURE.md` - Architecture overview, deployment modes, module map, offline sync design, data ownership, security, integrations, and release operations.
+- Documentation reflects current offline mode rules:
+  - local operational actions queue and sync to cloud
+  - master data remains cloud-owned and pulls down to local
+  - Cloudinary menu images are localized in `backend/uploads/offline-cache`
+  - subscription renewal requests and approvals sync across local/online modes
+
+Verification:
+
+```powershell
+Get-ChildItem -Path docs -File | Select-Object Name,Length
+git diff --check -- docs WORK_HANDOFF.md
+```
+
+Verification result:
+
+- Documentation files are present.
+- Markdown diff whitespace check passed.
+
+## Latest Completed Change
+
 - Refined the shared sidebar after visual review.
 - Problem:
   - The stronger sidebar treatment was too dark in light mode and did not clearly differentiate light/dark theme behavior.
