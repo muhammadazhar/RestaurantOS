@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: restaurantos-onprem-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-restaurantos}
+      POSTGRES_USER: ${POSTGRES_USER:-restaurantos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - restaurantos_onprem_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-restaurantos} -d ${POSTGRES_DB:-restaurantos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  init:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.onprem
+      args:
+        REACT_APP_API_URL: /api
+        REACT_APP_SOCKET_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+    container_name: restaurantos-onprem-init
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: production
+      DB_MODE: local
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-restaurantos}
+      DB_USER: ${DB_USER:-restaurantos}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["node", "backend/scripts/onprem-init.js"]
+    restart: "no"
+
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.onprem
+      args:
+        REACT_APP_API_URL: /api
+        REACT_APP_SOCKET_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+    container_name: restaurantos-onprem-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:5001"
+    env_file:
+      - ./.env
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      DEPLOYMENT_MODE: local_offline
+      DB_MODE: local
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-restaurantos}
+      DB_USER: ${DB_USER:-restaurantos}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      CLIENT_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+    volumes:
+      - restaurantos_onprem_uploads:/app/backend/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  restaurantos_onprem_db:
+  restaurantos_onprem_uploads:

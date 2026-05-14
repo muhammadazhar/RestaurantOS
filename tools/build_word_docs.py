@@ -24,6 +24,7 @@ DOC_SOURCES = [
     ("FLOW_DIAGRAMS.md", "RestaurantOS Flow Diagrams", "Business and System Process Flows"),
     ("SEQUENCE_DIAGRAMS.md", "RestaurantOS Sequence Diagrams", "Interaction and Sync Sequences"),
     ("SYSTEM_ARCHITECTURE.md", "RestaurantOS System Architecture", "Technical Architecture Document"),
+    ("ON_PREMISE_DEPLOYMENT.md", "RestaurantOS On-Premise Deployment Guide", "Docker Installation, Operations, Backup, and Restore"),
 ]
 
 TITLE_COLOR = RGBColor(31, 78, 121)
@@ -355,7 +356,7 @@ def main() -> None:
     for filename, title, subtitle in DOC_SOURCES:
         safe_name = Path(filename).stem.lower()
         build_document([(filename, title, subtitle)], OUT_DIR / f"{safe_name}.docx")
-    build_document(DOC_SOURCES, OUT_DIR / "RestaurantOS_Documentation_Pack.docx", combined=True)
+    build_document(DOC_SOURCES, OUT_DIR / "RestaurantOS_Documentation_Pack_OnPrem.docx", combined=True)
 
 
 if __name__ == "__main__":

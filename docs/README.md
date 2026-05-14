@@ -17,6 +17,7 @@ This documentation pack provides business, QA, operations, and technical teams w
 | [Flow Diagrams](./FLOW_DIAGRAMS.md) | Product, QA, operations, support | Shows business process flows across major modules. |
 | [Sequence Diagrams](./SEQUENCE_DIAGRAMS.md) | Developers, QA, architects | Shows request and sync sequences for key system interactions. |
 | [System Architecture](./SYSTEM_ARCHITECTURE.md) | Engineering, DevOps, security, support | Describes architecture, components, data stores, deployment modes, and integration points. |
+| [On-Premise Deployment](./ON_PREMISE_DEPLOYMENT.md) | IT admins, implementation partners, support | Explains Docker-based installation, backup, restore, update, LAN access, and optional cloud sync. |
 
 ## Microsoft Word Versions
 
@@ -25,12 +26,14 @@ Microsoft Word `.docx` copies are available in `docs/word/`.
 | Word File | Purpose |
 |---|---|
 | `docs/word/RestaurantOS_Documentation_Pack.docx` | Combined documentation pack in one Word file. |
+| `docs/word/RestaurantOS_Documentation_Pack_OnPrem.docx` | Combined documentation pack including the on-premise deployment guide. |
 | `docs/word/readme.docx` | Documentation index. |
 | `docs/word/uat_plan.docx` | UAT plan. |
 | `docs/word/user_manual.docx` | User manual. |
 | `docs/word/flow_diagrams.docx` | Flow diagrams document. |
 | `docs/word/sequence_diagrams.docx` | Sequence diagrams document. |
 | `docs/word/system_architecture.docx` | System architecture document. |
+| `docs/word/on_premise_deployment.docx` | On-premise deployment guide. |
 
 ## System Summary
 

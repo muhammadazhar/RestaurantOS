@@ -1492,6 +1492,46 @@ Verification result:
 
 ## Latest Completed Change
 
+- Added a complete Docker-based on-premise deployment package.
+- New deployment/runtime files:
+  - `Dockerfile.onprem` builds a production image that includes backend, frontend build, and database migrations/seeds.
+  - `deploy/on-prem/docker-compose.yml` starts PostgreSQL, first-time database initializer, and the RestaurantOS app.
+  - `deploy/on-prem/.env.example` documents required on-prem environment values.
+  - `backend/scripts/onprem-init.js` initializes a fresh database only when the schema is missing.
+  - `deploy/on-prem/scripts/backup.ps1` and `backup.sh` create SQL backups.
+  - `deploy/on-prem/scripts/restore.ps1` and `restore.sh` restore SQL backups.
+  - `deploy/on-prem/README.md` gives quick-start setup notes.
+- New documentation:
+  - `docs/ON_PREMISE_DEPLOYMENT.md`
+  - `docs/word/on_premise_deployment.docx`
+  - `docs/word/RestaurantOS_Documentation_Pack_OnPrem.docx`
+- Updated `docs/README.md` and `tools/build_word_docs.py` so the on-premise guide is part of the documentation index and Word generation flow.
+
+Verification:
+
+```powershell
+Copy-Item deploy\on-prem\.env.example deploy\on-prem\.env -Force
+docker compose -f deploy\on-prem\docker-compose.yml config
+Remove-Item deploy\on-prem\.env -Force
+node --check backend\scripts\onprem-init.js
+git diff --check -- Dockerfile.onprem backend/scripts/onprem-init.js deploy/on-prem docs/ON_PREMISE_DEPLOYMENT.md docs/README.md tools/build_word_docs.py
+Copy-Item deploy\on-prem\.env.example deploy\on-prem\.env -Force
+docker compose -f deploy\on-prem\docker-compose.yml build app
+Remove-Item deploy\on-prem\.env -Force
+& 'C:\Users\Azhar\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' tools\build_word_docs.py
+```
+
+Verification result:
+
+- Compose configuration validates with the example environment.
+- On-prem initializer script syntax check passed.
+- On-prem Docker image builds successfully.
+- Frontend production build completed during Docker image build; existing ESLint warnings remain in unrelated files.
+- Standalone and combined on-prem Word documents rendered successfully for visual QA.
+- `tools/build_word_docs.py` now writes the updated combined pack to `RestaurantOS_Documentation_Pack_OnPrem.docx` so it does not need to overwrite the previous combined Word pack if that file is open in Microsoft Word.
+
+## Latest Completed Change
+
 - Refined the shared sidebar after visual review.
 - Problem:
   - The stronger sidebar treatment was too dark in light mode and did not clearly differentiate light/dark theme behavior.
