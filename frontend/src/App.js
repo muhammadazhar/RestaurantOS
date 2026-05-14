@@ -71,14 +71,24 @@ function PrivateRoute({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
+function SuperAdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/super-admin" replace />;
+  return user.isSuperAdmin ? children : <Navigate to="/dashboard" replace />;
+}
+
+const userHome = (user) => (user?.isSuperAdmin ? '/admin' : '/dashboard');
+
 function AppRoutes() {
   const { user } = useAuth();
   return (
     <Routes>
-      <Route path="/login"       element={user ? <Navigate to="/dashboard" /> : <Login />} />
-      <Route path="/super-login" element={user ? <Navigate to="/dashboard" /> : <SuperLogin />} />
-      <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" /> : <ForgotPassword />} />
-      <Route path="/reset-password" element={user ? <Navigate to="/dashboard" /> : <ResetPassword />} />
+      <Route path="/login"       element={user ? <Navigate to={userHome(user)} /> : <Login />} />
+      <Route path="/super-admin" element={user ? <Navigate to={userHome(user)} /> : <SuperLogin />} />
+      <Route path="/super-login" element={<Navigate to="/super-admin" replace />} />
+      <Route path="/forgot-password" element={user ? <Navigate to={userHome(user)} /> : <ForgotPassword />} />
+      <Route path="/reset-password" element={user ? <Navigate to={userHome(user)} /> : <ResetPassword />} />
       <Route path="/register"    element={user ? <Navigate to="/setup" />     : <Register />} />
       <Route path="/setup"       element={<PrivateRoute><SetupWizard /></PrivateRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -97,7 +107,7 @@ function AppRoutes() {
       <Route path="/gl-setup"    element={<PrivateRoute><Layout><GLSetup /></Layout></PrivateRoute>} />
       <Route path="/gl-reports"  element={<PrivateRoute><Layout><GLReports /></Layout></PrivateRoute>} />
       <Route path="/alerts"    element={<PrivateRoute><Layout><Alerts /></Layout></PrivateRoute>} />
-      <Route path="/admin"     element={<PrivateRoute><Layout><Admin /></Layout></PrivateRoute>} />
+      <Route path="/admin"     element={<SuperAdminRoute><Layout><Admin /></Layout></SuperAdminRoute>} />
       <Route path="/menu-mgmt"    element={<PrivateRoute><Layout><MenuManagement /></Layout></PrivateRoute>} />
       <Route path="/orders"       element={<PrivateRoute><Layout><Orders /></Layout></PrivateRoute>} />
       <Route path="/refund-history" element={<PrivateRoute><Layout><RefundHistory /></Layout></PrivateRoute>} />
@@ -118,17 +128,17 @@ function AppRoutes() {
 
       {/* Subscriptions & Licensing */}
       <Route path="/subscriptions"     element={<PrivateRoute><Layout><MySubscriptions /></Layout></PrivateRoute>} />
-      <Route path="/module-pricing"    element={<PrivateRoute><Layout><ModulePricing /></Layout></PrivateRoute>} />
-      <Route path="/subscription-mgmt" element={<PrivateRoute><Layout><SubscriptionManagement /></Layout></PrivateRoute>} />
+      <Route path="/module-pricing"    element={<SuperAdminRoute><Layout><ModulePricing /></Layout></SuperAdminRoute>} />
+      <Route path="/subscription-mgmt" element={<SuperAdminRoute><Layout><SubscriptionManagement /></Layout></SuperAdminRoute>} />
 
       {/* Company Groups & Branches */}
-      <Route path="/company-groups"   element={<PrivateRoute><Layout><CompanyGroups /></Layout></PrivateRoute>} />
+      <Route path="/company-groups"   element={<SuperAdminRoute><Layout><CompanyGroups /></Layout></SuperAdminRoute>} />
       <Route path="/branches"         element={<PrivateRoute><Layout><BranchManagement /></Layout></PrivateRoute>} />
       <Route path="/group-dashboard"  element={<PrivateRoute><Layout><GroupDashboard /></Layout></PrivateRoute>} />
 
       {/* Support */}
       <Route path="/support"          element={<PrivateRoute><Layout><Support /></Layout></PrivateRoute>} />
-      <Route path="/admin-support"    element={<PrivateRoute><Layout><AdminSupport /></Layout></PrivateRoute>} />
+      <Route path="/admin-support"    element={<SuperAdminRoute><Layout><AdminSupport /></Layout></SuperAdminRoute>} />
 
       {/* Delivery Pricing */}
       <Route path="/delivery-pricing" element={<PrivateRoute><Layout><DeliveryPricing /></Layout></PrivateRoute>} />

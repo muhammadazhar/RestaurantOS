@@ -1435,6 +1435,39 @@ Verification result:
 
 ## Latest Completed Change
 
+- Separated super-admin access from the public restaurant login screen.
+- New behavior:
+  - Normal restaurant login at `/login` no longer displays a "Super Admin" link.
+  - Super-admin login is now accessed directly at `/super-admin`.
+  - Legacy `/super-login` redirects to `/super-admin` for backward compatibility.
+  - Super-admin-only frontend routes now use `SuperAdminRoute`:
+    - `/admin`
+    - `/module-pricing`
+    - `/subscription-mgmt`
+    - `/company-groups`
+    - `/admin-support`
+  - Logged-in super admins are routed to `/admin`; normal users continue to `/dashboard`.
+  - The super-admin login screen no longer links back to restaurant login and no longer displays demo credentials.
+- Backend security remains unchanged; protected APIs still rely on `requireSuperAdmin`.
+
+Verification:
+
+```powershell
+npm run build --prefix frontend
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+docker ps --filter "name=restaurantos" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+Verification result:
+
+- Frontend production build completed successfully.
+- Existing ESLint warnings remain in unrelated files.
+- Local offline container is running on `http://localhost:5051`.
+- Local online container is running on `http://localhost:5052`.
+
+## Latest Completed Change
+
 - Refined the shared sidebar after visual review.
 - Problem:
   - The stronger sidebar treatment was too dark in light mode and did not clearly differentiate light/dark theme behavior.

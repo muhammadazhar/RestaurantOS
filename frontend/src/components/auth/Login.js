@@ -98,9 +98,6 @@ export default function Login() {
           <Link to="/forgot-password" style={{ color: T.accent, fontWeight: 700 }}>Forgot password?</Link>
         </p>
 
-        <p style={{ marginTop: 20, fontSize: 12, color: T.textMid, textAlign: 'center' }}>
-          Super Admin? <Link to="/super-login" style={{ color: T.accent }}>Login here</Link>
-        </p>
         <div style={{ marginTop: 16, borderTop: `1px solid ${T.border}`, paddingTop: 16, textAlign: 'center' }}>
           <p style={{ fontSize: 13, color: T.textMid, marginBottom: 8 }}>Don't have an account yet?</p>
           <Link to="/register" style={{
