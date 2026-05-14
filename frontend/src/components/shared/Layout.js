@@ -392,6 +392,15 @@ export default function Layout({ children }) {
   const panelBorder = isLight ? 'rgba(148,163,184,0.18)' : 'rgba(148,163,184,0.14)';
   const moduleText = isLight ? '#0f172a' : '#f8fafc';
   const mutedText = isLight ? '#64748b' : '#94a3b8';
+  const sidebarBg = isLight
+    ? 'linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(30,41,59,0.94) 52%, rgba(17,24,39,0.97) 100%)'
+    : 'linear-gradient(180deg, rgba(7,17,29,0.98) 0%, rgba(15,23,42,0.94) 54%, rgba(3,7,18,0.98) 100%)';
+  const sidebarBorder = isLight ? 'rgba(251,191,36,0.32)' : 'rgba(255,255,255,0.12)';
+  const sidebarText = '#f8fafc';
+  const sidebarMuted = '#b6c2d2';
+  const sidebarItemBg = 'rgba(255,255,255,0.065)';
+  const sidebarItemBorder = 'rgba(255,255,255,0.10)';
+  const sidebarInset = 'inset 0 1px 0 rgba(255,255,255,0.10)';
   const accent = '#ffb661';
   const accentDeep = '#f6a84a';
   const syncDisplay = getSyncDisplay(syncStatus, connected);
@@ -545,15 +554,15 @@ export default function Layout({ children }) {
   return (
     <div style={{ minHeight: '100vh', background: isLight ? shellBg : `radial-gradient(circle at top left, rgba(255,182,97,0.08), transparent 24%), radial-gradient(circle at top right, rgba(68,183,255,0.08), transparent 22%), ${shellBg}`, fontFamily: "'Inter', sans-serif" }}>
       <div style={{ display: 'flex', minHeight: '100vh', padding: 12, gap: 12 }}>
-        <aside style={{ width: 88, flexShrink: 0, background: panelBg, border: `1px solid ${panelBorder}`, borderRadius: 24, boxShadow: isLight ? '0 18px 48px rgba(15,23,42,0.06)' : '0 22px 54px rgba(0,0,0,0.22)', padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 16, background: isLight ? '#fff' : 'rgba(255,255,255,0.04)', border: `1px solid ${panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: isLight ? '0 10px 30px rgba(15,23,42,0.06)' : '0 14px 34px rgba(0,0,0,0.25)' }}>
+        <aside style={{ width: 88, flexShrink: 0, background: sidebarBg, border: `1px solid ${sidebarBorder}`, borderRadius: 24, boxShadow: isLight ? '0 22px 58px rgba(15,23,42,0.22), inset 0 1px 0 rgba(255,255,255,0.10)' : '0 24px 62px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.08)', backdropFilter: 'blur(18px) saturate(135%)', WebkitBackdropFilter: 'blur(18px) saturate(135%)', padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 16, background: 'rgba(255,255,255,0.10)', border: `1px solid ${sidebarItemBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 14px 34px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12)' }}>
             {logoUrl
               ? <img src={logoUrl.startsWith('http') ? logoUrl : `${IMG_BASE}${logoUrl}`} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <span style={{ fontWeight: 900, color: moduleText }}>RO</span>
+              : <span style={{ fontWeight: 900, color: sidebarText }}>RO</span>
             }
           </div>
 
-          <div style={{ fontSize: 10, fontWeight: 800, color: moduleText, textAlign: 'center', lineHeight: 1.25, maxWidth: 64 }}>
+          <div style={{ fontSize: 10, fontWeight: 900, color: sidebarText, textAlign: 'center', lineHeight: 1.25, maxWidth: 64 }}>
             {user?.restaurantName || 'RestaurantOS'}
           </div>
 
@@ -570,9 +579,9 @@ export default function Layout({ children }) {
                   style={{
                     position: 'relative',
                     width: '100%',
-                    border: `1px solid ${groupActive ? accentDeep : 'transparent'}`,
-                    background: groupActive ? `linear-gradient(180deg, ${accent} 0%, #ffc880 100%)` : 'transparent',
-                    color: groupActive ? '#111827' : moduleText,
+                    border: `1px solid ${groupActive ? accentDeep : sidebarItemBorder}`,
+                    background: groupActive ? `linear-gradient(180deg, ${accent} 0%, #ffc880 100%)` : sidebarItemBg,
+                    color: groupActive ? '#111827' : sidebarText,
                     borderRadius: 18,
                     padding: '10px 6px 8px',
                     display: 'flex',
@@ -581,12 +590,12 @@ export default function Layout({ children }) {
                     justifyContent: 'center',
                     gap: 6,
                     cursor: 'pointer',
-                    boxShadow: groupActive ? '0 14px 28px rgba(255,182,97,0.22)' : 'none',
+                    boxShadow: groupActive ? '0 14px 28px rgba(255,182,97,0.26)' : sidebarInset,
                     transition: 'all 0.18s ease',
                   }}
                 >
-                  <div style={{ width: 34, height: 34, borderRadius: 12, background: groupActive ? 'rgba(255,255,255,0.28)' : (isLight ? '#ffffff' : 'rgba(255,255,255,0.04)'), border: `1px solid ${groupActive ? 'rgba(255,255,255,0.24)' : panelBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name={group.items[0]?.icon} color={groupActive ? '#111827' : '#dbe4f0'} size={16} stroke={1.85} />
+                  <div style={{ width: 34, height: 34, borderRadius: 12, background: groupActive ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.08)', border: `1px solid ${groupActive ? 'rgba(255,255,255,0.24)' : sidebarItemBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name={group.items[0]?.icon} color={groupActive ? '#111827' : '#eef4ff'} size={16} stroke={2} />
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 800, lineHeight: 1.1, textAlign: 'center' }}>{group.label}</span>
                   {badgeCount > 0 && (
@@ -604,31 +613,31 @@ export default function Layout({ children }) {
             title={`Switch to ${isLight ? 'dark' : 'light'} mode`}
             style={{
               width: '100%',
-              background: isLight ? '#ffffff' : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${panelBorder}`,
+              background: sidebarItemBg,
+              border: `1px solid ${sidebarItemBorder}`,
               borderRadius: 16,
               padding: '10px 6px 8px',
               cursor: 'pointer',
-              color: moduleText,
+              color: sidebarText,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               gap: 6,
             }}
           >
-            <div style={{ width: 34, height: 18, borderRadius: 999, background: isLight ? accent : 'rgba(255,255,255,0.14)', position: 'relative' }}>
+              <div style={{ width: 34, height: 18, borderRadius: 999, background: isLight ? accent : 'rgba(255,255,255,0.18)', position: 'relative' }}>
               <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isLight ? 19 : 3, transition: 'left 0.2s' }} />
             </div>
             <span style={{ fontSize: 10, fontWeight: 800 }}>{isLight ? 'Light' : 'Dark'}</span>
           </button>
 
-          <div style={{ width: '100%', background: isLight ? '#ffffff' : 'rgba(255,255,255,0.04)', border: `1px solid ${panelBorder}`, borderRadius: 18, padding: '8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: '100%', background: sidebarItemBg, border: `1px solid ${sidebarItemBorder}`, borderRadius: 18, padding: '8px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, boxShadow: sidebarInset }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: accent, color: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900 }}>
               {user?.name?.[0] || 'U'}
             </div>
-            <div style={{ fontSize: 10, fontWeight: 800, color: moduleText, textAlign: 'center', lineHeight: 1.15 }}>{user?.name}</div>
-            <div style={{ fontSize: 9, color: mutedText, textAlign: 'center' }}>{syncDisplay.label} / {user?.role || 'User'}</div>
-            <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: mutedText, padding: 0, cursor: 'pointer', fontSize: 10, fontFamily: "'Inter', sans-serif", fontWeight: 700 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, color: sidebarText, textAlign: 'center', lineHeight: 1.15 }}>{user?.name}</div>
+            <div style={{ fontSize: 9, color: sidebarMuted, textAlign: 'center' }}>{syncDisplay.label} / {user?.role || 'User'}</div>
+            <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: sidebarMuted, padding: 0, cursor: 'pointer', fontSize: 10, fontFamily: "'Inter', sans-serif", fontWeight: 800 }}>
               Sign out
             </button>
           </div>

@@ -1351,3 +1351,28 @@ Runtime note:
 
 - After container recreate, `restaurantos-online` may take a short time before port `5052` accepts requests.
 - First worker attempts during that startup window can log `Offline sync worker error: fetch failed`; later attempts work after online health is ready.
+
+## Latest Completed Change
+
+- Updated the shared app sidebar visual treatment in `frontend/src/components/shared/Layout.js`.
+- Problem:
+  - The left side menu was too light, especially in light mode, and blended into the app shell.
+- New behavior:
+  - Sidebar now uses a darker tinted glass surface in both light and dark themes.
+  - Added stronger border, shadow, blur/saturation glass styling, and clearer inactive item backgrounds.
+  - Increased contrast for sidebar labels, icons, restaurant name, user card, and sign-out text.
+  - Kept the active menu item in the warm RestaurantOS accent color so current section remains obvious.
+- This is a shared layout change, so both local offline and local online builds receive the same sidebar.
+
+Verification:
+
+```powershell
+npm run build --prefix frontend
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+```
+
+Build result:
+
+- Frontend production build completed successfully.
+- Existing ESLint warnings remain in unrelated files.
