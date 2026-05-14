@@ -1376,3 +1376,28 @@ Build result:
 
 - Frontend production build completed successfully.
 - Existing ESLint warnings remain in unrelated files.
+
+## Latest Completed Change
+
+- Refined the shared sidebar after visual review.
+- Problem:
+  - The stronger sidebar treatment was too dark in light mode and did not clearly differentiate light/dark theme behavior.
+  - When navigating from a scrolled page to another screen, the newly opened screen could remain scrolled down.
+- New behavior:
+  - Light mode sidebar is now a lighter frosted blue-gray glass panel with darker text/icons.
+  - Dark mode sidebar remains a deeper glass rail, so the two themes are visually distinct.
+  - Route changes now reset page scroll to top in the shared layout using `location.pathname` and `location.search`.
+- This applies to side-menu and sub-menu navigation because it lives in `frontend/src/components/shared/Layout.js`.
+
+Verification:
+
+```powershell
+npm run build --prefix frontend
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+```
+
+Build result:
+
+- Frontend production build completed successfully.
+- Existing ESLint warnings remain in unrelated files.

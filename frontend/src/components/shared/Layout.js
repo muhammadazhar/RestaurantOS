@@ -393,14 +393,14 @@ export default function Layout({ children }) {
   const moduleText = isLight ? '#0f172a' : '#f8fafc';
   const mutedText = isLight ? '#64748b' : '#94a3b8';
   const sidebarBg = isLight
-    ? 'linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(30,41,59,0.94) 52%, rgba(17,24,39,0.97) 100%)'
-    : 'linear-gradient(180deg, rgba(7,17,29,0.98) 0%, rgba(15,23,42,0.94) 54%, rgba(3,7,18,0.98) 100%)';
-  const sidebarBorder = isLight ? 'rgba(251,191,36,0.32)' : 'rgba(255,255,255,0.12)';
-  const sidebarText = '#f8fafc';
-  const sidebarMuted = '#b6c2d2';
-  const sidebarItemBg = 'rgba(255,255,255,0.065)';
-  const sidebarItemBorder = 'rgba(255,255,255,0.10)';
-  const sidebarInset = 'inset 0 1px 0 rgba(255,255,255,0.10)';
+    ? 'linear-gradient(180deg, rgba(226,232,240,0.94) 0%, rgba(203,213,225,0.88) 52%, rgba(241,245,249,0.94) 100%)'
+    : 'linear-gradient(180deg, rgba(15,23,42,0.96) 0%, rgba(30,41,59,0.92) 52%, rgba(17,24,39,0.96) 100%)';
+  const sidebarBorder = isLight ? 'rgba(100,116,139,0.34)' : 'rgba(255,255,255,0.12)';
+  const sidebarText = isLight ? '#172033' : '#f8fafc';
+  const sidebarMuted = isLight ? '#526176' : '#b6c2d2';
+  const sidebarItemBg = isLight ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.065)';
+  const sidebarItemBorder = isLight ? 'rgba(100,116,139,0.20)' : 'rgba(255,255,255,0.10)';
+  const sidebarInset = isLight ? 'inset 0 1px 0 rgba(255,255,255,0.65)' : 'inset 0 1px 0 rgba(255,255,255,0.10)';
   const accent = '#ffb661';
   const accentDeep = '#f6a84a';
   const syncDisplay = getSyncDisplay(syncStatus, connected);
@@ -412,6 +412,12 @@ export default function Layout({ children }) {
     offline: { bg: isLight ? '#f8fafc' : 'rgba(148,163,184,0.12)', border: panelBorder, text: mutedText, dot: '#94a3b8' },
     checking: { bg: isLight ? '#f8fafc' : 'rgba(148,163,184,0.10)', border: panelBorder, text: mutedText, dot: '#94a3b8' },
   }[syncDisplay.tone] || {};
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!user?.isSuperAdmin && hasPermission('settings')) {
@@ -554,8 +560,8 @@ export default function Layout({ children }) {
   return (
     <div style={{ minHeight: '100vh', background: isLight ? shellBg : `radial-gradient(circle at top left, rgba(255,182,97,0.08), transparent 24%), radial-gradient(circle at top right, rgba(68,183,255,0.08), transparent 22%), ${shellBg}`, fontFamily: "'Inter', sans-serif" }}>
       <div style={{ display: 'flex', minHeight: '100vh', padding: 12, gap: 12 }}>
-        <aside style={{ width: 88, flexShrink: 0, background: sidebarBg, border: `1px solid ${sidebarBorder}`, borderRadius: 24, boxShadow: isLight ? '0 22px 58px rgba(15,23,42,0.22), inset 0 1px 0 rgba(255,255,255,0.10)' : '0 24px 62px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.08)', backdropFilter: 'blur(18px) saturate(135%)', WebkitBackdropFilter: 'blur(18px) saturate(135%)', padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 48, height: 48, borderRadius: 16, background: 'rgba(255,255,255,0.10)', border: `1px solid ${sidebarItemBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 14px 34px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12)' }}>
+        <aside style={{ width: 88, flexShrink: 0, background: sidebarBg, border: `1px solid ${sidebarBorder}`, borderRadius: 24, boxShadow: isLight ? '0 18px 44px rgba(15,23,42,0.13), inset 0 1px 0 rgba(255,255,255,0.65)' : '0 24px 62px rgba(0,0,0,0.36), inset 0 1px 0 rgba(255,255,255,0.08)', backdropFilter: 'blur(18px) saturate(135%)', WebkitBackdropFilter: 'blur(18px) saturate(135%)', padding: '10px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 16, background: isLight ? 'rgba(255,255,255,0.58)' : 'rgba(255,255,255,0.10)', border: `1px solid ${sidebarItemBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: isLight ? '0 10px 24px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.70)' : '0 14px 34px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.12)' }}>
             {logoUrl
               ? <img src={logoUrl.startsWith('http') ? logoUrl : `${IMG_BASE}${logoUrl}`} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <span style={{ fontWeight: 900, color: sidebarText }}>RO</span>
@@ -594,8 +600,8 @@ export default function Layout({ children }) {
                     transition: 'all 0.18s ease',
                   }}
                 >
-                  <div style={{ width: 34, height: 34, borderRadius: 12, background: groupActive ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.08)', border: `1px solid ${groupActive ? 'rgba(255,255,255,0.24)' : sidebarItemBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name={group.items[0]?.icon} color={groupActive ? '#111827' : '#eef4ff'} size={16} stroke={2} />
+                  <div style={{ width: 34, height: 34, borderRadius: 12, background: groupActive ? 'rgba(255,255,255,0.28)' : (isLight ? 'rgba(255,255,255,0.62)' : 'rgba(255,255,255,0.08)'), border: `1px solid ${groupActive ? 'rgba(255,255,255,0.24)' : sidebarItemBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name={group.items[0]?.icon} color={groupActive ? '#111827' : (isLight ? '#253247' : '#eef4ff')} size={16} stroke={2} />
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 800, lineHeight: 1.1, textAlign: 'center' }}>{group.label}</span>
                   {badgeCount > 0 && (
