@@ -53,5 +53,5 @@ RestaurantOS is a multi-tenant restaurant management platform with:
 
 - Local offline app: `http://localhost:5051`
 - Local online/cloud test app: `http://localhost:5052`
-- Railway deployment is intentionally not pushed while the Railway subscription is expired.
+- Railway deployment is permitted after subscription renewal and should be verified after each reviewed release.
 - Runtime secrets and environment-specific values must remain outside Git, especially `backend/.env`.

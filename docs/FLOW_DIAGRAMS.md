@@ -67,7 +67,7 @@ flowchart TD
   G --> H["Cloud upserts Neon data"]
   H --> I["Queue item marked synced"]
   I --> J["Pending count clears"]
-  B -->|"Master data read"| K["Pull cloud master snapshot"]
+  B -->|"Subscription approval result"| K["Pull approved subscription state"]
   K --> L["Apply to local DB"]
   L --> M["Localize Cloudinary images"]
 ```
@@ -77,11 +77,11 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["User changes setup/master data"] --> B{"Running mode"}
-  B -->|"Cloud/online"| C["Allow create/update/delete"]
-  C --> D["Save to Neon"]
-  D --> E["Local servers pull updates"]
-  B -->|"Local offline"| F["Reject cloud-owned master edit"]
-  F --> G["User performs edit in cloud instead"]
+  B -->|"Local primary"| C["Allow create/update/delete"]
+  C --> D["Save to local PostgreSQL"]
+  D --> E["Queue and push snapshot to Neon"]
+  B -->|"Cloud/online"| F["Reject local-owned master edit"]
+  F --> G["User performs edit on local server"]
   G --> C
 ```
 
@@ -137,4 +137,3 @@ flowchart TD
   E -->|"Yes"| F["Admin marks resolved"]
   F --> G["Restaurant sees resolved status"]
 ```
-

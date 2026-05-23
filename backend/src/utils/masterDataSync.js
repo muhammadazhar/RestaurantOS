@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { branchCode, deviceId, isLocalOfflineMode } = require('./offlineConfig');
+const { branchCode, cloudApiUrl, cloudSyncToken, deviceId, isLocalOfflineMode } = require('./offlineConfig');
 const { localizeMenuImages } = require('./offlineImageCache');
 
 const MASTER_DATA_ENTITIES = {
@@ -310,6 +310,12 @@ async function queueMasterDataSnapshot(restaurantId, entityType, entityId, opera
     );
 
     await markEntitySyncStatus(client, entityType, entityId, 'pending');
+    if (cloudApiUrl && cloudSyncToken) {
+      setImmediate(() => {
+        const { processPendingQueue } = require('./offlineSync');
+        processPendingQueue().catch(err => console.warn('Immediate master-data sync failed:', err.message));
+      });
+    }
     return result.rows[0];
   } catch (err) {
     console.warn('Queue master-data snapshot failed:', err.message);
@@ -425,10 +431,17 @@ function rowToEntitySnapshot(restaurantId, entityType, entityId, data) {
   };
 }
 
-async function buildMasterDataPullSnapshot(restaurantIds = []) {
+async function buildMasterDataPullSnapshot(restaurantIds = [], entityTypes = null) {
   const client = await db.getClient();
   try {
     const ids = Array.isArray(restaurantIds) ? restaurantIds.filter(Boolean) : [];
+    const requestedTypes = Array.isArray(entityTypes) && entityTypes.length
+      ? new Set(entityTypes.filter(entityType => MASTER_DATA_ENTITIES[entityType]))
+      : null;
+    const includeRestaurant = !requestedTypes || requestedTypes.has('restaurant');
+    const entityPullOrder = requestedTypes
+      ? MASTER_ENTITY_PULL_ORDER.filter(entityType => requestedTypes.has(entityType))
+      : MASTER_ENTITY_PULL_ORDER;
     const restaurantFilter = ids.length ? 'WHERE id = ANY($1::uuid[])' : '';
     const params = ids.length ? [ids] : [];
     const restaurants = await client.query(`SELECT * FROM restaurants ${restaurantFilter} ORDER BY name`, params);
@@ -436,9 +449,11 @@ async function buildMasterDataPullSnapshot(restaurantIds = []) {
 
     for (const restaurant of restaurants.rows) {
       const restaurantId = restaurant.id;
-      snapshots.push(rowToEntitySnapshot(restaurantId, 'restaurant', restaurantId, { restaurants: [restaurant] }));
+      if (includeRestaurant) {
+        snapshots.push(rowToEntitySnapshot(restaurantId, 'restaurant', restaurantId, { restaurants: [restaurant] }));
+      }
 
-      for (const entityType of MASTER_ENTITY_PULL_ORDER) {
+      for (const entityType of entityPullOrder) {
         const config = MASTER_DATA_ENTITIES[entityType];
         const orderColumn = await hasColumn(client, config.primaryTable, 'created_at') ? 'created_at NULLS LAST, id' : 'id';
         const result = await client.query(

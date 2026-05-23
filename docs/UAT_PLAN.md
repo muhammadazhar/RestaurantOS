@@ -23,13 +23,13 @@ The objective of UAT is to verify that RestaurantOS supports real restaurant ope
 - Reports, refunds, general ledger, and shift sales reports.
 - Subscription request, approval, renewal, and module access.
 - Support tickets.
-- Offline local mode, sync queue, cloud push, and cloud-to-local master data pull.
+- Offline local mode, sync queue, local-to-cloud operational/master-data push, and cloud-to-local subscription-result pull.
 - Super admin management.
 
 ### Out of Scope
 
 - Third-party live payment gateway settlement.
-- Production Railway deployment while Railway subscription is expired.
+- Production Railway availability and environment ownership outside the controlled test window.
 - External accounting system integration.
 - Native mobile application testing unless separately scoped.
 
@@ -52,7 +52,7 @@ The objective of UAT is to verify that RestaurantOS supports real restaurant ope
 |---|---|---|---|
 | Local Offline | `http://localhost:5051` | Local Docker PostgreSQL | Offline/local server testing. |
 | Local Online | `http://localhost:5052` | Neon PostgreSQL | Cloud behavior and sync target testing. |
-| Railway Production | Railway backend/frontend URLs | Neon PostgreSQL | Deferred until Railway subscription is renewed. |
+| Railway Production | Railway backend/frontend URLs | Neon PostgreSQL | Available for verified release deployment. |
 
 ## 5. Entry Criteria
 
@@ -132,9 +132,9 @@ The objective of UAT is to verify that RestaurantOS supports real restaurant ope
 
 | ID | Scenario | Steps | Expected Result |
 |---|---|---|---|
-| MENU-01 | Create category online | Add category in online/cloud mode. | Category appears locally after master data pull. |
-| MENU-02 | Create menu item online | Add item, variants, image. | POS displays item and offline cache localizes image. |
-| MENU-03 | Block local master edits | Attempt menu/inventory master edit in offline local mode. | System rejects cloud-owned master edit. |
+| MENU-01 | Create category locally | Add category in local-primary mode while connected. | Category saves locally and appears in cloud after sync. |
+| MENU-02 | Create menu item locally | Add item, variants, and image in local-primary mode. | POS displays item locally and cloud receives the item after sync. |
+| MENU-03 | Local master-data edit sync | Create or edit menu/inventory master data in offline local mode, then reconnect. | Local edit is accepted, queued, and appears in cloud after sync. |
 | INV-01 | Stock movement | Record purchase/usage/waste. | Quantity and inventory transaction update. |
 | INV-02 | Low stock alert | Reduce stock below threshold. | Low stock alert appears. |
 | REC-01 | Recipe setup | Create recipe with ingredients. | Recipe saves and is available for costing/stock planning. |
@@ -198,4 +198,3 @@ The objective of UAT is to verify that RestaurantOS supports real restaurant ope
 |  | Restaurant Manager | Approved / Rejected |  |  |
 |  | QA Lead | Approved / Rejected |  |  |
 |  | Technical Lead | Approved / Rejected |  |  |
-

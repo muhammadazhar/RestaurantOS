@@ -5,12 +5,12 @@ Date: 2026-05-14
 
 ## 1. Executive Summary
 
-RestaurantOS is a multi-tenant SaaS restaurant management platform built with React, Node.js, Express, Socket.IO, and PostgreSQL. It supports cloud mode through Neon PostgreSQL and local offline mode through a Dockerized local server and local PostgreSQL database. Offline mode uses a sync queue for operational writes and cloud pull for master data.
+RestaurantOS is a multi-tenant SaaS restaurant management platform built with React, Node.js, Express, Socket.IO, and PostgreSQL. It supports cloud mode through Neon PostgreSQL and local offline mode through a Dockerized local server and local PostgreSQL database. In the local-primary deployment model, offline mode queues operational and master-data writes for push to cloud, while cloud approval results such as subscriptions can be returned to local.
 
 ## 2. Architecture Goals
 
 - Support restaurant operations even when internet connectivity is unavailable.
-- Keep master data controlled centrally from cloud to avoid conflicts.
+- Keep restaurant master data controlled from the local primary server to avoid conflicts.
 - Sync operational activity from local stores to cloud as soon as connectivity returns.
 - Keep tenant data separated by `restaurant_id`.
 - Provide role and module-based access control.
@@ -63,7 +63,7 @@ flowchart TB
 | App | Online backend and frontend. |
 | Database | Neon PostgreSQL. |
 | Mode | `DEPLOYMENT_MODE=cloud`, `DB_MODE=neon`. |
-| Use Case | Main SaaS operation, admin approval, master data management. |
+| Use Case | Cloud reporting, platform administration, and subscription approval. |
 
 ### 4.2 Local Offline Mode
 
@@ -73,7 +73,7 @@ flowchart TB
 | Database | Local Docker PostgreSQL. |
 | Mode | `DEPLOYMENT_MODE=local_offline`, `DB_MODE=local`. |
 | Use Case | POS/store operations without internet. |
-| Sync | Push operational data to cloud and pull master data from cloud. |
+| Sync | Push operational and master data to cloud; pull subscription approval results from cloud. |
 
 ### 4.3 Local Online Test Mode
 
@@ -92,7 +92,7 @@ flowchart TB
 | Express API | Business logic, validation, authentication, module permissions, persistence. |
 | Socket.IO | Live updates for orders, kitchen, tables, and operational events. |
 | PostgreSQL | Primary relational data store for tenants, orders, staff, inventory, finance, and sync. |
-| Offline sync worker | Pushes local operational queue and pulls cloud master data. |
+| Offline sync worker | Pushes local operational/master-data queue and pulls cloud approval results. |
 | Cloudinary | Stores remote menu and restaurant images in cloud mode. |
 | Offline image cache | Downloads Cloudinary menu images and rewrites local URLs to local uploads path. |
 
@@ -115,9 +115,9 @@ flowchart TB
 
 ## 7. Data Ownership Model
 
-### Cloud-Owned Master Data
+### Local-Owned Master Data
 
-The following should be added or modified from cloud/online mode to avoid conflicts:
+The following should be added or modified from local/offline mode to avoid conflicts:
 
 - Restaurant settings and logo.
 - Dining table setup.
@@ -170,7 +170,7 @@ flowchart LR
 | `attendance_log_snapshot` | Local to cloud | Clock-in, clock-out, manual logs, voids. |
 | `dining_table_status_snapshot` | Local to cloud | Operational table status updates. |
 | `subscription_request_snapshot` | Local to cloud | Offline subscription renewal request. |
-| `master_data_snapshot` | Cloud to local | Cloud-owned setup/master data. |
+| `master_data_snapshot` | Local to cloud | Local-owned setup/master data. |
 
 ## 9. Security Architecture
 
@@ -180,7 +180,7 @@ flowchart LR
 | Refresh tokens | Session renewal and logout invalidation support. |
 | Role permissions | Fine-grained access to modules/actions. |
 | Module subscriptions | Feature access governed by active subscriptions. |
-| Sync token | Protected offline sync ingest and master data pull. |
+| Sync token | Protected offline sync ingest and subscription-result pull. |
 | Rate limiting | Basic auth/API rate limits in Express middleware. |
 | Tenant isolation | Most business data scoped by `restaurant_id`. |
 
@@ -218,5 +218,4 @@ Common sync symptoms:
   - `docker compose -f docker-compose.local.yml up -d --build --force-recreate`
   - `docker compose -f docker-compose.online.yml up -d --build --force-recreate`
 - Do not commit `backend/.env`, `frontend/.env`, uploaded images, build artifacts, or local runtime caches unless explicitly required.
-- Do not deploy to Railway until the user confirms the Railway subscription is renewed.
-
+- Railway deployment is enabled now that the subscription has been renewed; deploy from the reviewed `main` branch and verify health after release.

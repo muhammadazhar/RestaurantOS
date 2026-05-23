@@ -115,13 +115,13 @@ The sync status indicator shows whether local mode is online, offline, pending s
 
 ## 8. Menu Management
 
-Menu and item setup is cloud-managed in offline architecture. Add or update master data from online/cloud mode.
+Menu and item setup is local-primary in the on-premise offline architecture. Add or update master data from the local server; it syncs to cloud when connectivity is available.
 
 1. Open Menu Management.
 2. Create categories.
 3. Create menu items, variants, add-ons, and images.
 4. Save.
-5. Local offline servers pull the updated master data from cloud.
+5. The local server pushes updated master data to cloud when connectivity is available.
 
 ## 9. Inventory and Recipes
 
@@ -250,7 +250,7 @@ Operational actions can be performed locally:
 - Dining table status updates
 - Subscription requests
 
-Master data is cloud-owned:
+Master data is local-owned:
 
 - Menu setup
 - Employees
@@ -272,4 +272,3 @@ When cloud is reachable, local queue items sync automatically. The status bar sh
 | Offline subscription remains pending | Refresh offline app after cloud approval or wait for pull interval. |
 | Images missing offline | Confirm image localization has run and uploads volume is mounted. |
 | Table status not updating online | Check queue status and cloud connectivity. |
-

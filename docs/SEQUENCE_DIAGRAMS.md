@@ -82,23 +82,24 @@ sequenceDiagram
   Worker->>LocalDB: Mark queue synced
 ```
 
-## 5. Cloud Master Data Pull
+## 5. Local Master Data Push
 
 ```mermaid
 sequenceDiagram
+  participant Manager
+  participant LocalAPI as Local API
+  participant LocalDB as Local PostgreSQL
   participant Worker as Local Sync Worker
   participant CloudAPI as Cloud API
   participant Neon as Neon PostgreSQL
-  participant LocalDB as Local PostgreSQL
-  participant Cache as Offline Image Cache
 
-  Worker->>CloudAPI: POST /api/sync/master-data
-  CloudAPI->>Neon: Read restaurants and master entities
-  Neon-->>CloudAPI: Master data snapshots
-  CloudAPI-->>Worker: master_data_pull payload
-  Worker->>LocalDB: Upsert master rows
-  Worker->>Cache: Localize menu images
-  Cache->>LocalDB: Rewrite local image URLs
+  Manager->>LocalAPI: Add or modify menu/inventory/staff setup
+  LocalAPI->>LocalDB: Save master record
+  LocalAPI->>LocalDB: Queue master_data_snapshot
+  Worker->>CloudAPI: POST /api/sync/ingest
+  CloudAPI->>Neon: Upsert local-owned master snapshot
+  CloudAPI-->>Worker: Success
+  Worker->>LocalDB: Mark queue item synced
 ```
 
 ## 6. Subscription Request and Approval
@@ -169,4 +170,3 @@ sequenceDiagram
   Restaurant->>API: GET ticket messages
   API-->>Restaurant: Conversation and status
 ```
-

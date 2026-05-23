@@ -1604,3 +1604,39 @@ Build result:
 
 - Frontend production build completed successfully.
 - Existing ESLint warnings remain in unrelated files.
+
+## Latest Completed Change - Local Primary Railway Rollout
+
+- Railway availability has been restored by the user, so production deployment is permitted again.
+- Established local PostgreSQL as the primary source for restaurant operational data and master data.
+- Local master-data changes now queue for immediate push through the cloud sync API, including menu, inventory setup, staff, roles, recipes, tables, discounts, and restaurant setup.
+- Cloud/online mode rejects local-owned master-data edits to avoid conflicting changes.
+- Cloud-to-local master-data pull is restricted to subscription approval state when `MASTER_DATA_AUTHORITY=local`, so super-admin approval results continue to reach the local server without overwriting locally managed setup.
+- Local Docker runtime `CLOUD_API_URL` is configured to use the Railway production API; the local online Docker instance remains available for Neon-backed testing.
+- Before restoring the baseline, backup dumps were created under ignored `backend/backups/local-primary-*`.
+- A final local PostgreSQL dump was restored to Neon so the cloud database begins from the local-primary state.
+
+Verification:
+
+```powershell
+node --check backend\src\utils\offlineConfig.js
+node --check backend\src\utils\masterDataSync.js
+node --check backend\src\utils\offlineSync.js
+node --check backend\src\controllers\combinedControllers.js
+node --check backend\src\controllers\inventoryController.js
+node --check backend\src\controllers\syncController.js
+docker compose -f docker-compose.local.yml config
+docker compose -f docker-compose.online.yml config
+docker compose -f deploy\on-prem\docker-compose.yml config
+docker compose -f docker-compose.local.yml up -d --build --force-recreate
+docker compose -f docker-compose.online.yml up -d --build --force-recreate
+```
+
+Verification result:
+
+- Local and Neon each expose 58 public tables, and all 58 row counts matched immediately after the local-primary restore.
+- Key matched baseline rows included `daily_attendance=71`, `journal_entries=22`, `journal_lines=53`, `notifications=16319`, `offline_sync_queue=5`, and `shift_sessions=29`.
+- `http://localhost:5051/api/health` and `http://localhost:5052/api/health` both returned healthy status after restart.
+- The filtered local-primary cloud pull contract returned 27 `subscription` snapshots and no locally owned master-data entity types.
+- The Word documentation pack was regenerated and rendered for visual QA after the local-primary ownership changes.
+- Queue sync covers the implemented application workflows and master-data snapshot entities; it is not general-purpose replication for arbitrary direct SQL edits outside the application.

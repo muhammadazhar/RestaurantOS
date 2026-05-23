@@ -82,7 +82,8 @@ exports.getMasterData = async (req, res) => {
     }
 
     const restaurantIds = Array.isArray(req.body?.restaurantIds) ? req.body.restaurantIds : [];
-    res.json(await buildMasterDataPullSnapshot(restaurantIds));
+    const entityTypes = Array.isArray(req.body?.entityTypes) ? req.body.entityTypes : null;
+    res.json(await buildMasterDataPullSnapshot(restaurantIds, entityTypes));
   } catch (err) {
     console.error('Sync master-data pull error:', err.message, err.detail || '');
     res.status(err.statusCode || 500).json({ error: err.message || 'Unable to build master-data snapshot' });

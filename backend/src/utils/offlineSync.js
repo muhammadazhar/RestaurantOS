@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const { cloudApiUrl, cloudSyncToken, deviceId, branchCode, isLocalOfflineMode, getRuntimeInfo } = require('./offlineConfig');
+const { cloudApiUrl, cloudSyncToken, deviceId, branchCode, isLocalOfflineMode, isLocalMasterPrimary, getRuntimeInfo } = require('./offlineConfig');
 const {
   MASTER_DATA_TABLES,
   addMasterDataSyncMetadata,
@@ -784,7 +784,12 @@ async function pullCloudMasterData() {
       'X-RestaurantOS-Sync-Token': cloudSyncToken,
       'X-RestaurantOS-Device-Id': deviceId,
     },
-    body: JSON.stringify({ restaurantIds, branchCode, deviceId }),
+    body: JSON.stringify({
+      restaurantIds,
+      branchCode,
+      deviceId,
+      entityTypes: isLocalMasterPrimary ? ['subscription'] : undefined,
+    }),
   });
 
   if (!response.ok) {

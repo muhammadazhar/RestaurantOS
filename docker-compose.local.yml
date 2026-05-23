@@ -16,6 +16,7 @@ services:
       NODE_ENV: production
       PORT: 5001
       DEPLOYMENT_MODE: local_offline
+      MASTER_DATA_AUTHORITY: local
       DB_MODE: local
       DB_HOST: host.docker.internal
       DB_PORT: 5432

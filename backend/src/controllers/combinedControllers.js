@@ -2,7 +2,7 @@
 const db = require('../config/db');
 const { normalizeWorkflowSettings } = require('../utils/workflowSettings');
 const { queueMasterDataSnapshot } = require('../utils/masterDataSync');
-const { isLocalOfflineMode } = require('../utils/offlineConfig');
+const { isLocalOfflineMode, isLocalMasterPrimary } = require('../utils/offlineConfig');
 const { queueDiningTableStatusSnapshot, queueShiftSessionSnapshot } = require('../utils/offlineSync');
 
 const queueMasterSync = (restaurantId, entityType, entityId, operation = 'sync') => {
@@ -11,9 +11,12 @@ const queueMasterSync = (restaurantId, entityType, entityId, operation = 'sync')
 };
 
 const blockLocalMasterDataWrite = (res) => {
-  if (!isLocalOfflineMode) return false;
+  const shouldBlock = isLocalMasterPrimary ? !isLocalOfflineMode : isLocalOfflineMode;
+  if (!shouldBlock) return false;
   res.status(409).json({
-    error: 'Master data is managed from the cloud. Please add or edit this setup data online, then let the local server sync it down.',
+    error: isLocalMasterPrimary
+      ? 'Master data is managed from the local server. Please add or edit this setup data locally, then let it sync to the cloud.'
+      : 'Master data is managed from the cloud. Please add or edit this setup data online, then let the local server sync it down.',
   });
   return true;
 };

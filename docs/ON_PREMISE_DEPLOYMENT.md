@@ -307,7 +307,8 @@ The same `CLOUD_SYNC_TOKEN` must exist on the cloud backend.
 Sync behavior:
 
 - POS/orders, shifts, attendance, table status, and subscription requests are queued locally and pushed to cloud.
-- Master data remains cloud-owned and pulls down to the local server.
+- Master data, including menu, inventory setup, staff, roles, recipes, tables, discounts, and restaurant setup, is maintained on the local server and pushed to cloud.
+- The cloud deployment returns subscription approvals to the local server, because those approvals are super-admin decisions.
 - Menu item images can be cached locally for offline use.
 
 Leave `CLOUD_API_URL` and `CLOUD_SYNC_TOKEN` blank for a fully offline installation.
