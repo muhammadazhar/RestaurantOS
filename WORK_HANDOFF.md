@@ -1638,5 +1638,7 @@ Verification result:
 - Key matched baseline rows included `daily_attendance=71`, `journal_entries=22`, `journal_lines=53`, `notifications=16319`, `offline_sync_queue=5`, and `shift_sessions=29`.
 - `http://localhost:5051/api/health` and `http://localhost:5052/api/health` both returned healthy status after restart.
 - The filtered local-primary cloud pull contract returned 27 `subscription` snapshots and no locally owned master-data entity types.
+- Pushed `main` through commit `fd922ef2` to the Railway-connected repository; production changed from the previous full snapshot response to 27 `subscription` snapshots only, confirming the deployed local-primary behavior.
+- Railway CLI was not authenticated in this workspace, so deployment verification was completed through the live production health and sync API responses.
 - The Word documentation pack was regenerated and rendered for visual QA after the local-primary ownership changes.
 - Queue sync covers the implemented application workflows and master-data snapshot entities; it is not general-purpose replication for arbitrary direct SQL edits outside the application.
